@@ -1,0 +1,63 @@
+[package]
+name = "imap-server"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+[dependencies]
+jmap-client = { path = "/home/vagrant/code/jmap-client", features = ["websockets", "debug"] } #TODO: remove local path
+mail-parser = { path = "/home/vagrant/code/mail-parser" } #TODO: remove local path
+chrono = { version = "0.4"}
+tracing-subscriber = "0.2"
+rustls = "0.20"
+rustls-pemfile = "1.0"
+tokio = { version = "1.16.1", features = ["full"] }
+
+[dev-dependencies]
+
+
+[profile.dev]
+opt-level = 0
+debug = 1
+codegen-units = 4
+lto = false
+incremental = true
+panic = 'unwind'
+debug-assertions = true
+overflow-checks = false
+rpath = false
+
+[profile.release]
+opt-level = 3
+debug = false
+codegen-units = 1
+lto = "thin"
+incremental = false
+panic = 'unwind'
+debug-assertions = false
+overflow-checks = false
+rpath = false
+
+#[profile.release.package.server]
+#opt-level = 1
+#codegen-units = 4
+
+[profile.test]
+opt-level = 0
+debug = 1
+codegen-units = 16
+lto = false
+incremental = true
+debug-assertions = true
+overflow-checks = true
+rpath = false
+
+[profile.bench]
+opt-level = 3
+debug = false
+codegen-units = 1
+lto = 'thin'
+incremental = false
+debug-assertions = false
+overflow-checks = false
+rpath = false
