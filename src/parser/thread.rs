@@ -3,12 +3,15 @@ use std::borrow::Cow;
 use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 
-use crate::protocol::{
-    search::Filter,
-    thread::{self, Algorithm},
+use crate::{
+    core::receiver::Token,
+    protocol::{
+        search::Filter,
+        thread::{self, Algorithm},
+    },
 };
 
-use super::{receiver::Token, search::parse_filters};
+use super::search::parse_filters;
 
 #[allow(clippy::while_let_on_iterator)]
 pub fn parse_thread(tokens: Vec<Token>) -> super::Result<thread::Arguments> {
@@ -65,7 +68,7 @@ impl Algorithm {
 mod tests {
 
     use crate::{
-        parser::receiver::Receiver,
+        core::receiver::Receiver,
         protocol::{
             search::Filter,
             thread::{self, Algorithm},
@@ -93,9 +96,9 @@ mod tests {
             ),
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
-            receiver.parse(command);
+
             assert_eq!(
-                super::parse_thread(receiver.next_request().unwrap().unwrap().tokens)
+                super::parse_thread(receiver.parse(&mut command.iter()).unwrap().tokens)
                     .expect(&command_str),
                 arguments,
                 "{}",

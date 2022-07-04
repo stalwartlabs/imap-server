@@ -1,6 +1,4 @@
-use crate::protocol::rename;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::rename};
 
 pub fn parse_rename(tokens: Vec<Token>) -> super::Result<rename::Arguments> {
     match tokens.len() {
@@ -19,7 +17,7 @@ pub fn parse_rename(tokens: Vec<Token>) -> super::Result<rename::Arguments> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::rename};
+    use crate::{core::receiver::Receiver, protocol::rename};
 
     #[test]
     fn parse_rename() {
@@ -41,9 +39,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_rename(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_rename(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

@@ -1,8 +1,6 @@
 use std::borrow::Cow;
 
-use crate::protocol::lsub;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::lsub};
 
 pub fn parse_lsub(tokens: Vec<Token>) -> super::Result<lsub::Arguments> {
     if tokens.len() > 1 {
@@ -25,7 +23,7 @@ pub fn parse_lsub(tokens: Vec<Token>) -> super::Result<lsub::Arguments> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::lsub};
+    use crate::{core::receiver::Receiver, protocol::lsub};
 
     #[test]
     fn parse_lsub() {
@@ -47,9 +45,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_lsub(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_lsub(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

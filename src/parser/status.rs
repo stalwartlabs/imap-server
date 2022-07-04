@@ -1,7 +1,6 @@
+use crate::core::receiver::Token;
 use crate::protocol::status;
 use crate::protocol::status::Status;
-
-use super::receiver::Token;
 
 pub fn parse_status(tokens: Vec<Token>) -> super::Result<status::Arguments> {
     match tokens.len() {
@@ -60,7 +59,7 @@ impl Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::status};
+    use crate::{core::receiver::Receiver, protocol::status};
 
     #[test]
     fn parse_status() {
@@ -73,9 +72,14 @@ mod tests {
                 items: vec![status::Status::UidNext, status::Status::Messages],
             },
         )] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_status(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_status(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

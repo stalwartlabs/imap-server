@@ -1,6 +1,4 @@
-use crate::protocol::select;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::select};
 
 pub fn parse_select(tokens: Vec<Token>) -> super::Result<select::Arguments> {
     match tokens.len() {
@@ -14,7 +12,7 @@ pub fn parse_select(tokens: Vec<Token>) -> super::Result<select::Arguments> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::select};
+    use crate::{core::receiver::Receiver, protocol::select};
 
     #[test]
     fn parse_select() {
@@ -34,9 +32,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_select(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_select(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

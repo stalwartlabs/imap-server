@@ -10,7 +10,6 @@ pub mod list;
 pub mod login;
 pub mod lsub;
 pub mod move_;
-pub mod receiver;
 pub mod rename;
 pub mod search;
 pub mod select;

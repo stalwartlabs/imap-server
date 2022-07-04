@@ -1,6 +1,7 @@
-use crate::protocol::{capability::Capability, enable};
-
-use super::receiver::Token;
+use crate::{
+    core::receiver::Token,
+    protocol::{capability::Capability, enable},
+};
 
 pub fn parse_enable(tokens: Vec<Token>) -> super::Result<enable::Arguments> {
     let len = tokens.len();
@@ -38,7 +39,7 @@ impl Capability {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser::receiver::Receiver,
+        core::receiver::Receiver,
         protocol::{capability::Capability, enable},
     };
 
@@ -52,9 +53,14 @@ mod tests {
                 capabilities: vec![Capability::IMAP4rev2, Capability::Condstore],
             },
         )] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_enable(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_enable(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

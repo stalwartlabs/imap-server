@@ -26,7 +26,6 @@ pub mod store;
 pub mod subscribe;
 pub mod thread;
 pub mod unsubscribe;
-pub mod utf7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolVersion {
@@ -207,5 +206,11 @@ impl StatusResponse {
         }
         buf.extend_from_slice(self.message.as_bytes());
         buf.extend_from_slice(b"\r\n");
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(16);
+        self.serialize(&mut buf);
+        buf
     }
 }

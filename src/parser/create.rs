@@ -1,6 +1,4 @@
-use crate::protocol::create;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::create};
 
 pub fn parse_create(tokens: Vec<Token>) -> super::Result<create::Arguments> {
     match tokens.len() {
@@ -14,7 +12,7 @@ pub fn parse_create(tokens: Vec<Token>) -> super::Result<create::Arguments> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::create};
+    use crate::{core::receiver::Receiver, protocol::create};
 
     #[test]
     fn parse_create() {
@@ -34,9 +32,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_create(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_create(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

@@ -1,6 +1,4 @@
-use crate::protocol::authenticate;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::authenticate};
 
 pub fn parse_authenticate(tokens: Vec<Token>) -> super::Result<authenticate::Arguments> {
     match tokens.len() {
@@ -18,7 +16,7 @@ pub fn parse_authenticate(tokens: Vec<Token>) -> super::Result<authenticate::Arg
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::authenticate};
+    use crate::{core::receiver::Receiver, protocol::authenticate};
 
     #[test]
     fn parse_authenticate() {
@@ -40,10 +38,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_authenticate(receiver.next_request().unwrap().unwrap().tokens)
-                    .unwrap(),
+                super::parse_authenticate(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

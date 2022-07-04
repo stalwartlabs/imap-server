@@ -1,9 +1,8 @@
-use crate::core::StatusResponse;
+use crate::core::{utf7::utf7_encode, StatusResponse};
 
 use super::{
     quoted_string,
     status::{Status, StatusItem},
-    utf7::utf7_encode,
     ImapResponse, ProtocolVersion,
 };
 

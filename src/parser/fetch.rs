@@ -2,9 +2,11 @@ use std::borrow::Cow;
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::protocol::fetch::{self, Attribute, Section};
+use crate::{
+    core::receiver::Token,
+    protocol::fetch::{self, Attribute, Section},
+};
 
-use super::receiver::Token;
 use super::{parse_integer, parse_sequence_set};
 
 #[allow(clippy::while_let_on_iterator)]
@@ -348,7 +350,7 @@ pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Op
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser::receiver::Receiver,
+        core::receiver::Receiver,
         protocol::{
             fetch::{self, Attribute, Section},
             Sequence,
@@ -581,10 +583,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_fetch(receiver.next_request().unwrap().unwrap().tokens)
-                    .expect(command),
+                super::parse_fetch(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .expect(command),
                 arguments,
                 "{}",
                 command

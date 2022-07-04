@@ -1,6 +1,4 @@
-use crate::protocol::examine;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::examine};
 
 pub fn parse_examine(tokens: Vec<Token>) -> super::Result<examine::Arguments> {
     match tokens.len() {
@@ -14,7 +12,7 @@ pub fn parse_examine(tokens: Vec<Token>) -> super::Result<examine::Arguments> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::examine};
+    use crate::{core::receiver::Receiver, protocol::examine};
 
     #[test]
     fn parse_examine() {
@@ -34,9 +32,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_examine(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_examine(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

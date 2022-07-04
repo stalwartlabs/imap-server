@@ -6,11 +6,11 @@ use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 use mail_parser::decoders::charsets::DecoderFnc;
 
+use crate::core::receiver::Token;
 use crate::core::Flag;
 use crate::protocol::search::ResultOption;
 use crate::protocol::search::{self, Filter};
 
-use super::receiver::Token;
 use super::{parse_date, parse_integer, parse_sequence_set};
 
 #[allow(clippy::while_let_on_iterator)]
@@ -314,8 +314,7 @@ impl ResultOption {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::Flag,
-        parser::receiver::Receiver,
+        core::{receiver::Receiver, Flag},
         protocol::{
             search::{self, Filter, ResultOption},
             Sequence,
@@ -524,9 +523,8 @@ mod tests {
             ),
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
-            receiver.parse(command);
             assert_eq!(
-                super::parse_search(receiver.next_request().unwrap().unwrap().tokens)
+                super::parse_search(receiver.parse(&mut command.iter()).unwrap().tokens)
                     .expect(&command_str),
                 arguments,
                 "{}",

@@ -1,3 +1,12 @@
+pub mod client;
+pub mod config;
+pub mod connection;
+pub mod env_settings;
+pub mod listener;
+pub mod receiver;
+pub mod utf7;
+pub mod writer;
+
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,7 +147,7 @@ impl StatusResponse {
         }
     }
 
-    pub fn parse(tag: Option<String>, message: impl Into<Cow<'static, str>>) -> Self {
+    pub fn parse_error(tag: Option<String>, message: impl Into<Cow<'static, str>>) -> Self {
         StatusResponse {
             tag,
             code: ResponseCode::Parse.into(),

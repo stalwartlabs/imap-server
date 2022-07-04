@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 
 use crate::{
-    core::Flag,
+    core::{receiver::Token, Flag},
     protocol::store::{self, Operation},
 };
 
-use super::{parse_sequence_set, receiver::Token};
+use super::parse_sequence_set;
 
 pub fn parse_store(tokens: Vec<Token>) -> super::Result<store::Arguments> {
     let mut tokens = tokens.into_iter();
@@ -75,8 +75,7 @@ pub fn parse_store(tokens: Vec<Token>) -> super::Result<store::Arguments> {
 mod tests {
 
     use crate::{
-        core::Flag,
-        parser::receiver::Receiver,
+        core::{receiver::Receiver, Flag},
         protocol::{
             store::{self, Operation},
             Sequence,
@@ -111,9 +110,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_store(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_store(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

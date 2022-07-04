@@ -1,11 +1,12 @@
 use std::borrow::Cow;
 
-use crate::protocol::{
-    list::{self, ReturnOption, SelectionOption},
-    status::Status,
+use crate::{
+    core::receiver::Token,
+    protocol::{
+        list::{self, ReturnOption, SelectionOption},
+        status::Status,
+    },
 };
-
-use super::receiver::Token;
 
 #[allow(clippy::while_let_on_iterator)]
 pub fn parse_list(tokens: Vec<Token>) -> super::Result<list::Arguments> {
@@ -154,7 +155,7 @@ impl ReturnOption {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser::receiver::Receiver,
+        core::receiver::Receiver,
         protocol::{
             list::{self, ReturnOption, SelectionOption},
             status::Status,
@@ -304,9 +305,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_list(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_list(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

@@ -1,6 +1,4 @@
-use crate::protocol::delete;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::delete};
 
 pub fn parse_delete(tokens: Vec<Token>) -> super::Result<delete::Arguments> {
     match tokens.len() {
@@ -14,7 +12,7 @@ pub fn parse_delete(tokens: Vec<Token>) -> super::Result<delete::Arguments> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::delete};
+    use crate::{core::receiver::Receiver, protocol::delete};
 
     #[test]
     fn parse_delete() {
@@ -34,9 +32,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_delete(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_delete(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

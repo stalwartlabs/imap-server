@@ -3,12 +3,15 @@ use std::borrow::Cow;
 use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 
-use crate::protocol::{
-    search::Filter,
-    sort::{self, Comparator, Sort},
+use crate::{
+    core::receiver::Token,
+    protocol::{
+        search::Filter,
+        sort::{self, Comparator, Sort},
+    },
 };
 
-use super::{receiver::Token, search::parse_filters};
+use super::search::parse_filters;
 
 #[allow(clippy::while_let_on_iterator)]
 pub fn parse_sort(tokens: Vec<Token>) -> super::Result<sort::Arguments> {
@@ -100,7 +103,7 @@ impl Sort {
 mod tests {
 
     use crate::{
-        parser::receiver::Receiver,
+        core::receiver::Receiver,
         protocol::{
             search::Filter,
             sort::{self, Comparator, Sort},
@@ -170,9 +173,9 @@ mod tests {
             ),
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
-            receiver.parse(command);
+
             assert_eq!(
-                super::parse_sort(receiver.next_request().unwrap().unwrap().tokens)
+                super::parse_sort(receiver.parse(&mut command.iter()).unwrap().tokens)
                     .expect(&command_str),
                 arguments,
                 "{}",

@@ -1,6 +1,6 @@
-use crate::core::StatusResponse;
+use crate::core::{utf7::utf7_encode, StatusResponse};
 
-use super::{quoted_string, utf7::utf7_encode, ImapResponse, ProtocolVersion};
+use super::{quoted_string, ImapResponse, ProtocolVersion};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {

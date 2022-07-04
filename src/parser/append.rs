@@ -1,8 +1,11 @@
 use std::borrow::Cow;
 
-use crate::{core::Flag, protocol::append};
+use crate::{
+    core::{receiver::Token, Flag},
+    protocol::append,
+};
 
-use super::{parse_datetime, receiver::Token};
+use super::parse_datetime;
 
 pub fn parse_append(tokens: Vec<Token>) -> super::Result<append::Arguments> {
     match tokens.len() {
@@ -51,7 +54,10 @@ pub fn parse_append(tokens: Vec<Token>) -> super::Result<append::Arguments> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{core::Flag, parser::receiver::Receiver, protocol::append};
+    use crate::{
+        core::{receiver::Receiver, Flag},
+        protocol::append,
+    };
 
     #[test]
     fn parse_append() {
@@ -95,9 +101,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_append(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_append(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments,
                 "{:?}",
                 command

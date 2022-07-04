@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
-use crate::protocol::copy;
+use crate::{core::receiver::Token, protocol::copy};
 
-use super::{parse_sequence_set, receiver::Token};
+use super::parse_sequence_set;
 
 pub fn parse_copy(tokens: Vec<Token>) -> super::Result<copy::Arguments> {
     if tokens.len() > 1 {
@@ -28,7 +28,7 @@ pub fn parse_copy(tokens: Vec<Token>) -> super::Result<copy::Arguments> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser::receiver::Receiver,
+        core::receiver::Receiver,
         protocol::{copy, Sequence},
     };
 
@@ -46,9 +46,14 @@ mod tests {
                 mailbox_name: "MEETING".to_string(),
             },
         )] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_copy(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_copy(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

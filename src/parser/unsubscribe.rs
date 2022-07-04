@@ -1,6 +1,4 @@
-use crate::protocol::unsubscribe;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::unsubscribe};
 
 pub fn parse_unsubscribe(tokens: Vec<Token>) -> super::Result<unsubscribe::Arguments> {
     match tokens.len() {
@@ -14,7 +12,7 @@ pub fn parse_unsubscribe(tokens: Vec<Token>) -> super::Result<unsubscribe::Argum
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::unsubscribe};
+    use crate::{core::receiver::Receiver, protocol::unsubscribe};
 
     #[test]
     fn parse_unsubscribe() {
@@ -34,9 +32,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_unsubscribe(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_unsubscribe(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }

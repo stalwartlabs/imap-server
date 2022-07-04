@@ -1,6 +1,4 @@
-use crate::protocol::subscribe;
-
-use super::receiver::Token;
+use crate::{core::receiver::Token, protocol::subscribe};
 
 pub fn parse_subscribe(tokens: Vec<Token>) -> super::Result<subscribe::Arguments> {
     match tokens.len() {
@@ -14,7 +12,7 @@ pub fn parse_subscribe(tokens: Vec<Token>) -> super::Result<subscribe::Arguments
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::receiver::Receiver, protocol::subscribe};
+    use crate::{core::receiver::Receiver, protocol::subscribe};
 
     #[test]
     fn parse_subscribe() {
@@ -34,9 +32,14 @@ mod tests {
                 },
             ),
         ] {
-            receiver.parse(command.as_bytes().to_vec());
             assert_eq!(
-                super::parse_subscribe(receiver.next_request().unwrap().unwrap().tokens).unwrap(),
+                super::parse_subscribe(
+                    receiver
+                        .parse(&mut command.as_bytes().iter())
+                        .unwrap()
+                        .tokens
+                )
+                .unwrap(),
                 arguments
             );
         }
