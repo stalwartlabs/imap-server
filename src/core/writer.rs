@@ -6,6 +6,8 @@ use tokio::{
 use tokio_rustls::server::TlsStream;
 use tracing::debug;
 
+use super::client::{Session, SessionData};
+
 const IPC_CHANNEL_BUFFER: usize = 128;
 
 pub enum Event {
@@ -72,4 +74,26 @@ pub fn spawn_writer() -> mpsc::Sender<Event> {
         }
     });
     tx
+}
+
+impl Session {
+    pub async fn write_bytes(&self, bytes: Vec<u8>) -> Result<(), ()> {
+        if let Err(err) = self.writer.send(Event::Bytes(bytes)).await {
+            debug!("Failed to send bytes: {}", err);
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl SessionData {
+    pub async fn write_bytes(&self, bytes: Vec<u8>) -> bool {
+        if let Err(err) = self.writer.send(Event::Bytes(bytes)).await {
+            debug!("Failed to send bytes: {}", err);
+            false
+        } else {
+            true
+        }
+    }
 }

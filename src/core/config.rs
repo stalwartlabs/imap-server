@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader, sync::Arc};
 
 use rustls::{Certificate, PrivateKey};
-use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use tracing::warn;
 
 use super::env_settings::EnvSettings;

@@ -42,7 +42,7 @@ impl Default for Request {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum State {
+pub enum State {
     Start,
     Tag,
     Command { is_uid: bool },
@@ -55,8 +55,8 @@ enum State {
 
 pub struct Receiver {
     buf: Vec<u8>,
-    request: Request,
-    state: State,
+    pub request: Request,
+    pub state: State,
 }
 
 impl Receiver {
@@ -412,6 +412,81 @@ impl Default for Receiver {
             buf: Vec::with_capacity(10),
             request: Default::default(),
             state: State::Tag,
+        }
+    }
+}
+
+impl Request {
+    pub fn into_error(self, message: impl Into<Cow<'static, str>>) -> StatusResponse {
+        StatusResponse {
+            tag: self.tag.into(),
+            code: None,
+            message: message.into(),
+            rtype: ResponseType::No,
+        }
+    }
+
+    pub fn into_parse_error(self, message: impl Into<Cow<'static, str>>) -> StatusResponse {
+        StatusResponse {
+            tag: self.tag.into(),
+            code: ResponseCode::Parse.into(),
+            message: message.into(),
+            rtype: ResponseType::Bad,
+        }
+    }
+}
+
+impl From<(String, &'static str)> for StatusResponse {
+    fn from((tag, message): (String, &'static str)) -> Self {
+        StatusResponse {
+            tag: Some(tag),
+            code: None,
+            message: message.into(),
+            rtype: ResponseType::No,
+        }
+    }
+}
+
+impl From<(&str, &'static str)> for StatusResponse {
+    fn from((tag, message): (&str, &'static str)) -> Self {
+        StatusResponse {
+            tag: Some(tag.to_string()),
+            code: None,
+            message: message.into(),
+            rtype: ResponseType::No,
+        }
+    }
+}
+
+impl From<(String, String)> for StatusResponse {
+    fn from((tag, message): (String, String)) -> Self {
+        StatusResponse {
+            tag: Some(tag),
+            code: None,
+            message: message.into(),
+            rtype: ResponseType::No,
+        }
+    }
+}
+
+impl From<(String, Cow<'static, str>)> for StatusResponse {
+    fn from((tag, message): (String, Cow<'static, str>)) -> Self {
+        StatusResponse {
+            tag: Some(tag),
+            code: None,
+            message,
+            rtype: ResponseType::No,
+        }
+    }
+}
+
+impl From<(&str, Cow<'static, str>)> for StatusResponse {
+    fn from((tag, message): (&str, Cow<'static, str>)) -> Self {
+        StatusResponse {
+            tag: Some(tag.to_string()),
+            code: None,
+            message,
+            rtype: ResponseType::No,
         }
     }
 }

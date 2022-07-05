@@ -1,10 +1,8 @@
-use std::borrow::Cow;
-
 use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 
 use crate::{
-    core::receiver::Token,
+    core::receiver::Request,
     protocol::{
         search::Filter,
         thread::{self, Algorithm},
@@ -14,29 +12,30 @@ use crate::{
 use super::search::parse_filters;
 
 #[allow(clippy::while_let_on_iterator)]
-pub fn parse_thread(tokens: Vec<Token>) -> super::Result<thread::Arguments> {
-    if tokens.is_empty() {
-        return Err("Missing thread criteria.".into());
+pub fn parse_thread(request: Request) -> crate::core::Result<thread::Arguments> {
+    if request.tokens.is_empty() {
+        return Err(request.into_error("Missing thread criteria."));
     }
 
-    let mut tokens = tokens.into_iter().peekable();
+    let mut tokens = request.tokens.into_iter().peekable();
     let algorithm = Algorithm::parse(
         &tokens
             .next()
-            .ok_or_else(|| Cow::from("Missing threading algorithm."))?
+            .ok_or((request.tag.as_str(), "Missing threading algorithm."))?
             .unwrap_bytes(),
-    )?;
+    )
+    .map_err(|v| (request.tag.as_str(), v))?;
 
     let decoder = get_charset_decoder(
         &tokens
             .next()
-            .ok_or_else(|| Cow::from("Missing charset."))?
+            .ok_or((request.tag.as_str(), "Missing charset."))?
             .unwrap_bytes(),
     );
 
-    let mut filters = parse_filters(&mut tokens, decoder)?;
+    let mut filters = parse_filters(&mut tokens, decoder).map_err(|v| (request.tag.as_str(), v))?;
     match filters.len() {
-        0 => Err(Cow::from("No filters found in command.")),
+        0 => Err((request.tag.as_str(), "No filters found in command.").into()),
         1 => Ok(thread::Arguments {
             algorithm,
             filter: filters.pop().unwrap(),
@@ -98,7 +97,7 @@ mod tests {
             let command_str = String::from_utf8_lossy(&command).into_owned();
 
             assert_eq!(
-                super::parse_thread(receiver.parse(&mut command.iter()).unwrap().tokens)
+                super::parse_thread(receiver.parse(&mut command.iter()).unwrap())
                     .expect(&command_str),
                 arguments,
                 "{}",

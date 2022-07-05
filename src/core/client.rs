@@ -1,18 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use jmap_client::client::Client;
-use tokio::{
-    io::WriteHalf,
-    net::TcpStream,
-    sync::{mpsc, oneshot},
-};
+use tokio::{io::WriteHalf, net::TcpStream, sync::mpsc};
 use tokio_rustls::server::TlsStream;
 use tracing::debug;
 
-use crate::protocol::{
-    capability::{self, Capability},
-    ImapResponse, ProtocolVersion,
-};
+use crate::protocol::ProtocolVersion;
 
 use super::{
     config::Config,
@@ -30,10 +23,16 @@ pub struct Session {
     pub writer: mpsc::Sender<writer::Event>,
 }
 
+pub struct SessionData {
+    pub client: Client,
+    pub config: Arc<Config>,
+    pub writer: mpsc::Sender<writer::Event>,
+}
+
 pub enum State {
-    NotAuthenticated,
-    Authenticated { client: Client },
-    Selected { client: Client },
+    NotAuthenticated { auth_failures: u8 },
+    Authenticated { data: Arc<SessionData> },
+    Selected { data: Arc<SessionData> },
 }
 
 impl Session {
@@ -42,7 +41,7 @@ impl Session {
             config,
             receiver: Receiver::new(),
             version: ProtocolVersion::Rev1,
-            state: State::NotAuthenticated,
+            state: State::NotAuthenticated { auth_failures: 0 },
             peer_addr,
             is_tls,
             writer: writer::spawn_writer(),
@@ -65,15 +64,6 @@ impl Session {
             false
         } else {
             true
-        }
-    }
-
-    pub async fn write_bytes(&mut self, bytes: Vec<u8>) -> Result<(), ()> {
-        if let Err(err) = self.writer.send(writer::Event::Bytes(bytes)).await {
-            debug!("Failed to send bytes: {}", err);
-            Err(())
-        } else {
-            Ok(())
         }
     }
 
@@ -120,7 +110,9 @@ impl Session {
                 Command::StartTls => {
                     return self.handle_starttls(request).await;
                 }
-                Command::Authenticate => {}
+                Command::Authenticate => {
+                    self.handle_authenticate(request).await?;
+                }
                 Command::Login => {
                     self.handle_login(request).await?;
                 }
@@ -177,7 +169,7 @@ impl Request {
                 }
             }
             Command::Authenticate => {
-                if let State::NotAuthenticated = state {
+                if let State::NotAuthenticated { .. } = state {
                     Ok(self)
                 } else {
                     Err(StatusResponse::no(
@@ -188,7 +180,7 @@ impl Request {
                 }
             }
             Command::Login => {
-                if let State::NotAuthenticated = state {
+                if let State::NotAuthenticated { .. } = state {
                     if is_tls {
                         Ok(self)
                     } else {
@@ -251,6 +243,23 @@ impl Request {
                     ))
                 }
             }
+        }
+    }
+}
+
+impl State {
+    pub fn auth_failures(&self) -> u8 {
+        match self {
+            State::NotAuthenticated { auth_failures } => *auth_failures,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn session_data(&self) -> Arc<SessionData> {
+        match self {
+            State::Authenticated { data } => data.clone(),
+            State::Selected { data } => data.clone(),
+            _ => unreachable!(),
         }
     }
 }

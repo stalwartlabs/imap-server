@@ -1,12 +1,18 @@
-use crate::{core::receiver::Token, protocol::unsubscribe};
+use crate::{core::receiver::Request, protocol::unsubscribe};
 
-pub fn parse_unsubscribe(tokens: Vec<Token>) -> super::Result<unsubscribe::Arguments> {
-    match tokens.len() {
+pub fn parse_unsubscribe(request: Request) -> crate::core::Result<unsubscribe::Arguments> {
+    match request.tokens.len() {
         1 => Ok(unsubscribe::Arguments {
-            name: tokens.into_iter().next().unwrap().unwrap_string()?,
+            name: request
+                .tokens
+                .into_iter()
+                .next()
+                .unwrap()
+                .unwrap_string()
+                .map_err(|v| (request.tag, v))?,
         }),
-        0 => Err("Missing mailbox name.".into()),
-        _ => Err("Too many arguments.".into()),
+        0 => Err(request.into_error("Missing mailbox name.")),
+        _ => Err(request.into_error("Too many arguments.")),
     }
 }
 
@@ -33,13 +39,8 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_unsubscribe(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_unsubscribe(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments
             );
         }

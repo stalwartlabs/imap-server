@@ -1,8 +1,15 @@
+use std::time::Duration;
+
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::watch};
 use tokio_rustls::server::TlsStream;
 use tracing::debug;
 
+use crate::core::client::State;
+
 use super::client::Session;
+
+const NON_AUTHENTICATED_TIMEOUT: Duration = Duration::from_secs(60);
+const AUTHENTICATED_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 pub async fn handle_conn(
     stream: TcpStream,
@@ -18,9 +25,15 @@ pub async fn handle_conn(
 
     loop {
         tokio::select! {
-            result = stream_rx.read(&mut buf) => {
+            result = tokio::time::timeout(
+                if !matches!(session.state, State::NotAuthenticated {..}) {
+                    AUTHENTICATED_TIMEOUT
+                } else {
+                    NON_AUTHENTICATED_TIMEOUT
+                },
+                stream_rx.read(&mut buf)) => {
                 match result {
-                    Ok(bytes_read) => {
+                    Ok(Ok(bytes_read)) => {
                         if bytes_read > 0 {
                             match session.ingest(&buf[..bytes_read]).await {
                                 Ok(Some(stream_tx)) => {
@@ -50,10 +63,15 @@ pub async fn handle_conn(
                             break;
                         }
                     },
-                    Err(err) => {
-                        debug!("IMAP connection closed by peer {}: {}.", session.peer_addr, err);
+                    Ok(Err(err)) => {
+                        debug!("IMAP connection closed by {}: {}.", session.peer_addr, err);
                         break;
                     },
+                    Err(_) => {
+                        session.write_bytes(b"* BYE Connection timed out.\r\n".to_vec()).await.ok();
+                        debug!("IMAP connection timed out with {}.", session.peer_addr);
+                        break;
+                    }
                 }
             },
             _ = shutdown_rx.changed() => {
@@ -78,9 +96,15 @@ pub async fn handle_conn_tls(
 
     loop {
         tokio::select! {
-            result = stream_rx.read(&mut buf) => {
+            result = tokio::time::timeout(
+                if !matches!(session.state, State::NotAuthenticated {..}) {
+                    AUTHENTICATED_TIMEOUT
+                } else {
+                    NON_AUTHENTICATED_TIMEOUT
+                },
+                stream_rx.read(&mut buf)) => {
                 match result {
-                    Ok(bytes_read) => {
+                    Ok(Ok(bytes_read)) => {
                         if bytes_read > 0 {
                             if session.ingest(&buf[..bytes_read]).await.is_err() {
                                 debug!("Disconnecting client.");
@@ -91,10 +115,15 @@ pub async fn handle_conn_tls(
                             break;
                         }
                     },
-                    Err(err) => {
+                    Ok(Err(err)) => {
                         debug!("IMAP connection closed by peer {}: {}.", session.peer_addr, err);
                         break;
                     },
+                    Err(_) => {
+                        session.write_bytes(b"* BYE Connection timed out.\r\n".to_vec()).await.ok();
+                        debug!("IMAP connection timed out with {}.", session.peer_addr);
+                        break;
+                    }
                 }
             },
             _ = shutdown_rx.changed() => {

@@ -1,20 +1,28 @@
-use crate::core::receiver::Token;
+use crate::core::receiver::{Request, Token};
 use crate::protocol::status;
 use crate::protocol::status::Status;
 
-pub fn parse_status(tokens: Vec<Token>) -> super::Result<status::Arguments> {
-    match tokens.len() {
-        0..=3 => Err("Missing arguments.".into()),
+pub fn parse_status(request: Request) -> crate::core::Result<status::Arguments> {
+    match request.tokens.len() {
+        0..=3 => Err(request.into_error("Missing arguments.")),
         len => {
-            let mut tokens = tokens.into_iter();
-            let name = tokens.next().unwrap().unwrap_string()?;
+            let mut tokens = request.tokens.into_iter();
+            let name = tokens
+                .next()
+                .unwrap()
+                .unwrap_string()
+                .map_err(|v| (request.tag.as_str(), v))?;
             let mut items = Vec::with_capacity(len - 2);
 
             if tokens
                 .next()
                 .map_or(true, |token| !token.is_parenthesis_open())
             {
-                return Err("Expected parenthesis after mailbox name.".into());
+                return Err((
+                    request.tag.as_str(),
+                    "Expected parenthesis after mailbox name.",
+                )
+                    .into());
             }
 
             #[allow(clippy::while_let_on_iterator)]
@@ -22,9 +30,15 @@ pub fn parse_status(tokens: Vec<Token>) -> super::Result<status::Arguments> {
                 match token {
                     Token::ParenthesisClose => break,
                     Token::Argument(value) => {
-                        items.push(Status::parse(&value)?);
+                        items.push(Status::parse(&value).map_err(|v| (request.tag.as_str(), v))?);
                     }
-                    _ => return Err("Invalid status return option argument.".into()),
+                    _ => {
+                        return Err((
+                            request.tag.as_str(),
+                            "Invalid status return option argument.",
+                        )
+                            .into())
+                    }
                 }
             }
 
@@ -73,13 +87,8 @@ mod tests {
             },
         )] {
             assert_eq!(
-                super::parse_status(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_status(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments
             );
         }

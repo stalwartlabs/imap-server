@@ -1,6 +1,6 @@
 use crate::core::StatusResponse;
 
-use super::{ImapResponse, ProtocolVersion};
+use super::{authenticate::Mechanism, ImapResponse, ProtocolVersion};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
@@ -10,34 +10,46 @@ pub struct Response {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Capability {
     IMAP4rev2,
+    IMAP4rev1,
     StartTLS,
     LoginDisabled,
     Condstore,
+    Auth(Mechanism),
 }
 
 impl Capability {
-    pub fn to_buf(&self) -> &'static [u8] {
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
         match self {
-            Capability::IMAP4rev2 => b"IMAP4rev2",
-            Capability::StartTLS => b"STARTTLS",
-            Capability::LoginDisabled => b"LOGINDISABLED",
-            Capability::Condstore => b"CONDSTORE",
+            Capability::IMAP4rev2 => {
+                buf.extend_from_slice(b"IMAP4rev2");
+            }
+            Capability::IMAP4rev1 => {
+                buf.extend_from_slice(b"IMAP4rev1");
+            }
+            Capability::StartTLS => {
+                buf.extend_from_slice(b"STARTTLS");
+            }
+            Capability::LoginDisabled => {
+                buf.extend_from_slice(b"LOGINDISABLED");
+            }
+            Capability::Condstore => {
+                buf.extend_from_slice(b"CONDSTORE");
+            }
+            Capability::Auth(mechanism) => {
+                buf.extend_from_slice(b"AUTH=");
+                mechanism.serialize(buf);
+            }
         }
     }
 }
 
 impl ImapResponse for Response {
     fn serialize(&self, tag: String, _imap_rev: ProtocolVersion) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(
-            b"* CAPABILITY  \r\n".len()
-                + (self.capabilities.len() * 10)
-                + b" OK CAPABILITY completed\r\n".len()
-                + tag.len(),
-        );
+        let mut buf = Vec::with_capacity(64);
         buf.extend_from_slice(b"* CAPABILITY");
         for capability in self.capabilities.iter() {
             buf.push(b' ');
-            buf.extend_from_slice(capability.to_buf());
+            capability.serialize(&mut buf);
         }
         buf.extend_from_slice(b"\r\n");
         StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);

@@ -1,12 +1,18 @@
-use crate::{core::receiver::Token, protocol::examine};
+use crate::{core::receiver::Request, protocol::examine};
 
-pub fn parse_examine(tokens: Vec<Token>) -> super::Result<examine::Arguments> {
-    match tokens.len() {
+pub fn parse_examine(request: Request) -> crate::core::Result<examine::Arguments> {
+    match request.tokens.len() {
         1 => Ok(examine::Arguments {
-            name: tokens.into_iter().next().unwrap().unwrap_string()?,
+            name: request
+                .tokens
+                .into_iter()
+                .next()
+                .unwrap()
+                .unwrap_string()
+                .map_err(|v| (request.tag, v))?,
         }),
-        0 => Err("Missing mailbox name.".into()),
-        _ => Err("Too many arguments.".into()),
+        0 => Err(request.into_error("Missing mailbox name.")),
+        _ => Err(request.into_error("Too many arguments.")),
     }
 }
 
@@ -33,13 +39,8 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_examine(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_examine(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments
             );
         }

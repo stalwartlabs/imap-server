@@ -181,6 +181,19 @@ impl StatusResponse {
             rtype: ResponseType::Ok,
         }
     }
+
+    pub fn bye(
+        tag: Option<String>,
+        code: Option<ResponseCode>,
+        message: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        StatusResponse {
+            tag,
+            code,
+            message: message.into(),
+            rtype: ResponseType::Bye,
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, StatusResponse>;

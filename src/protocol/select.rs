@@ -40,7 +40,7 @@ impl ImapResponse for Response {
             buf.extend_from_slice(b" RECENT\r\n");
         }
 
-        self.mailbox.serialize(&mut buf, version);
+        self.mailbox.serialize(&mut buf, version, false);
 
         if version == ProtocolVersion::Rev1 {
             buf.extend_from_slice(b"* OK [UNSEEN ");

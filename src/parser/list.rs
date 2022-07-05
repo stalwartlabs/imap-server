@@ -1,7 +1,5 @@
-use std::borrow::Cow;
-
 use crate::{
-    core::receiver::Token,
+    core::receiver::{Request, Token},
     protocol::{
         list::{self, ReturnOption, SelectionOption},
         status::Status,
@@ -9,18 +7,27 @@ use crate::{
 };
 
 #[allow(clippy::while_let_on_iterator)]
-pub fn parse_list(tokens: Vec<Token>) -> super::Result<list::Arguments> {
-    match tokens.len() {
-        0 | 1 => Err("Missing arguments.".into()),
+pub fn parse_list(request: Request) -> crate::core::Result<list::Arguments> {
+    match request.tokens.len() {
+        0 | 1 => Err(request.into_error("Missing arguments.")),
         2 => {
-            let mut tokens = tokens.into_iter();
+            let mut tokens = request.tokens.into_iter();
             Ok(list::Arguments::Basic {
-                reference_name: tokens.next().unwrap().unwrap_string()?,
-                mailbox_name: tokens.next().unwrap().unwrap_string()?,
+                reference_name: tokens
+                    .next()
+                    .unwrap()
+                    .unwrap_string()
+                    .map_err(|v| (request.tag.as_str(), v))?,
+                mailbox_name: tokens
+                    .next()
+                    .unwrap()
+                    .unwrap_string()
+                    .map_err(|v| (request.tag.as_str(), v))?,
+                tag: request.tag,
             })
         }
         _ => {
-            let mut tokens = tokens.into_iter();
+            let mut tokens = request.tokens.into_iter();
             let mut selection_options = Vec::new();
             let mut return_options = Vec::new();
             let mut mailbox_name = Vec::new();
@@ -31,35 +38,55 @@ pub fn parse_list(tokens: Vec<Token>) -> super::Result<list::Arguments> {
                         match token {
                             Token::ParenthesisClose => break,
                             Token::Argument(value) => {
-                                selection_options.push(SelectionOption::parse(&value)?);
+                                selection_options.push(
+                                    SelectionOption::parse(&value)
+                                        .map_err(|v| (request.tag.as_str(), v))?,
+                                );
                             }
-                            _ => return Err("Invalid selection option argument.".into()),
+                            _ => {
+                                return Err((
+                                    request.tag.as_str(),
+                                    "Invalid selection option argument.",
+                                )
+                                    .into())
+                            }
                         }
                     }
                     tokens
                         .next()
-                        .ok_or_else(|| Cow::from("Missing reference name."))?
-                        .unwrap_string()?
+                        .ok_or((request.tag.as_str(), "Missing reference name."))?
+                        .unwrap_string()
+                        .map_err(|v| (request.tag.as_str(), v))?
                 }
-                token => token.unwrap_string()?,
+                token => token
+                    .unwrap_string()
+                    .map_err(|v| (request.tag.as_str(), v))?,
             };
 
             match tokens
                 .next()
-                .ok_or_else(|| Cow::from("Missing mailbox name."))?
+                .ok_or((request.tag.as_str(), "Missing mailbox name."))?
             {
                 Token::ParenthesisOpen => {
                     while let Some(token) = tokens.next() {
                         match token {
                             Token::ParenthesisClose => break,
                             token => {
-                                mailbox_name.push(token.unwrap_string()?);
+                                mailbox_name.push(
+                                    token
+                                        .unwrap_string()
+                                        .map_err(|v| (request.tag.as_str(), v))?,
+                                );
                             }
                         }
                     }
                 }
                 token => {
-                    mailbox_name.push(token.unwrap_string()?);
+                    mailbox_name.push(
+                        token
+                            .unwrap_string()
+                            .map_err(|v| (request.tag.as_str(), v))?,
+                    );
                 }
             }
 
@@ -71,46 +98,62 @@ pub fn parse_list(tokens: Vec<Token>) -> super::Result<list::Arguments> {
                     .next()
                     .map_or(true, |token| !token.is_parenthesis_open())
                 {
-                    return Err("Invalid return option, expected parenthesis.".into());
+                    return Err((
+                        request.tag.as_str(),
+                        "Invalid return option, expected parenthesis.",
+                    )
+                        .into());
                 }
 
                 while let Some(token) = tokens.next() {
                     match token {
                         Token::ParenthesisClose => break,
                         Token::Argument(value) => {
-                            let mut return_option = ReturnOption::parse(&value)?;
+                            let mut return_option = ReturnOption::parse(&value)
+                                .map_err(|v| (request.tag.as_str(), v))?;
                             if let ReturnOption::Status(status) = &mut return_option {
                                 if tokens
                                     .next()
                                     .map_or(true, |token| !token.is_parenthesis_open())
                                 {
-                                    return Err(
-                                        "Invalid return option, expected parenthesis after STATUS."
-                                            .into(),
-                                    );
+                                    return Err((
+                                        request.tag,
+                                        "Invalid return option, expected parenthesis after STATUS.",
+                                    )
+                                        .into());
                                 }
                                 while let Some(token) = tokens.next() {
                                     match token {
                                         Token::ParenthesisClose => break,
                                         Token::Argument(value) => {
-                                            status.push(Status::parse(&value)?);
+                                            status.push(
+                                                Status::parse(&value)
+                                                    .map_err(|v| (request.tag.as_str(), v))?,
+                                            );
                                         }
                                         _ => {
-                                            return Err(
-                                                "Invalid status return option argument.".into()
+                                            return Err((
+                                                request.tag,
+                                                "Invalid status return option argument.",
                                             )
+                                                .into())
                                         }
                                     }
                                 }
                             }
                             return_options.push(return_option);
                         }
-                        _ => return Err("Invalid return option argument.".into()),
+                        _ => {
+                            return Err(
+                                (request.tag.as_str(), "Invalid return option argument.").into()
+                            )
+                        }
                     }
                 }
             }
 
             Ok(list::Arguments::Extended {
+                tag: request.tag,
                 reference_name,
                 mailbox_name,
                 selection_options,
@@ -170,6 +213,7 @@ mod tests {
             (
                 "A682 LIST \"\" *\r\n",
                 list::Arguments::Basic {
+                    tag: "A682".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: "*".to_string(),
                 },
@@ -177,6 +221,7 @@ mod tests {
             (
                 "A02 LIST (SUBSCRIBED) \"\" \"*\"\r\n",
                 list::Arguments::Extended {
+                    tag: "A02".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["*".to_string()],
                     selection_options: vec![SelectionOption::Subscribed],
@@ -186,6 +231,7 @@ mod tests {
             (
                 "A03 LIST () \"\" \"%\" RETURN (CHILDREN)\r\n",
                 list::Arguments::Extended {
+                    tag: "A03".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string()],
                     selection_options: vec![],
@@ -195,6 +241,7 @@ mod tests {
             (
                 "A04 LIST (REMOTE) \"\" \"%\" RETURN (CHILDREN)\r\n",
                 list::Arguments::Extended {
+                    tag: "A04".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string()],
                     selection_options: vec![SelectionOption::Remote],
@@ -204,6 +251,7 @@ mod tests {
             (
                 "A05 LIST (REMOTE SUBSCRIBED) \"\" \"*\"\r\n",
                 list::Arguments::Extended {
+                    tag: "A05".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["*".to_string()],
                     selection_options: vec![SelectionOption::Remote, SelectionOption::Subscribed],
@@ -213,6 +261,7 @@ mod tests {
             (
                 "A06 LIST (REMOTE) \"\" \"*\" RETURN (SUBSCRIBED)\r\n",
                 list::Arguments::Extended {
+                    tag: "A06".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["*".to_string()],
                     selection_options: vec![SelectionOption::Remote],
@@ -222,6 +271,7 @@ mod tests {
             (
                 "C04 LIST (SUBSCRIBED RECURSIVEMATCH) \"\" \"%\"\r\n",
                 list::Arguments::Extended {
+                    tag: "C04".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string()],
                     selection_options: vec![
@@ -234,6 +284,7 @@ mod tests {
             (
                 "C04 LIST (SUBSCRIBED RECURSIVEMATCH) \"\" \"%\" RETURN (CHILDREN)\r\n",
                 list::Arguments::Extended {
+                    tag: "C04".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string()],
                     selection_options: vec![
@@ -246,6 +297,7 @@ mod tests {
             (
                 "a1 LIST \"\" (\"foo\")\r\n",
                 list::Arguments::Extended {
+                    tag: "a1".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["foo".to_string()],
                     selection_options: vec![],
@@ -255,6 +307,7 @@ mod tests {
             (
                 "a3.1 LIST \"\" (% music/rock)\r\n",
                 list::Arguments::Extended {
+                    tag: "a3.1".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string(), "music/rock".to_string()],
                     selection_options: vec![],
@@ -264,6 +317,7 @@ mod tests {
             (
                 "BBB LIST \"\" (\"INBOX\" \"Drafts\" \"Sent/%\")\r\n",
                 list::Arguments::Extended {
+                    tag: "BBB".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec![
                         "INBOX".to_string(),
@@ -277,6 +331,7 @@ mod tests {
             (
                 "A01 LIST \"\" % RETURN (STATUS (MESSAGES UNSEEN))\r\n",
                 list::Arguments::Extended {
+                    tag: "A01".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string()],
                     selection_options: vec![],
@@ -292,6 +347,7 @@ mod tests {
                     "% RETURN (CHILDREN STATUS (MESSAGES))\r\n"
                 ),
                 list::Arguments::Extended {
+                    tag: "A02".to_string(),
                     reference_name: "".to_string(),
                     mailbox_name: vec!["%".to_string()],
                     selection_options: vec![
@@ -306,13 +362,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_list(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_list(receiver.parse(&mut command.as_bytes().iter()).unwrap()).unwrap(),
                 arguments
             );
         }

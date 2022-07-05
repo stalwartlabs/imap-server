@@ -6,7 +6,7 @@ use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 use mail_parser::decoders::charsets::DecoderFnc;
 
-use crate::core::receiver::Token;
+use crate::core::receiver::{Request, Token};
 use crate::core::Flag;
 use crate::protocol::search::ResultOption;
 use crate::protocol::search::{self, Filter};
@@ -14,12 +14,12 @@ use crate::protocol::search::{self, Filter};
 use super::{parse_date, parse_integer, parse_sequence_set};
 
 #[allow(clippy::while_let_on_iterator)]
-pub fn parse_search(tokens: Vec<Token>) -> super::Result<search::Arguments> {
-    if tokens.is_empty() {
-        return Err("Missing search criteria.".into());
+pub fn parse_search(request: Request) -> crate::core::Result<search::Arguments> {
+    if request.tokens.is_empty() {
+        return Err(request.into_error("Missing search criteria."));
     }
 
-    let mut tokens = tokens.into_iter().peekable();
+    let mut tokens = request.tokens.into_iter().peekable();
     let mut result_options = Vec::new();
     let mut decoder = None;
 
@@ -31,15 +31,26 @@ pub fn parse_search(tokens: Vec<Token>) -> super::Result<search::Arguments> {
                     .next()
                     .map_or(true, |token| !token.is_parenthesis_open())
                 {
-                    return Err("Invalid result option, expected parenthesis.".into());
+                    return Err((
+                        request.tag.as_str(),
+                        "Invalid result option, expected parenthesis.",
+                    )
+                        .into());
                 }
                 while let Some(token) = tokens.next() {
                     match token {
                         Token::ParenthesisClose => break,
                         Token::Argument(value) => {
-                            result_options.push(ResultOption::parse(&value)?);
+                            result_options.push(
+                                ResultOption::parse(&value)
+                                    .map_err(|v| (request.tag.as_str(), v))?,
+                            );
                         }
-                        _ => return Err("Invalid result option argument.".into()),
+                        _ => {
+                            return Err(
+                                (request.tag.as_str(), "Invalid result option argument.").into()
+                            )
+                        }
                     }
                 }
             }
@@ -48,7 +59,7 @@ pub fn parse_search(tokens: Vec<Token>) -> super::Result<search::Arguments> {
                 decoder = get_charset_decoder(
                     &tokens
                         .next()
-                        .ok_or_else(|| Cow::from("Missing charset."))?
+                        .ok_or((request.tag.as_str(), "Missing charset."))?
                         .unwrap_bytes(),
                 );
             }
@@ -56,9 +67,9 @@ pub fn parse_search(tokens: Vec<Token>) -> super::Result<search::Arguments> {
         }
     }
 
-    let mut filters = parse_filters(&mut tokens, decoder)?;
+    let mut filters = parse_filters(&mut tokens, decoder).map_err(|v| (request.tag.as_str(), v))?;
     match filters.len() {
-        0 => Err(Cow::from("No filters found in command.")),
+        0 => Err((request.tag.as_str(), "No filters found in command.").into()),
         1 => Ok(search::Arguments {
             result_options,
             filter: filters.pop().unwrap(),
@@ -524,7 +535,7 @@ mod tests {
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
             assert_eq!(
-                super::parse_search(receiver.parse(&mut command.iter()).unwrap().tokens)
+                super::parse_search(receiver.parse(&mut command.iter()).unwrap())
                     .expect(&command_str),
                 arguments,
                 "{}",

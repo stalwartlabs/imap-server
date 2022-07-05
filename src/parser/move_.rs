@@ -1,27 +1,27 @@
-use std::borrow::Cow;
-
-use crate::{core::receiver::Token, protocol::move_};
+use crate::{core::receiver::Request, protocol::move_};
 
 use super::parse_sequence_set;
 
-pub fn parse_move(tokens: Vec<Token>) -> super::Result<move_::Arguments> {
-    if tokens.len() > 1 {
-        let mut tokens = tokens.into_iter();
+pub fn parse_move(request: Request) -> crate::core::Result<move_::Arguments> {
+    if request.tokens.len() > 1 {
+        let mut tokens = request.tokens.into_iter();
 
         Ok(move_::Arguments {
             sequence_set: parse_sequence_set(
                 &tokens
                     .next()
-                    .ok_or_else(|| Cow::from("Missing sequence set."))?
+                    .ok_or((request.tag.as_str(), "Missing sequence set."))?
                     .unwrap_bytes(),
-            )?,
+            )
+            .map_err(|v| (request.tag.as_str(), v))?,
             mailbox_name: tokens
                 .next()
-                .ok_or_else(|| Cow::from("Missing mailbox name."))?
-                .unwrap_string()?,
+                .ok_or((request.tag.as_str(), "Missing mailbox name."))?
+                .unwrap_string()
+                .map_err(|v| (request.tag.as_str(), v))?,
         })
     } else {
-        Err("Missing arguments.".into())
+        Err(request.into_error("Missing arguments."))
     }
 }
 
@@ -47,13 +47,7 @@ mod tests {
             },
         )] {
             assert_eq!(
-                super::parse_move(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_move(receiver.parse(&mut command.as_bytes().iter()).unwrap()).unwrap(),
                 arguments
             );
         }

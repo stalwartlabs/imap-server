@@ -9,14 +9,21 @@ use super::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Arguments {
     Basic {
+        tag: String,
         reference_name: String,
         mailbox_name: String,
     },
     Extended {
+        tag: String,
         reference_name: String,
         mailbox_name: Vec<String>,
         selection_options: Vec<SelectionOption>,
         return_options: Vec<ReturnOption>,
+    },
+    Lsub {
+        tag: String,
+        reference_name: String,
+        mailbox_name: String,
     },
 }
 
@@ -149,9 +156,13 @@ impl ListItem {
         }
     }
 
-    pub fn serialize(&self, buf: &mut Vec<u8>, version: ProtocolVersion) {
+    pub fn serialize(&self, buf: &mut Vec<u8>, version: ProtocolVersion, as_lsub: bool) {
         let normalized_mailbox_name = utf7_encode(&self.mailbox_name);
-        buf.extend_from_slice(b"* LIST (");
+        if !as_lsub {
+            buf.extend_from_slice(b"* LIST (");
+        } else {
+            buf.extend_from_slice(b"* LSUB (");
+        }
         let mut is_first = true;
         for attr in &self.attributes {
             if version == ProtocolVersion::Rev2 || attr.is_rev1() {
@@ -196,7 +207,7 @@ impl ImapResponse for Response {
     fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
         for list_item in &self.list_items {
-            list_item.serialize(&mut buf, version);
+            list_item.serialize(&mut buf, version, false);
         }
         if version == ProtocolVersion::Rev2 {
             for status_item in &self.status_items {
@@ -266,8 +277,8 @@ mod tests {
             let mut buf_1 = Vec::with_capacity(100);
             let mut buf_2 = Vec::with_capacity(100);
 
-            response.serialize(&mut buf_1, ProtocolVersion::Rev1);
-            response.serialize(&mut buf_2, ProtocolVersion::Rev2);
+            response.serialize(&mut buf_1, ProtocolVersion::Rev1, false);
+            response.serialize(&mut buf_2, ProtocolVersion::Rev2, false);
 
             let response_v1 = String::from_utf8(buf_1).unwrap();
             let response_v2 = String::from_utf8(buf_2).unwrap();

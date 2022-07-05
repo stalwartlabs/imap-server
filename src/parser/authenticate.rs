@@ -1,22 +1,67 @@
-use crate::{core::receiver::Token, protocol::authenticate};
+use crate::{
+    core::receiver::Request,
+    protocol::authenticate::{self, Mechanism},
+};
 
-pub fn parse_authenticate(tokens: Vec<Token>) -> super::Result<authenticate::Arguments> {
-    match tokens.len() {
-        1 | 2 => {
-            let mut tokens = tokens.into_iter();
-            Ok(authenticate::Arguments {
-                mechanism: tokens.next().unwrap().unwrap_string()?,
-                initial_response: tokens.next().map(|token| token.unwrap_bytes()),
-            })
+pub fn parse_authenticate(request: Request) -> crate::core::Result<authenticate::Arguments> {
+    if !request.tokens.is_empty() {
+        let mut tokens = request.tokens.into_iter();
+        Ok(authenticate::Arguments {
+            mechanism: Mechanism::parse(&tokens.next().unwrap().unwrap_bytes())
+                .map_err(|v| (request.tag.as_str(), v))?,
+            params: tokens
+                .into_iter()
+                .filter_map(|token| token.unwrap_string().ok())
+                .collect(),
+            tag: request.tag,
+        })
+    } else {
+        Err(request.into_error("Authentication mechanism missing."))
+    }
+}
+
+impl Mechanism {
+    pub fn parse(value: &[u8]) -> super::Result<Self> {
+        if value.eq_ignore_ascii_case(b"PLAIN") {
+            Ok(Self::Plain)
+        } else if value.eq_ignore_ascii_case(b"CRAM-MD5") {
+            Ok(Self::CramMd5)
+        } else if value.eq_ignore_ascii_case(b"DIGEST-MD5") {
+            Ok(Self::DigestMd5)
+        } else if value.eq_ignore_ascii_case(b"SCRAM-SHA-1") {
+            Ok(Self::ScramSha1)
+        } else if value.eq_ignore_ascii_case(b"SCRAM-SHA-256") {
+            Ok(Self::ScramSha256)
+        } else if value.eq_ignore_ascii_case(b"APOP") {
+            Ok(Self::Apop)
+        } else if value.eq_ignore_ascii_case(b"NTLM") {
+            Ok(Self::Ntlm)
+        } else if value.eq_ignore_ascii_case(b"GSSAPI") {
+            Ok(Self::Gssapi)
+        } else if value.eq_ignore_ascii_case(b"ANONYMOUS") {
+            Ok(Self::Anonymous)
+        } else if value.eq_ignore_ascii_case(b"EXTERNAL") {
+            Ok(Self::External)
+        } else if value.eq_ignore_ascii_case(b"OAUTHBEARER") {
+            Ok(Self::OAuthBearer)
+        } else if value.eq_ignore_ascii_case(b"XOAUTH2") {
+            Ok(Self::XOauth2)
+        } else {
+            Err(format!(
+                "Unsupported mechanism '{}'.",
+                String::from_utf8_lossy(value)
+            )
+            .into())
         }
-        0 => Err("Missing arguments.".into()),
-        _ => Err("Too many arguments.".into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{core::receiver::Receiver, protocol::authenticate};
+    use crate::{
+        core::receiver::Receiver,
+        protocol::authenticate::{self, Mechanism},
+    };
 
     #[test]
     fn parse_authenticate() {
@@ -26,26 +71,23 @@ mod tests {
             (
                 "a002 AUTHENTICATE \"EXTERNAL\" {16+}\r\nfred@example.com\r\n",
                 authenticate::Arguments {
-                    mechanism: "EXTERNAL".to_string(),
-                    initial_response: Some("fred@example.com".as_bytes().to_vec()),
+                    tag: "a002".to_string(),
+                    mechanism: Mechanism::External,
+                    params: vec!["fred@example.com".to_string()],
                 },
             ),
             (
                 "A01 AUTHENTICATE PLAIN\r\n",
                 authenticate::Arguments {
-                    mechanism: "PLAIN".to_string(),
-                    initial_response: None,
+                    tag: "A01".to_string(),
+                    mechanism: Mechanism::Plain,
+                    params: vec![],
                 },
             ),
         ] {
             assert_eq!(
-                super::parse_authenticate(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_authenticate(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments
             );
         }

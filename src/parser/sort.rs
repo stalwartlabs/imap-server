@@ -1,10 +1,8 @@
-use std::borrow::Cow;
-
 use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 
 use crate::{
-    core::receiver::Token,
+    core::receiver::{Request, Token},
     protocol::{
         search::Filter,
         sort::{self, Comparator, Sort},
@@ -14,19 +12,23 @@ use crate::{
 use super::search::parse_filters;
 
 #[allow(clippy::while_let_on_iterator)]
-pub fn parse_sort(tokens: Vec<Token>) -> super::Result<sort::Arguments> {
-    if tokens.is_empty() {
-        return Err("Missing sort criteria.".into());
+pub fn parse_sort(request: Request) -> crate::core::Result<sort::Arguments> {
+    if request.tokens.is_empty() {
+        return Err(request.into_error("Missing sort criteria."));
     }
 
-    let mut tokens = tokens.into_iter().peekable();
+    let mut tokens = request.tokens.into_iter().peekable();
     let mut sort = Vec::new();
 
     if tokens
         .next()
         .map_or(true, |token| !token.is_parenthesis_open())
     {
-        return Err("Expected sort criteria between parentheses.".into());
+        return Err((
+            request.tag.as_str(),
+            "Expected sort criteria between parentheses.",
+        )
+            .into());
     }
 
     let mut is_ascending = true;
@@ -38,30 +40,30 @@ pub fn parse_sort(tokens: Vec<Token>) -> super::Result<sort::Arguments> {
                     is_ascending = false;
                 } else {
                     sort.push(Comparator {
-                        sort: Sort::parse(&value)?,
+                        sort: Sort::parse(&value).map_err(|v| (request.tag.as_str(), v))?,
                         ascending: is_ascending,
                     });
                     is_ascending = true;
                 }
             }
-            _ => return Err("Invalid result option argument.".into()),
+            _ => return Err((request.tag.as_str(), "Invalid result option argument.").into()),
         }
     }
 
     if sort.is_empty() {
-        return Err("Missing sort criteria.".into());
+        return Err((request.tag.as_str(), "Missing sort criteria.").into());
     }
 
     let decoder = get_charset_decoder(
         &tokens
             .next()
-            .ok_or_else(|| Cow::from("Missing charset."))?
+            .ok_or((request.tag.as_str(), "Missing charset."))?
             .unwrap_bytes(),
     );
 
-    let mut filters = parse_filters(&mut tokens, decoder)?;
+    let mut filters = parse_filters(&mut tokens, decoder).map_err(|v| (request.tag.as_str(), v))?;
     match filters.len() {
-        0 => Err(Cow::from("No filters found in command.")),
+        0 => Err((request.tag.as_str(), "No filters found in command.").into()),
         1 => Ok(sort::Arguments {
             sort,
             filter: filters.pop().unwrap(),
@@ -175,7 +177,7 @@ mod tests {
             let command_str = String::from_utf8_lossy(&command).into_owned();
 
             assert_eq!(
-                super::parse_sort(receiver.parse(&mut command.iter()).unwrap().tokens)
+                super::parse_sort(receiver.parse(&mut command.iter()).unwrap())
                     .expect(&command_str),
                 arguments,
                 "{}",

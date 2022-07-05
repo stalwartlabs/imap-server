@@ -1,18 +1,23 @@
-use std::borrow::Cow;
-
 use crate::{
-    core::{receiver::Token, Flag},
+    core::{
+        receiver::{Request, Token},
+        Flag,
+    },
     protocol::append,
 };
 
 use super::parse_datetime;
 
-pub fn parse_append(tokens: Vec<Token>) -> super::Result<append::Arguments> {
-    match tokens.len() {
-        0 | 1 => Err("Missing arguments.".into()),
+pub fn parse_append(request: Request) -> crate::core::Result<append::Arguments> {
+    match request.tokens.len() {
+        0 | 1 => Err(request.into_error("Missing arguments.")),
         _ => {
-            let mut tokens = tokens.into_iter();
-            let mailbox_name = tokens.next().unwrap().unwrap_string()?;
+            let mut tokens = request.tokens.into_iter();
+            let mailbox_name = tokens
+                .next()
+                .unwrap()
+                .unwrap_string()
+                .map_err(|v| (request.tag.as_str(), v))?;
             let mut flags = Vec::new();
             let token = match tokens.next().unwrap() {
                 Token::ParenthesisOpen => {
@@ -21,21 +26,26 @@ pub fn parse_append(tokens: Vec<Token>) -> super::Result<append::Arguments> {
                         match token {
                             Token::ParenthesisClose => break,
                             Token::Argument(value) => {
-                                flags.push(Flag::parse_imap(value)?);
+                                flags.push(
+                                    Flag::parse_imap(value)
+                                        .map_err(|v| (request.tag.as_str(), v))?,
+                                );
                             }
-                            _ => return Err("Invalid flag.".into()),
+                            _ => return Err((request.tag.as_str(), "Invalid flag.").into()),
                         }
                     }
                     tokens
                         .next()
-                        .ok_or_else(|| Cow::from("Missing paramaters after flags."))?
+                        .ok_or((request.tag.as_str(), "Missing paramaters after flags."))?
                 }
                 token => token,
             };
             let (message, received_at) = if let Some(next_token) = tokens.next() {
                 (
                     next_token.unwrap_bytes(),
-                    parse_datetime(&token.unwrap_bytes())?.into(),
+                    parse_datetime(&token.unwrap_bytes())
+                        .map_err(|v| (request.tag.as_str(), v))?
+                        .into(),
                 )
             } else {
                 (token.unwrap_bytes(), None)
@@ -102,13 +112,8 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_append(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_append(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments,
                 "{:?}",
                 command

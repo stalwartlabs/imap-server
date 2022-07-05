@@ -1,23 +1,25 @@
-use std::borrow::Cow;
-
 use crate::{
-    core::{receiver::Token, Flag},
+    core::{
+        receiver::{Request, Token},
+        Flag,
+    },
     protocol::store::{self, Operation},
 };
 
 use super::parse_sequence_set;
 
-pub fn parse_store(tokens: Vec<Token>) -> super::Result<store::Arguments> {
-    let mut tokens = tokens.into_iter();
+pub fn parse_store(request: Request) -> crate::core::Result<store::Arguments> {
+    let mut tokens = request.tokens.into_iter();
     let sequence_set = parse_sequence_set(
         &tokens
             .next()
-            .ok_or_else(|| Cow::from("Missing sequence set."))?
+            .ok_or((request.tag.as_str(), "Missing sequence set."))?
             .unwrap_bytes(),
-    )?;
+    )
+    .map_err(|v| (request.tag.as_str(), v))?;
     let operation = tokens
         .next()
-        .ok_or_else(|| Cow::from("Missing message data item name."))?
+        .ok_or((request.tag.as_str(), "Missing message data item name."))?
         .unwrap_bytes();
     let operation = if operation.eq_ignore_ascii_case(b"FLAGS") {
         Operation::Set
@@ -32,30 +34,38 @@ pub fn parse_store(tokens: Vec<Token>) -> super::Result<store::Arguments> {
     } else if operation.eq_ignore_ascii_case(b"-FLAGS.SILENT") {
         Operation::ClearSilent
     } else {
-        return Err(Cow::from(format!(
-            "Unsupported message data item name: {:?}",
-            String::from_utf8_lossy(&operation)
-        )));
+        return Err((
+            request.tag,
+            format!(
+                "Unsupported message data item name: {:?}",
+                String::from_utf8_lossy(&operation)
+            ),
+        )
+            .into());
     };
 
     if tokens
         .next()
         .map_or(true, |token| !token.is_parenthesis_open())
     {
-        return Err("Expected store parameters between parentheses.".into());
+        return Err((
+            request.tag,
+            "Expected store parameters between parentheses.",
+        )
+            .into());
     }
 
     let mut keywords = Vec::new();
     for token in tokens {
         match token {
             Token::Argument(flag) => {
-                keywords.push(Flag::parse_imap(flag)?);
+                keywords.push(Flag::parse_imap(flag).map_err(|v| (request.tag.as_str(), v))?);
             }
             Token::ParenthesisClose => {
                 break;
             }
             _ => {
-                return Err("Unsupported flag.".into());
+                return Err((request.tag.as_str(), "Unsupported flag.").into());
             }
         }
     }
@@ -67,7 +77,7 @@ pub fn parse_store(tokens: Vec<Token>) -> super::Result<store::Arguments> {
             keywords,
         })
     } else {
-        Err("Missing flags.".into())
+        Err((request.tag.as_str(), "Missing flags.").into())
     }
 }
 
@@ -111,13 +121,8 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_store(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_store(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments
             );
         }

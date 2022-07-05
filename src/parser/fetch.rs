@@ -3,26 +3,27 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 use crate::{
-    core::receiver::Token,
+    core::receiver::{Request, Token},
     protocol::fetch::{self, Attribute, Section},
 };
 
 use super::{parse_integer, parse_sequence_set};
 
 #[allow(clippy::while_let_on_iterator)]
-pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
-    if tokens.len() < 2 {
-        return Err("Missing parameters.".into());
+pub fn parse_fetch(request: Request) -> crate::core::Result<fetch::Arguments> {
+    if request.tokens.len() < 2 {
+        return Err(request.into_error("Missing parameters."));
     }
 
-    let mut tokens = tokens.into_iter().peekable();
+    let mut tokens = request.tokens.into_iter().peekable();
     let mut attributes = Vec::new();
     let sequence_set = parse_sequence_set(
         &tokens
             .next()
-            .ok_or_else(|| Cow::from("Missing sequence set."))?
+            .ok_or((request.tag.as_str(), "Missing sequence set."))?
             .unwrap_bytes(),
-    )?;
+    )
+    .map_err(|v| (request.tag.as_str(), v))?;
 
     let mut in_parentheses = false;
 
@@ -68,7 +69,7 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                         tokens.next();
                         let rfc822 = tokens
                             .next()
-                            .ok_or_else(|| Cow::from("Missing RFC822 parameter."))?
+                            .ok_or((request.tag.as_str(), "Missing RFC822 parameter."))?
                             .unwrap_bytes();
                         if rfc822.eq_ignore_ascii_case(b"HEADER") {
                             Attribute::Rfc822Header
@@ -77,11 +78,14 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                         } else if rfc822.eq_ignore_ascii_case(b"TEXT") {
                             Attribute::Rfc822Text
                         } else {
-                            return Err(format!(
-                                "Invalid RFC822 parameter {:?}.",
-                                String::from_utf8_lossy(&rfc822)
+                            return Err((
+                                request.tag,
+                                format!(
+                                    "Invalid RFC822 parameter {:?}.",
+                                    String::from_utf8_lossy(&rfc822)
+                                ),
                             )
-                            .into());
+                                .into());
                         }
                     } else {
                         Attribute::Rfc822
@@ -98,10 +102,16 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                                 .next()
                                 .map_or(true, |token| !token.eq_ignore_ascii_case(b"PEEK"))
                             {
-                                return Err("Expected 'PEEK' after '.'.".into());
+                                return Err(
+                                    (request.tag.as_str(), "Expected 'PEEK' after '.'.").into()
+                                );
                             }
                             if tokens.next().map_or(true, |token| !token.is_bracket_open()) {
-                                return Err("Expected '[' after 'BODY.PEEK'".into());
+                                return Err((
+                                    request.tag.as_str(),
+                                    "Expected '[' after 'BODY.PEEK'",
+                                )
+                                    .into());
                             }
                             true
                         }
@@ -123,16 +133,22 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                                         if tokens.next().map_or(true, |token| {
                                             !token.eq_ignore_ascii_case(b"FIELDS")
                                         }) {
-                                            return Err("Expected 'FIELDS' after 'HEADER.'.".into());
+                                            return Err((
+                                                request.tag,
+                                                "Expected 'FIELDS' after 'HEADER.'.",
+                                            )
+                                                .into());
                                         }
                                         let is_not = if let Some(Token::Dot) = tokens.peek() {
                                             tokens.next();
                                             if tokens.next().map_or(true, |token| {
                                                 !token.eq_ignore_ascii_case(b"NOT")
                                             }) {
-                                                return Err(
-                                                    "Expected 'NOT' after 'HEADER.FIELDS.'.".into(),
-                                                );
+                                                return Err((
+                                                    request.tag,
+                                                    "Expected 'NOT' after 'HEADER.FIELDS.'.",
+                                                )
+                                                    .into());
                                             }
                                             true
                                         } else {
@@ -142,9 +158,11 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                                             .next()
                                             .map_or(true, |token| !token.is_parenthesis_open())
                                         {
-                                            return Err(
-                                                "Expected '(' after 'HEADER.FIELDS'.".into()
-                                            );
+                                            return Err((
+                                                request.tag,
+                                                "Expected '(' after 'HEADER.FIELDS'.",
+                                            )
+                                                .into());
                                         }
                                         let mut fields = Vec::new();
                                         while let Some(token) = tokens.next() {
@@ -152,10 +170,16 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                                                 Token::ParenthesisClose => break,
                                                 Token::Argument(value) => {
                                                     fields.push(String::from_utf8(value).map_err(
-                                                        |_| Cow::from("Invalid UTF-8 in header field name."),
+                                                        |_| (request.tag.as_str(), "Invalid UTF-8 in header field name."),
                                                     )?);
                                                 }
-                                                _ => return Err("Expected field name.".into()),
+                                                _ => {
+                                                    return Err((
+                                                        request.tag,
+                                                        "Expected field name.",
+                                                    )
+                                                        .into())
+                                                }
                                             }
                                         }
                                         Section::HeaderFields {
@@ -171,18 +195,19 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                                     Section::Mime
                                 } else {
                                     Section::Part {
-                                        num: parse_integer(&value)?,
+                                        num: parse_integer(&value)
+                                            .map_err(|v| (request.tag.as_str(), v))?,
                                     }
                                 };
                                 sections.push(section);
                             }
                             Token::Dot => (),
                             _ => {
-                                return Err(format!(
-                                    "Invalid token {:?} found in section-spect.",
-                                    token
+                                return Err((
+                                    request.tag,
+                                    format!("Invalid token {:?} found in section-spect.", token),
                                 )
-                                .into())
+                                    .into())
                             }
                         }
                     }
@@ -190,21 +215,28 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                     attributes.push(Attribute::BodySection {
                         peek: is_peek,
                         sections,
-                        partial: parse_partial(&mut tokens)?,
+                        partial: parse_partial(&mut tokens)
+                            .map_err(|v| (request.tag.as_str(), v))?,
                     });
                 } else if value.eq_ignore_ascii_case(b"BINARY") {
                     let (is_peek, is_size) = if let Some(Token::Dot) = tokens.peek() {
                         tokens.next();
                         let param = tokens
                             .next()
-                            .ok_or_else(|| Cow::from("Missing parameter after 'BINARY.'."))?
+                            .ok_or({
+                                (request.tag.as_str(), "Missing parameter after 'BINARY.'.")
+                            })?
                             .unwrap_bytes();
                         if param.eq_ignore_ascii_case(b"PEEK") {
                             (true, false)
                         } else if param.eq_ignore_ascii_case(b"SIZE") {
                             (false, true)
                         } else {
-                            return Err("Expected 'PEEK' or 'SIZE' after 'BINARY.'.".into());
+                            return Err((
+                                request.tag,
+                                "Expected 'PEEK' or 'SIZE' after 'BINARY.'.",
+                            )
+                                .into());
                         }
                     } else {
                         (false, false)
@@ -212,22 +244,27 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
 
                     // Parse section-part
                     if tokens.next().map_or(true, |token| !token.is_bracket_open()) {
-                        return Err("Expected '[' after 'BINARY'.".into());
+                        return Err((request.tag.as_str(), "Expected '[' after 'BINARY'.").into());
                     }
                     let mut sections = Vec::new();
                     while let Some(token) = tokens.next() {
                         match token {
                             Token::Argument(value) => {
-                                sections.push(parse_integer(&value)?);
+                                sections.push(
+                                    parse_integer(&value).map_err(|v| (request.tag.as_str(), v))?,
+                                );
                             }
                             Token::Dot => (),
                             Token::BracketClose => break,
                             _ => {
-                                return Err(format!(
-                                    "Expected part section integer, got {:?}.",
-                                    token.to_string()
+                                return Err((
+                                    request.tag,
+                                    format!(
+                                        "Expected part section integer, got {:?}.",
+                                        token.to_string()
+                                    ),
                                 )
-                                .into())
+                                    .into())
                             }
                         }
                     }
@@ -235,32 +272,41 @@ pub fn parse_fetch(tokens: Vec<Token>) -> super::Result<fetch::Arguments> {
                         Attribute::Binary {
                             peek: is_peek,
                             sections,
-                            partial: parse_partial(&mut tokens)?,
+                            partial: parse_partial(&mut tokens)
+                                .map_err(|v| (request.tag.as_str(), v))?,
                         }
                     } else {
                         Attribute::BinarySize { sections }
                     });
                 } else {
-                    return Err(
-                        format!("Invalid attribute {:?}", String::from_utf8_lossy(&value)).into(),
-                    );
+                    return Err((
+                        request.tag,
+                        format!("Invalid attribute {:?}", String::from_utf8_lossy(&value)),
+                    )
+                        .into());
                 }
             }
             Token::ParenthesisOpen => {
                 if !in_parentheses {
                     in_parentheses = true;
                 } else {
-                    return Err("Unexpected parenthesis open.".into());
+                    return Err((request.tag.as_str(), "Unexpected parenthesis open.").into());
                 }
             }
             Token::ParenthesisClose => {
                 if in_parentheses {
                     break;
                 } else {
-                    return Err("Unexpected parenthesis close.".into());
+                    return Err((request.tag.as_str(), "Unexpected parenthesis close.").into());
                 }
             }
-            _ => return Err(format!("Invalid fetch argument {:?}.", token.to_string()).into()),
+            _ => {
+                return Err((
+                    request.tag,
+                    format!("Invalid fetch argument {:?}.", token.to_string()),
+                )
+                    .into())
+            }
         }
     }
 
@@ -584,13 +630,8 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_fetch(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .expect(command),
+                super::parse_fetch(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .expect(command),
                 arguments,
                 "{}",
                 command

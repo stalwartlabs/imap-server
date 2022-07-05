@@ -1,18 +1,21 @@
 use crate::{
-    core::receiver::Token,
+    core::receiver::Request,
     protocol::{capability::Capability, enable},
 };
 
-pub fn parse_enable(tokens: Vec<Token>) -> super::Result<enable::Arguments> {
-    let len = tokens.len();
+pub fn parse_enable(request: Request) -> crate::core::Result<enable::Arguments> {
+    let len = request.tokens.len();
     if len > 0 {
         let mut capabilities = Vec::with_capacity(len);
-        for capability in tokens {
-            capabilities.push(Capability::parse(&capability.unwrap_bytes())?);
+        for capability in request.tokens {
+            capabilities.push(
+                Capability::parse(&capability.unwrap_bytes())
+                    .map_err(|v| (request.tag.as_str(), v))?,
+            );
         }
         Ok(enable::Arguments { capabilities })
     } else {
-        Err("Missing arguments.".into())
+        Err(request.into_error("Missing arguments."))
     }
 }
 
@@ -54,13 +57,8 @@ mod tests {
             },
         )] {
             assert_eq!(
-                super::parse_enable(
-                    receiver
-                        .parse(&mut command.as_bytes().iter())
-                        .unwrap()
-                        .tokens
-                )
-                .unwrap(),
+                super::parse_enable(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                    .unwrap(),
                 arguments
             );
         }
