@@ -3,20 +3,22 @@ use crate::{
     protocol::authenticate::{self, Mechanism},
 };
 
-pub fn parse_authenticate(request: Request) -> crate::core::Result<authenticate::Arguments> {
-    if !request.tokens.is_empty() {
-        let mut tokens = request.tokens.into_iter();
-        Ok(authenticate::Arguments {
-            mechanism: Mechanism::parse(&tokens.next().unwrap().unwrap_bytes())
-                .map_err(|v| (request.tag.as_str(), v))?,
-            params: tokens
-                .into_iter()
-                .filter_map(|token| token.unwrap_string().ok())
-                .collect(),
-            tag: request.tag,
-        })
-    } else {
-        Err(request.into_error("Authentication mechanism missing."))
+impl Request {
+    pub fn parse_authenticate(self) -> crate::core::Result<authenticate::Arguments> {
+        if !self.tokens.is_empty() {
+            let mut tokens = self.tokens.into_iter();
+            Ok(authenticate::Arguments {
+                mechanism: Mechanism::parse(&tokens.next().unwrap().unwrap_bytes())
+                    .map_err(|v| (self.tag.as_str(), v))?,
+                params: tokens
+                    .into_iter()
+                    .filter_map(|token| token.unwrap_string().ok())
+                    .collect(),
+                tag: self.tag,
+            })
+        } else {
+            Err(self.into_error("Authentication mechanism missing."))
+        }
     }
 }
 
@@ -86,7 +88,10 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_authenticate(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_authenticate()
                     .unwrap(),
                 arguments
             );

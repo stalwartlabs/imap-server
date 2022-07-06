@@ -1,164 +1,170 @@
 use crate::{
-    core::receiver::{Request, Token},
+    core::{
+        receiver::{Request, Token},
+        utf7::utf7_maybe_decode,
+    },
     protocol::{
         list::{self, ReturnOption, SelectionOption},
         status::Status,
+        ProtocolVersion,
     },
 };
 
-#[allow(clippy::while_let_on_iterator)]
-pub fn parse_list(request: Request) -> crate::core::Result<list::Arguments> {
-    match request.tokens.len() {
-        0 | 1 => Err(request.into_error("Missing arguments.")),
-        2 => {
-            let mut tokens = request.tokens.into_iter();
-            Ok(list::Arguments::Basic {
-                reference_name: tokens
-                    .next()
-                    .unwrap()
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-                mailbox_name: tokens
-                    .next()
-                    .unwrap()
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-                tag: request.tag,
-            })
-        }
-        _ => {
-            let mut tokens = request.tokens.into_iter();
-            let mut selection_options = Vec::new();
-            let mut return_options = Vec::new();
-            let mut mailbox_name = Vec::new();
+impl Request {
+    #[allow(clippy::while_let_on_iterator)]
+    pub fn parse_list(self, version: ProtocolVersion) -> crate::core::Result<list::Arguments> {
+        match self.tokens.len() {
+            0 | 1 => Err(self.into_error("Missing arguments.")),
+            2 => {
+                let mut tokens = self.tokens.into_iter();
+                Ok(list::Arguments::Basic {
+                    reference_name: tokens
+                        .next()
+                        .unwrap()
+                        .unwrap_string()
+                        .map_err(|v| (self.tag.as_str(), v))?,
+                    mailbox_name: utf7_maybe_decode(
+                        tokens
+                            .next()
+                            .unwrap()
+                            .unwrap_string()
+                            .map_err(|v| (self.tag.as_str(), v))?,
+                        version,
+                    ),
+                    tag: self.tag,
+                })
+            }
+            _ => {
+                let mut tokens = self.tokens.into_iter();
+                let mut selection_options = Vec::new();
+                let mut return_options = Vec::new();
+                let mut mailbox_name = Vec::new();
 
-            let reference_name = match tokens.next().unwrap() {
-                Token::ParenthesisOpen => {
+                let reference_name = match tokens.next().unwrap() {
+                    Token::ParenthesisOpen => {
+                        while let Some(token) = tokens.next() {
+                            match token {
+                                Token::ParenthesisClose => break,
+                                Token::Argument(value) => {
+                                    selection_options.push(
+                                        SelectionOption::parse(&value)
+                                            .map_err(|v| (self.tag.as_str(), v))?,
+                                    );
+                                }
+                                _ => {
+                                    return Err((
+                                        self.tag.as_str(),
+                                        "Invalid selection option argument.",
+                                    )
+                                        .into())
+                                }
+                            }
+                        }
+                        tokens
+                            .next()
+                            .ok_or((self.tag.as_str(), "Missing reference name."))?
+                            .unwrap_string()
+                            .map_err(|v| (self.tag.as_str(), v))?
+                    }
+                    token => token.unwrap_string().map_err(|v| (self.tag.as_str(), v))?,
+                };
+
+                match tokens
+                    .next()
+                    .ok_or((self.tag.as_str(), "Missing mailbox name."))?
+                {
+                    Token::ParenthesisOpen => {
+                        while let Some(token) = tokens.next() {
+                            match token {
+                                Token::ParenthesisClose => break,
+                                token => {
+                                    mailbox_name.push(
+                                        token
+                                            .unwrap_string()
+                                            .map_err(|v| (self.tag.as_str(), v))?,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    token => {
+                        mailbox_name.push(utf7_maybe_decode(
+                            token.unwrap_string().map_err(|v| (self.tag.as_str(), v))?,
+                            version,
+                        ));
+                    }
+                }
+
+                if tokens
+                    .next()
+                    .map_or(false, |token| token.eq_ignore_ascii_case(b"return"))
+                {
+                    if tokens
+                        .next()
+                        .map_or(true, |token| !token.is_parenthesis_open())
+                    {
+                        return Err((
+                            self.tag.as_str(),
+                            "Invalid return option, expected parenthesis.",
+                        )
+                            .into());
+                    }
+
                     while let Some(token) = tokens.next() {
                         match token {
                             Token::ParenthesisClose => break,
                             Token::Argument(value) => {
-                                selection_options.push(
-                                    SelectionOption::parse(&value)
-                                        .map_err(|v| (request.tag.as_str(), v))?,
-                                );
-                            }
-                            _ => {
-                                return Err((
-                                    request.tag.as_str(),
-                                    "Invalid selection option argument.",
-                                )
-                                    .into())
-                            }
-                        }
-                    }
-                    tokens
-                        .next()
-                        .ok_or((request.tag.as_str(), "Missing reference name."))?
-                        .unwrap_string()
-                        .map_err(|v| (request.tag.as_str(), v))?
-                }
-                token => token
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-            };
-
-            match tokens
-                .next()
-                .ok_or((request.tag.as_str(), "Missing mailbox name."))?
-            {
-                Token::ParenthesisOpen => {
-                    while let Some(token) = tokens.next() {
-                        match token {
-                            Token::ParenthesisClose => break,
-                            token => {
-                                mailbox_name.push(
-                                    token
-                                        .unwrap_string()
-                                        .map_err(|v| (request.tag.as_str(), v))?,
-                                );
-                            }
-                        }
-                    }
-                }
-                token => {
-                    mailbox_name.push(
-                        token
-                            .unwrap_string()
-                            .map_err(|v| (request.tag.as_str(), v))?,
-                    );
-                }
-            }
-
-            if tokens
-                .next()
-                .map_or(false, |token| token.eq_ignore_ascii_case(b"return"))
-            {
-                if tokens
-                    .next()
-                    .map_or(true, |token| !token.is_parenthesis_open())
-                {
-                    return Err((
-                        request.tag.as_str(),
-                        "Invalid return option, expected parenthesis.",
-                    )
-                        .into());
-                }
-
-                while let Some(token) = tokens.next() {
-                    match token {
-                        Token::ParenthesisClose => break,
-                        Token::Argument(value) => {
-                            let mut return_option = ReturnOption::parse(&value)
-                                .map_err(|v| (request.tag.as_str(), v))?;
-                            if let ReturnOption::Status(status) = &mut return_option {
-                                if tokens
-                                    .next()
-                                    .map_or(true, |token| !token.is_parenthesis_open())
-                                {
-                                    return Err((
-                                        request.tag,
+                                let mut return_option = ReturnOption::parse(&value)
+                                    .map_err(|v| (self.tag.as_str(), v))?;
+                                if let ReturnOption::Status(status) = &mut return_option {
+                                    if tokens
+                                        .next()
+                                        .map_or(true, |token| !token.is_parenthesis_open())
+                                    {
+                                        return Err((
+                                        self.tag,
                                         "Invalid return option, expected parenthesis after STATUS.",
                                     )
                                         .into());
-                                }
-                                while let Some(token) = tokens.next() {
-                                    match token {
-                                        Token::ParenthesisClose => break,
-                                        Token::Argument(value) => {
-                                            status.push(
-                                                Status::parse(&value)
-                                                    .map_err(|v| (request.tag.as_str(), v))?,
-                                            );
-                                        }
-                                        _ => {
-                                            return Err((
-                                                request.tag,
-                                                "Invalid status return option argument.",
-                                            )
-                                                .into())
+                                    }
+                                    while let Some(token) = tokens.next() {
+                                        match token {
+                                            Token::ParenthesisClose => break,
+                                            Token::Argument(value) => {
+                                                status.push(
+                                                    Status::parse(&value)
+                                                        .map_err(|v| (self.tag.as_str(), v))?,
+                                                );
+                                            }
+                                            _ => {
+                                                return Err((
+                                                    self.tag,
+                                                    "Invalid status return option argument.",
+                                                )
+                                                    .into())
+                                            }
                                         }
                                     }
                                 }
+                                return_options.push(return_option);
                             }
-                            return_options.push(return_option);
-                        }
-                        _ => {
-                            return Err(
-                                (request.tag.as_str(), "Invalid return option argument.").into()
-                            )
+                            _ => {
+                                return Err(
+                                    (self.tag.as_str(), "Invalid return option argument.").into()
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            Ok(list::Arguments::Extended {
-                tag: request.tag,
-                reference_name,
-                mailbox_name,
-                selection_options,
-                return_options,
-            })
+                Ok(list::Arguments::Extended {
+                    tag: self.tag,
+                    reference_name,
+                    mailbox_name,
+                    selection_options,
+                    return_options,
+                })
+            }
         }
     }
 }
@@ -202,6 +208,7 @@ mod tests {
         protocol::{
             list::{self, ReturnOption, SelectionOption},
             status::Status,
+            ProtocolVersion,
         },
     };
 
@@ -362,7 +369,11 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_list(receiver.parse(&mut command.as_bytes().iter()).unwrap()).unwrap(),
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_list(ProtocolVersion::Rev2)
+                    .unwrap(),
                 arguments
             );
         }

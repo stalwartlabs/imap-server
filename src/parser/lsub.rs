@@ -1,29 +1,37 @@
 use crate::{
-    core::receiver::Request,
-    protocol::list::{self, SelectionOption},
+    core::{receiver::Request, utf7::utf7_maybe_decode},
+    protocol::{
+        list::{self, SelectionOption},
+        ProtocolVersion,
+    },
 };
 
-pub fn parse_lsub(request: Request) -> crate::core::Result<list::Arguments> {
-    if request.tokens.len() > 1 {
-        let mut tokens = request.tokens.into_iter();
+impl Request {
+    pub fn parse_lsub(self) -> crate::core::Result<list::Arguments> {
+        if self.tokens.len() > 1 {
+            let mut tokens = self.tokens.into_iter();
 
-        Ok(list::Arguments::Extended {
-            reference_name: tokens
-                .next()
-                .ok_or((request.tag.as_str(), "Missing reference name."))?
-                .unwrap_string()
-                .map_err(|v| (request.tag.as_str(), v))?,
-            mailbox_name: vec![tokens
-                .next()
-                .ok_or((request.tag.as_str(), "Missing mailbox name."))?
-                .unwrap_string()
-                .map_err(|v| (request.tag.as_str(), v))?],
-            selection_options: vec![SelectionOption::Subscribed],
-            return_options: vec![],
-            tag: request.tag,
-        })
-    } else {
-        Err(request.into_error("Missing arguments."))
+            Ok(list::Arguments::Extended {
+                reference_name: tokens
+                    .next()
+                    .ok_or((self.tag.as_str(), "Missing reference name."))?
+                    .unwrap_string()
+                    .map_err(|v| (self.tag.as_str(), v))?,
+                mailbox_name: vec![utf7_maybe_decode(
+                    tokens
+                        .next()
+                        .ok_or((self.tag.as_str(), "Missing mailbox name."))?
+                        .unwrap_string()
+                        .map_err(|v| (self.tag.as_str(), v))?,
+                    ProtocolVersion::Rev1,
+                )],
+                selection_options: vec![SelectionOption::Subscribed],
+                return_options: vec![],
+                tag: self.tag,
+            })
+        } else {
+            Err(self.into_error("Missing arguments."))
+        }
     }
 }
 
@@ -61,7 +69,11 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_lsub(receiver.parse(&mut command.as_bytes().iter()).unwrap()).unwrap(),
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_lsub()
+                    .unwrap(),
                 arguments
             );
         }

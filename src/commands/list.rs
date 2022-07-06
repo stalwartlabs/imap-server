@@ -1,32 +1,26 @@
 use std::sync::Arc;
 
-use jmap_client::{
-    client::Client,
-    mailbox::{Property, Role},
-};
+use jmap_client::mailbox::Role;
 use tracing::debug;
 
 use crate::{
     core::{
         client::{Session, SessionData},
         receiver::Request,
-        Command, StatusResponse,
+        Command, IntoStatusResponse,
     },
-    parser::{list::parse_list, lsub::parse_lsub},
     protocol::{
-        list::{self, Arguments, Attribute, ListItem},
-        lsub,
-        status::Status,
-        ImapResponse, ProtocolVersion,
+        list::{self, Arguments, Attribute, ListItem, ReturnOption, SelectionOption},
+        lsub, ImapResponse, ProtocolVersion,
     },
 };
 
 impl Session {
     pub async fn handle_list(&mut self, request: Request) -> Result<(), ()> {
         match if request.command == Command::List {
-            parse_list(request)
+            request.parse_list(self.version)
         } else {
-            parse_lsub(request)
+            request.parse_lsub()
         } {
             Ok(arguments) => {
                 spawn_list(self.state.session_data(), self.version, arguments);
@@ -39,64 +33,152 @@ impl Session {
 
 fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Arguments) {
     tokio::spawn(async move {
-        let (tag, is_lsub) = match arguments {
-            Arguments::Basic {
-                tag,
-                reference_name,
-                mailbox_name,
-            } => (tag, false),
-            Arguments::Extended {
-                tag,
-                reference_name,
-                mailbox_name,
-                selection_options,
-                return_options,
-            } => (tag, false),
-            Arguments::Lsub {
-                tag,
-                reference_name,
-                mailbox_name,
-            } => (tag, true),
-        };
+        let (tag, is_lsub, reference_name, mut patterns, selection_options, return_options) =
+            match arguments {
+                Arguments::Basic {
+                    tag,
+                    reference_name,
+                    mailbox_name,
+                } => (
+                    tag,
+                    false,
+                    reference_name,
+                    vec![mailbox_name],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                Arguments::Extended {
+                    tag,
+                    reference_name,
+                    mailbox_name,
+                    selection_options,
+                    return_options,
+                } => (
+                    tag,
+                    false,
+                    reference_name,
+                    mailbox_name,
+                    selection_options,
+                    return_options,
+                ),
+                Arguments::Lsub {
+                    tag,
+                    reference_name,
+                    mailbox_name,
+                } => (
+                    tag,
+                    true,
+                    reference_name,
+                    vec![mailbox_name],
+                    vec![SelectionOption::Subscribed],
+                    Vec::new(),
+                ),
+            };
 
-        let mut list_items = vec![ListItem {
-            mailbox_name: data.config.folder_all.clone(),
-            attributes: vec![Attribute::All],
-            tags: vec![],
-        }];
-
-        // Fetch mailboxes for the main account
-        if let Err(err) = fetch_mailboxes(&data.client, None, None, &mut list_items, &[]).await {
-            debug!("Failed to fetch mailboxes: {}", err);
-            data.write_bytes(
-                StatusResponse::no(tag.into(), None, "Failed to fetch mailboxes").into_bytes(),
-            )
-            .await;
+        // Refresh mailboxes
+        if let Err(err) = data.refresh_mailboxes().await {
+            debug!("Failed to refresh mailboxes: {}", err);
+            data.write_bytes(err.into_status_response(tag.into()).into_bytes())
+                .await;
             return;
         }
 
-        // Fetch shared mailboxes
-        let session = data.client.session();
-        for account_id in session.accounts() {
-            if account_id != data.client.default_account_id() {
-                if let Err(err) = fetch_mailboxes(
-                    &data.client,
-                    Some(account_id),
-                    format!(
-                        "{}/{}",
-                        data.config.folder_shared,
-                        session.account(account_id).unwrap().name()
-                    )
-                    .into(),
-                    &mut list_items,
-                    &[],
-                )
-                .await
-                {
-                    debug!(
-                        "Failed to fetch mailboxes for account {}: {}",
-                        account_id, err
-                    );
+        // Process arguments
+        let filter_subscribed = selection_options.contains(&SelectionOption::Subscribed);
+        let mut include_subscribed = filter_subscribed;
+        let mut include_children = false;
+        let mut include_status = None;
+        for return_option in &return_options {
+            match return_option {
+                ReturnOption::Subscribed => {
+                    include_subscribed = true;
+                }
+                ReturnOption::Children => {
+                    include_children = true;
+                }
+                ReturnOption::Status(status) => {
+                    include_status = status.into();
+                }
+            }
+        }
+
+        // Append reference name
+        if !patterns.is_empty() && !reference_name.is_empty() {
+            patterns.iter_mut().for_each(|item| {
+                *item = format!("{}{}", reference_name, item);
+            })
+        }
+
+        let mut list_items = Vec::with_capacity(10);
+
+        // Add "All Messages" folder
+        if !filter_subscribed && matches_pattern(&patterns, &data.config.folder_all) {
+            list_items.push(ListItem {
+                mailbox_name: data.config.folder_all.clone(),
+                attributes: vec![Attribute::All, Attribute::NoInferiors],
+                tags: vec![],
+            });
+        }
+
+        // Add mailboxes
+        let mut added_shared_folder = false;
+        for account in data.mailboxes.lock().iter() {
+            if let Some(prefix) = &account.prefix {
+                if !added_shared_folder {
+                    if !filter_subscribed && matches_pattern(&patterns, &data.config.folder_shared)
+                    {
+                        list_items.push(ListItem {
+                            mailbox_name: data.config.folder_shared.clone(),
+                            attributes: if include_children {
+                                vec![Attribute::HasChildren, Attribute::NoSelect]
+                            } else {
+                                vec![Attribute::NoSelect]
+                            },
+                            tags: vec![],
+                        });
+                    }
+                    added_shared_folder = true;
+                }
+                if !filter_subscribed && matches_pattern(&patterns, prefix) {
+                    list_items.push(ListItem {
+                        mailbox_name: prefix.clone(),
+                        attributes: if include_children {
+                            vec![Attribute::HasChildren, Attribute::NoSelect]
+                        } else {
+                            vec![Attribute::NoSelect]
+                        },
+                        tags: vec![],
+                    });
+                }
+            }
+
+            for (mailbox_name, mailbox_id) in &account.mailbox_names {
+                if matches_pattern(&patterns, mailbox_name) {
+                    let mailbox = account.mailbox_data.get(mailbox_id).unwrap();
+                    let mut attributes = Vec::with_capacity(2);
+                    if include_children {
+                        attributes.push(if mailbox.has_children {
+                            Attribute::HasChildren
+                        } else {
+                            Attribute::HasNoChildren
+                        });
+                    }
+                    if include_subscribed && mailbox.is_subscribed {
+                        attributes.push(Attribute::Subscribed);
+                    }
+                    match mailbox.role {
+                        Role::Archive => attributes.push(Attribute::Archive),
+                        Role::Drafts => attributes.push(Attribute::Drafts),
+                        Role::Junk => attributes.push(Attribute::Junk),
+                        Role::Sent => attributes.push(Attribute::Sent),
+                        Role::Trash => attributes.push(Attribute::Trash),
+                        _ => (),
+                    }
+                    list_items.push(ListItem {
+                        mailbox_name: mailbox_name.clone(),
+                        attributes,
+                        tags: vec![],
+                    });
                 }
             }
         }
@@ -115,138 +197,39 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
     });
 }
 
-async fn fetch_mailboxes(
-    client: &Client,
-    account_id: Option<&str>,
-    mailbox_prefix: Option<String>,
-    list_items: &mut Vec<ListItem>,
-    status: &[Status],
-) -> jmap_client::Result<()> {
-    let max_objects_in_get = client
-        .session()
-        .core_capabilities()
-        .map(|c| c.max_objects_in_get())
-        .unwrap_or(100);
-    let mut position = 0;
-    let mut mailboxes = Vec::with_capacity(10);
-    let mut properties = vec![
-        Property::Id,
-        Property::Name,
-        Property::IsSubscribed,
-        Property::ParentId,
-        Property::Role,
-    ];
-    if status.contains(&Status::Messages) {
-        properties.push(Property::TotalEmails);
-    }
-    if status.contains(&Status::Unseen) {
-        properties.push(Property::UnreadEmails);
+fn matches_pattern(patterns: &[String], mailbox_name: &str) -> bool {
+    if patterns.is_empty() {
+        return true;
     }
 
-    for _ in 0..100 {
-        let mut request = client.build();
-        if let Some(account_id) = account_id {
-            request = request.account_id(account_id);
-        }
-        let query_result = request
-            .query_mailbox()
-            .calculate_total(true)
-            .position(position)
-            .limit(max_objects_in_get)
-            .result_reference();
-        request
-            .get_mailbox()
-            .ids_ref(query_result)
-            .properties(properties.clone());
-
-        let mut response = request.send().await?.unwrap_method_responses();
-        if response.len() != 2 {
-            return Err(jmap_client::Error::Internal(
-                "Invalid response while fetching mailboxes".to_string(),
-            ));
-        }
-        let mailboxes_part = response.pop().unwrap().unwrap_get_mailbox()?.unwrap_list();
-        let total_mailboxes = response
-            .pop()
-            .unwrap()
-            .unwrap_query_mailbox()?
-            .total()
-            .unwrap_or(0);
-
-        let mailboxes_part_len = mailboxes_part.len();
-        if mailboxes_part_len > 0 {
-            mailboxes.extend(mailboxes_part);
-            if mailboxes.len() < total_mailboxes {
-                position += mailboxes_part_len as i32;
-                continue;
+    for pattern in patterns {
+        if pattern == "*" {
+            return true;
+        } else if pattern == "%" {
+            return !mailbox_name.contains('/');
+        } else if let Some((prefix, suffix)) = pattern.split_once('*') {
+            if (prefix.is_empty() || mailbox_name.starts_with(prefix))
+                && (suffix.is_empty() || mailbox_name.ends_with(suffix))
+            {
+                return true;
             }
-        }
-        break;
-    }
-
-    let mut iter = mailboxes.iter();
-    let mut parent_id = None;
-    let mut path = Vec::new();
-    let mut iter_stack = Vec::new();
-
-    if let Some(mailbox_prefix) = mailbox_prefix {
-        path.push(mailbox_prefix);
-    }
-
-    // Build list item tree
-    loop {
-        while let Some(mailbox) = iter.next() {
-            if mailbox.parent_id() == parent_id {
-                let mut mailbox_path = path.clone();
-                let mailbox_role = mailbox.role();
-                if mailbox_role != Role::Inbox {
-                    mailbox_path.push(mailbox.name().map(|n| n.to_string()).unwrap_or_default());
+        } else if let Some((prefix, suffix)) = pattern.split_once('%') {
+            if !prefix.is_empty() {
+                if let Some(end) = mailbox_name.strip_prefix(prefix) {
+                    if end.contains('/') {
+                        continue;
+                    }
                 } else {
-                    mailbox_path.push("INBOX".to_string());
-                }
-                let has_children = mailboxes
-                    .iter()
-                    .any(|child| child.parent_id() == Some(mailbox.id()));
-                let mut attributes = Vec::new();
-                match mailbox_role {
-                    Role::Archive => attributes.push(Attribute::Archive),
-                    Role::Drafts => attributes.push(Attribute::Drafts),
-                    Role::Junk => attributes.push(Attribute::Junk),
-                    Role::Sent => attributes.push(Attribute::Sent),
-                    Role::Trash => attributes.push(Attribute::Trash),
-                    _ => (),
-                }
-                if mailbox.is_subscribed() {
-                    attributes.push(Attribute::Subscribed);
-                }
-                attributes.push(if has_children {
-                    Attribute::HasChildren
-                } else {
-                    Attribute::HasNoChildren
-                });
-                list_items.push(ListItem {
-                    mailbox_name: mailbox_path.join("/"),
-                    attributes,
-                    tags: vec![],
-                });
-
-                if has_children && iter_stack.len() < 100 {
-                    iter_stack.push((iter, parent_id, path));
-                    parent_id = Some(mailbox.id());
-                    path = mailbox_path;
-                    iter = mailboxes.iter();
+                    continue;
                 }
             }
-        }
-
-        if let Some((prev_iter, prev_parent_id, prev_path)) = iter_stack.pop() {
-            iter = prev_iter;
-            parent_id = prev_parent_id;
-            path = prev_path;
-        } else {
-            break;
+            if suffix.is_empty() || mailbox_name.ends_with(suffix) {
+                return true;
+            }
+        } else if pattern == mailbox_name {
+            return true;
         }
     }
 
-    Ok(())
+    false
 }

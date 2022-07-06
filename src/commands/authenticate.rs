@@ -6,16 +6,16 @@ use tracing::debug;
 use crate::{
     core::{
         client::{Session, SessionData, State},
+        mailbox::fetch_mailboxes,
         receiver::{self, Request},
         Command, StatusResponse,
     },
-    parser::authenticate::parse_authenticate,
     protocol::authenticate::Mechanism,
 };
 
 impl Session {
     pub async fn handle_authenticate(&mut self, request: Request) -> Result<(), ()> {
-        match parse_authenticate(request) {
+        match request.parse_authenticate() {
             Ok(mut args) => match args.mechanism {
                 Mechanism::Plain => {
                     if !args.params.is_empty() {
@@ -102,6 +102,11 @@ impl Session {
             Ok(client) => {
                 self.state = State::Authenticated {
                     data: Arc::new(SessionData {
+                        mailboxes: parking_lot::Mutex::new(
+                            fetch_mailboxes(&client, &self.config.folder_shared)
+                                .await
+                                .ok_or(())?,
+                        ),
                         client,
                         config: self.config.clone(),
                         writer: self.writer.clone(),

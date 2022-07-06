@@ -3,6 +3,7 @@ pub mod config;
 pub mod connection;
 pub mod env_settings;
 pub mod listener;
+pub mod mailbox;
 pub mod receiver;
 pub mod utf7;
 pub mod writer;
@@ -193,6 +194,16 @@ impl StatusResponse {
             message: message.into(),
             rtype: ResponseType::Bye,
         }
+    }
+}
+
+pub trait IntoStatusResponse {
+    fn into_status_response(self, tag: Option<String>) -> StatusResponse;
+}
+
+impl IntoStatusResponse for jmap_client::Error {
+    fn into_status_response(self, tag: Option<String>) -> StatusResponse {
+        StatusResponse::no(tag, None, self.to_string())
     }
 }
 

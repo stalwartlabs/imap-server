@@ -9,6 +9,7 @@ use crate::protocol::ProtocolVersion;
 
 use super::{
     config::Config,
+    mailbox::Account,
     receiver::{self, Receiver, Request},
     writer, Command, StatusResponse,
 };
@@ -27,6 +28,7 @@ pub struct SessionData {
     pub client: Client,
     pub config: Arc<Config>,
     pub writer: mpsc::Sender<writer::Event>,
+    pub mailboxes: parking_lot::Mutex<Vec<Account>>,
 }
 
 pub enum State {
@@ -116,6 +118,9 @@ impl Session {
                 Command::Login => {
                     self.handle_login(request).await?;
                 }
+                Command::List | Command::Lsub => {
+                    self.handle_list(request).await?;
+                }
                 Command::Enable => todo!(),
                 Command::Select => todo!(),
                 Command::Examine => todo!(),
@@ -124,7 +129,6 @@ impl Session {
                 Command::Rename => todo!(),
                 Command::Subscribe => todo!(),
                 Command::Unsubscribe => todo!(),
-                Command::List => todo!(),
                 Command::Namespace => todo!(),
                 Command::Status => todo!(),
                 Command::Append => todo!(),
@@ -137,7 +141,6 @@ impl Session {
                 Command::Store(_) => todo!(),
                 Command::Copy(_) => todo!(),
                 Command::Move(_) => todo!(),
-                Command::Lsub => todo!(),
                 Command::Check => todo!(),
                 Command::Sort(_) => todo!(),
                 Command::Thread(_) => todo!(),

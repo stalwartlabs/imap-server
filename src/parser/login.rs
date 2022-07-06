@@ -1,25 +1,27 @@
 use crate::{core::receiver::Request, protocol::login};
 
-pub fn parse_login(request: Request) -> crate::core::Result<login::Arguments> {
-    match request.tokens.len() {
-        2 => {
-            let mut tokens = request.tokens.into_iter();
-            Ok(login::Arguments {
-                username: tokens
-                    .next()
-                    .unwrap()
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-                password: tokens
-                    .next()
-                    .unwrap()
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-                tag: request.tag,
-            })
+impl Request {
+    pub fn parse_login(self) -> crate::core::Result<login::Arguments> {
+        match self.tokens.len() {
+            2 => {
+                let mut tokens = self.tokens.into_iter();
+                Ok(login::Arguments {
+                    username: tokens
+                        .next()
+                        .unwrap()
+                        .unwrap_string()
+                        .map_err(|v| (self.tag.as_str(), v))?,
+                    password: tokens
+                        .next()
+                        .unwrap()
+                        .unwrap_string()
+                        .map_err(|v| (self.tag.as_str(), v))?,
+                    tag: self.tag,
+                })
+            }
+            0 => Err(self.into_error("Missing arguments.")),
+            _ => Err(self.into_error("Too many arguments.")),
         }
-        0 => Err(request.into_error("Missing arguments.")),
-        _ => Err(request.into_error("Too many arguments.")),
     }
 }
 
@@ -50,7 +52,10 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::parse_login(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_login()
                     .unwrap(),
                 arguments
             );

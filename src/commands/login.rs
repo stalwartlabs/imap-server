@@ -1,13 +1,10 @@
 use jmap_client::client::Credentials;
 
-use crate::{
-    core::{client::Session, receiver::Request},
-    parser::login::parse_login,
-};
+use crate::core::{client::Session, receiver::Request};
 
 impl Session {
     pub async fn handle_login(&mut self, request: Request) -> Result<(), ()> {
-        match parse_login(request) {
+        match request.parse_login() {
             Ok(args) => {
                 self.authenticate(Credentials::basic(&args.username, &args.password), args.tag)
                     .await
