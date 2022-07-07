@@ -124,11 +124,21 @@ impl Session {
                 Command::Enable => todo!(),
                 Command::Select => todo!(),
                 Command::Examine => todo!(),
-                Command::Create => todo!(),
-                Command::Delete => todo!(),
-                Command::Rename => todo!(),
-                Command::Subscribe => todo!(),
-                Command::Unsubscribe => todo!(),
+                Command::Create => {
+                    self.handle_create(request).await?;
+                }
+                Command::Delete => {
+                    self.handle_delete(request).await?;
+                }
+                Command::Rename => {
+                    self.handle_rename(request).await?;
+                }
+                Command::Subscribe => {
+                    self.handle_subscribe(request).await?;
+                }
+                Command::Unsubscribe => {
+                    self.handle_unsubscribe(request).await?;
+                }
                 Command::Namespace => todo!(),
                 Command::Status => todo!(),
                 Command::Append => todo!(),

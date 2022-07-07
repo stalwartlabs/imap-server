@@ -8,7 +8,8 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
-    pub name: String,
+    pub tag: String,
+    pub mailbox_name: String,
 }
 
 pub struct Response {

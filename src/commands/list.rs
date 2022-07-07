@@ -182,6 +182,7 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
                 }
             }
         }
+        //TODO: Add childinfo
 
         // Write response
         data.write_bytes(if !is_lsub {

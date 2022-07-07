@@ -7,7 +7,7 @@ impl Request {
     pub fn parse_create(self, version: ProtocolVersion) -> crate::core::Result<create::Arguments> {
         match self.tokens.len() {
             1 => Ok(create::Arguments {
-                name: utf7_maybe_decode(
+                mailbox_name: utf7_maybe_decode(
                     self.tokens
                         .into_iter()
                         .next()
@@ -40,14 +40,14 @@ mod tests {
                 "A142 CREATE 12345\r\n",
                 create::Arguments {
                     tag: "A142".to_string(),
-                    name: "12345".to_string(),
+                    mailbox_name: "12345".to_string(),
                 },
             ),
             (
                 "A142 CREATE \"my funky mailbox\"\r\n",
                 create::Arguments {
                     tag: "A142".to_string(),
-                    name: "my funky mailbox".to_string(),
+                    mailbox_name: "my funky mailbox".to_string(),
                 },
             ),
         ] {

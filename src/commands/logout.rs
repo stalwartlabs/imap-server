@@ -2,10 +2,22 @@ use crate::core::{client::Session, receiver::Request, StatusResponse};
 
 impl Session {
     pub async fn handle_logout(&mut self, request: Request) -> Result<(), ()> {
-        self.write_bytes(
-            StatusResponse::ok(request.tag.into(), None, "Romanes eunt domus.").into_bytes(),
+        let mut response = StatusResponse::bye(
+            None,
+            None,
+            concat!(
+                "Stalwart IMAP4rev2 v",
+                env!("CARGO_PKG_VERSION"),
+                " bids you farewell."
+            )
+            .to_string(),
         )
-        .await?;
+        .into_bytes();
+        response.extend(
+            StatusResponse::ok(request.tag.into(), None, "LOGOUT - Romanes eunt domus!")
+                .into_bytes(),
+        );
+        self.write_bytes(response).await?;
         Err(())
     }
 }

@@ -13,7 +13,7 @@ pub struct Config {
     pub folder_all: String,
 }
 
-pub const DEFAULT_JMAP_URL: &str = "https://127.0.0.1";
+pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1/.well-known/jmap";
 
 pub fn load_config(settings: &EnvSettings) -> Config {
     Config {

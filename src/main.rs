@@ -15,16 +15,16 @@ pub mod commands;
 pub mod core;
 pub mod parser;
 pub mod protocol;
+#[cfg(test)]
+pub mod tests;
 
 const IMAP4_PORT: u16 = 143;
 const IMAP4_PORT_TLS: u16 = 993;
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
     tracing_subscriber::fmt::init();
 
     // Read configuration parameters
-    let settings = EnvSettings::new();
     let bind_addr = SocketAddr::from((
         settings.parse_ipaddr("bind-addr", "127.0.0.1"),
         settings.parse("bind-port").unwrap_or(IMAP4_PORT),
@@ -54,7 +54,7 @@ async fn main() -> std::io::Result<()> {
             }
             SIGTERM | SIGINT | SIGQUIT => {
                 // Shutdown the system;
-                info!("Shutting down IMAP4rev2 server...");
+                info!("Shutting down Stalwart IMAP4rev2 server...");
                 shutdown_tx.send(true).unwrap();
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 break;
@@ -64,4 +64,10 @@ async fn main() -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    // Start server
+    start_imap_server(EnvSettings::new()).await
 }

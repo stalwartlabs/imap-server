@@ -1,24 +1,38 @@
-use crate::{core::receiver::Request, protocol::examine};
+use crate::{
+    core::{receiver::Request, utf7::utf7_maybe_decode},
+    protocol::{examine, ProtocolVersion},
+};
 
-pub fn parse_examine(request: Request) -> crate::core::Result<examine::Arguments> {
-    match request.tokens.len() {
-        1 => Ok(examine::Arguments {
-            name: request
-                .tokens
-                .into_iter()
-                .next()
-                .unwrap()
-                .unwrap_string()
-                .map_err(|v| (request.tag, v))?,
-        }),
-        0 => Err(request.into_error("Missing mailbox name.")),
-        _ => Err(request.into_error("Too many arguments.")),
+impl Request {
+    pub fn parse_examine(
+        self,
+        version: ProtocolVersion,
+    ) -> crate::core::Result<examine::Arguments> {
+        match self.tokens.len() {
+            1 => Ok(examine::Arguments {
+                mailbox_name: utf7_maybe_decode(
+                    self.tokens
+                        .into_iter()
+                        .next()
+                        .unwrap()
+                        .unwrap_string()
+                        .map_err(|v| (self.tag.as_ref(), v))?,
+                    version,
+                ),
+                tag: self.tag,
+            }),
+            0 => Err(self.into_error("Missing mailbox name.")),
+            _ => Err(self.into_error("Too many arguments.")),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{core::receiver::Receiver, protocol::examine};
+    use crate::{
+        core::receiver::Receiver,
+        protocol::{examine, ProtocolVersion},
+    };
 
     #[test]
     fn parse_examine() {
@@ -28,18 +42,23 @@ mod tests {
             (
                 "A142 EXAMINE INBOX\r\n",
                 examine::Arguments {
-                    name: "INBOX".to_string(),
+                    mailbox_name: "INBOX".to_string(),
+                    tag: "A142".to_string(),
                 },
             ),
             (
                 "A142 EXAMINE {4+}\r\ntest\r\n",
                 examine::Arguments {
-                    name: "test".to_string(),
+                    mailbox_name: "test".to_string(),
+                    tag: "A142".to_string(),
                 },
             ),
         ] {
             assert_eq!(
-                super::parse_examine(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_examine(ProtocolVersion::Rev2)
                     .unwrap(),
                 arguments
             );

@@ -1,48 +1,58 @@
 use crate::core::receiver::{Request, Token};
-use crate::protocol::status;
+use crate::core::utf7::utf7_maybe_decode;
 use crate::protocol::status::Status;
+use crate::protocol::{status, ProtocolVersion};
 
-pub fn parse_status(request: Request) -> crate::core::Result<status::Arguments> {
-    match request.tokens.len() {
-        0..=3 => Err(request.into_error("Missing arguments.")),
-        len => {
-            let mut tokens = request.tokens.into_iter();
-            let name = tokens
-                .next()
-                .unwrap()
-                .unwrap_string()
-                .map_err(|v| (request.tag.as_str(), v))?;
-            let mut items = Vec::with_capacity(len - 2);
+impl Request {
+    pub fn parse_status(self, version: ProtocolVersion) -> crate::core::Result<status::Arguments> {
+        match self.tokens.len() {
+            0..=3 => Err(self.into_error("Missing arguments.")),
+            len => {
+                let mut tokens = self.tokens.into_iter();
+                let mailbox_name = utf7_maybe_decode(
+                    tokens
+                        .next()
+                        .unwrap()
+                        .unwrap_string()
+                        .map_err(|v| (self.tag.as_ref(), v))?,
+                    version,
+                );
+                let mut items = Vec::with_capacity(len - 2);
 
-            if tokens
-                .next()
-                .map_or(true, |token| !token.is_parenthesis_open())
-            {
-                return Err((
-                    request.tag.as_str(),
-                    "Expected parenthesis after mailbox name.",
-                )
-                    .into());
-            }
+                if tokens
+                    .next()
+                    .map_or(true, |token| !token.is_parenthesis_open())
+                {
+                    return Err((
+                        self.tag.as_str(),
+                        "Expected parenthesis after mailbox name.",
+                    )
+                        .into());
+                }
 
-            #[allow(clippy::while_let_on_iterator)]
-            while let Some(token) = tokens.next() {
-                match token {
-                    Token::ParenthesisClose => break,
-                    Token::Argument(value) => {
-                        items.push(Status::parse(&value).map_err(|v| (request.tag.as_str(), v))?);
-                    }
-                    _ => {
-                        return Err((
-                            request.tag.as_str(),
-                            "Invalid status return option argument.",
-                        )
-                            .into())
+                #[allow(clippy::while_let_on_iterator)]
+                while let Some(token) = tokens.next() {
+                    match token {
+                        Token::ParenthesisClose => break,
+                        Token::Argument(value) => {
+                            items.push(Status::parse(&value).map_err(|v| (self.tag.as_str(), v))?);
+                        }
+                        _ => {
+                            return Err((
+                                self.tag.as_str(),
+                                "Invalid status return option argument.",
+                            )
+                                .into())
+                        }
                     }
                 }
-            }
 
-            Ok(status::Arguments { name, items })
+                Ok(status::Arguments {
+                    tag: self.tag,
+                    mailbox_name,
+                    items,
+                })
+            }
         }
     }
 }
@@ -73,7 +83,10 @@ impl Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::{core::receiver::Receiver, protocol::status};
+    use crate::{
+        core::receiver::Receiver,
+        protocol::{status, ProtocolVersion},
+    };
 
     #[test]
     fn parse_status() {
@@ -82,12 +95,16 @@ mod tests {
         for (command, arguments) in [(
             "A042 STATUS blurdybloop (UIDNEXT MESSAGES)\r\n",
             status::Arguments {
-                name: "blurdybloop".to_string(),
+                tag: "A042".to_string(),
+                mailbox_name: "blurdybloop".to_string(),
                 items: vec![status::Status::UidNext, status::Status::Messages],
             },
         )] {
             assert_eq!(
-                super::parse_status(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_status(ProtocolVersion::Rev2)
                     .unwrap(),
                 arguments
             );

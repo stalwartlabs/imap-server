@@ -1,31 +1,46 @@
-use crate::{core::receiver::Request, protocol::rename};
+use crate::{
+    core::{receiver::Request, utf7::utf7_maybe_decode},
+    protocol::{rename, ProtocolVersion},
+};
 
-pub fn parse_rename(request: Request) -> crate::core::Result<rename::Arguments> {
-    match request.tokens.len() {
-        2 => {
-            let mut tokens = request.tokens.into_iter();
-            Ok(rename::Arguments {
-                name: tokens
-                    .next()
-                    .unwrap()
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-                new_name: tokens
-                    .next()
-                    .unwrap()
-                    .unwrap_string()
-                    .map_err(|v| (request.tag.as_str(), v))?,
-            })
+impl Request {
+    pub fn parse_rename(self, version: ProtocolVersion) -> crate::core::Result<rename::Arguments> {
+        match self.tokens.len() {
+            2 => {
+                let mut tokens = self.tokens.into_iter();
+                Ok(rename::Arguments {
+                    mailbox_name: utf7_maybe_decode(
+                        tokens
+                            .next()
+                            .unwrap()
+                            .unwrap_string()
+                            .map_err(|v| (self.tag.as_ref(), v))?,
+                        version,
+                    ),
+                    new_mailbox_name: utf7_maybe_decode(
+                        tokens
+                            .next()
+                            .unwrap()
+                            .unwrap_string()
+                            .map_err(|v| (self.tag.as_ref(), v))?,
+                        version,
+                    ),
+                    tag: self.tag,
+                })
+            }
+            0 => Err(self.into_error("Missing argument.")),
+            1 => Err(self.into_error("Missing new mailbox name.")),
+            _ => Err(self.into_error("Too many arguments.")),
         }
-        0 => Err(request.into_error("Missing argument.")),
-        1 => Err(request.into_error("Missing new mailbox name.")),
-        _ => Err(request.into_error("Too many arguments.")),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{core::receiver::Receiver, protocol::rename};
+    use crate::{
+        core::receiver::Receiver,
+        protocol::{rename, ProtocolVersion},
+    };
 
     #[test]
     fn parse_rename() {
@@ -35,20 +50,25 @@ mod tests {
             (
                 "A142 RENAME \"my funky mailbox\" Private\r\n",
                 rename::Arguments {
-                    name: "my funky mailbox".to_string(),
-                    new_name: "Private".to_string(),
+                    mailbox_name: "my funky mailbox".to_string(),
+                    new_mailbox_name: "Private".to_string(),
+                    tag: "A142".to_string(),
                 },
             ),
             (
                 "A142 RENAME {1+}\r\na {1+}\r\nb\r\n",
                 rename::Arguments {
-                    name: "a".to_string(),
-                    new_name: "b".to_string(),
+                    mailbox_name: "a".to_string(),
+                    new_mailbox_name: "b".to_string(),
+                    tag: "A142".to_string(),
                 },
             ),
         ] {
             assert_eq!(
-                super::parse_rename(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_rename(ProtocolVersion::Rev2)
                     .unwrap(),
                 arguments
             );

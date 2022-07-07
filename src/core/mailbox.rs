@@ -352,4 +352,21 @@ impl SessionData {
 
         Ok(())
     }
+
+    pub fn get_mailbox_by_name(&self, mailbox_name: &str) -> Option<(String, String)> {
+        for account in self.mailboxes.lock().iter() {
+            if account
+                .prefix
+                .as_ref()
+                .map_or(true, |p| mailbox_name.starts_with(p))
+            {
+                for (mailbox_id_, mailbox_name_) in account.mailbox_names.iter() {
+                    if mailbox_name_ == mailbox_name {
+                        return (account.account_id.to_string(), mailbox_id_.to_string()).into();
+                    }
+                }
+            }
+        }
+        None
+    }
 }
