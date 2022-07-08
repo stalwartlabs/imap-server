@@ -7,10 +7,12 @@ use crate::{
     core::{
         client::{Session, SessionData},
         receiver::Request,
-        Command, IntoStatusResponse,
+        Command, IntoStatusResponse, StatusResponse,
     },
     protocol::{
-        list::{self, Arguments, Attribute, ListItem, ReturnOption, SelectionOption},
+        list::{
+            self, Arguments, Attribute, ChildInfo, ListItem, ReturnOption, SelectionOption, Tag,
+        },
         lsub, ImapResponse, ProtocolVersion,
     },
 };
@@ -76,7 +78,7 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
             };
 
         // Refresh mailboxes
-        if let Err(err) = data.refresh_mailboxes().await {
+        if let Err(err) = data.synchronize_mailboxes().await {
             debug!("Failed to refresh mailboxes: {}", err);
             data.write_bytes(err.into_status_response(tag.into()).into_bytes())
                 .await;
@@ -84,10 +86,23 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
         }
 
         // Process arguments
-        let filter_subscribed = selection_options.contains(&SelectionOption::Subscribed);
-        let mut include_subscribed = filter_subscribed;
+        let mut filter_subscribed = false;
+        let mut recursive_match = false;
+        let mut include_subscribed = false;
         let mut include_children = false;
         let mut include_status = None;
+        for selection_option in &selection_options {
+            match selection_option {
+                SelectionOption::Subscribed => {
+                    filter_subscribed = true;
+                    include_subscribed = true;
+                }
+                SelectionOption::Remote => (),
+                SelectionOption::RecursiveMatch => {
+                    recursive_match = true;
+                }
+            }
+        }
         for return_option in &return_options {
             match return_option {
                 ReturnOption::Subscribed => {
@@ -101,6 +116,18 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
                 }
             }
         }
+        if recursive_match && !filter_subscribed {
+            data.write_bytes(
+                StatusResponse::bad(
+                    tag.into(),
+                    None,
+                    "RECURSIVEMATCH cannot be the only selection option.",
+                )
+                .into_bytes(),
+            )
+            .await;
+            return;
+        }
 
         // Append reference name
         if !patterns.is_empty() && !reference_name.is_empty() {
@@ -112,9 +139,9 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
         let mut list_items = Vec::with_capacity(10);
 
         // Add "All Messages" folder
-        if !filter_subscribed && matches_pattern(&patterns, &data.config.folder_all) {
+        if !filter_subscribed && matches_pattern(&patterns, &data.core.folder_all) {
             list_items.push(ListItem {
-                mailbox_name: data.config.folder_all.clone(),
+                mailbox_name: data.core.folder_all.clone(),
                 attributes: vec![Attribute::All, Attribute::NoInferiors],
                 tags: vec![],
             });
@@ -125,10 +152,9 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
         for account in data.mailboxes.lock().iter() {
             if let Some(prefix) = &account.prefix {
                 if !added_shared_folder {
-                    if !filter_subscribed && matches_pattern(&patterns, &data.config.folder_shared)
-                    {
+                    if !filter_subscribed && matches_pattern(&patterns, &data.core.folder_shared) {
                         list_items.push(ListItem {
-                            mailbox_name: data.config.folder_shared.clone(),
+                            mailbox_name: data.core.folder_shared.clone(),
                             attributes: if include_children {
                                 vec![Attribute::HasChildren, Attribute::NoSelect]
                             } else {
@@ -155,34 +181,51 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
             for (mailbox_name, mailbox_id) in &account.mailbox_names {
                 if matches_pattern(&patterns, mailbox_name) {
                     let mailbox = account.mailbox_data.get(mailbox_id).unwrap();
-                    let mut attributes = Vec::with_capacity(2);
-                    if include_children {
-                        attributes.push(if mailbox.has_children {
-                            Attribute::HasChildren
-                        } else {
-                            Attribute::HasNoChildren
+                    let mut has_recursive_match = false;
+                    if recursive_match {
+                        let prefix = format!("{}/", mailbox_name);
+                        for (mailbox_name, mailbox_id) in &account.mailbox_names {
+                            if mailbox_name.starts_with(&prefix)
+                                && account.mailbox_data.get(mailbox_id).unwrap().is_subscribed
+                            {
+                                has_recursive_match = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !filter_subscribed || mailbox.is_subscribed || has_recursive_match {
+                        let mut attributes = Vec::with_capacity(2);
+                        if include_children {
+                            attributes.push(if mailbox.has_children {
+                                Attribute::HasChildren
+                            } else {
+                                Attribute::HasNoChildren
+                            });
+                        }
+                        if include_subscribed && mailbox.is_subscribed {
+                            attributes.push(Attribute::Subscribed);
+                        }
+                        match mailbox.role {
+                            Role::Archive => attributes.push(Attribute::Archive),
+                            Role::Drafts => attributes.push(Attribute::Drafts),
+                            Role::Junk => attributes.push(Attribute::Junk),
+                            Role::Sent => attributes.push(Attribute::Sent),
+                            Role::Trash => attributes.push(Attribute::Trash),
+                            _ => (),
+                        }
+                        list_items.push(ListItem {
+                            mailbox_name: mailbox_name.clone(),
+                            attributes,
+                            tags: if !has_recursive_match {
+                                vec![]
+                            } else {
+                                vec![Tag::ChildInfo(vec![ChildInfo::Subscribed])]
+                            },
                         });
                     }
-                    if include_subscribed && mailbox.is_subscribed {
-                        attributes.push(Attribute::Subscribed);
-                    }
-                    match mailbox.role {
-                        Role::Archive => attributes.push(Attribute::Archive),
-                        Role::Drafts => attributes.push(Attribute::Drafts),
-                        Role::Junk => attributes.push(Attribute::Junk),
-                        Role::Sent => attributes.push(Attribute::Sent),
-                        Role::Trash => attributes.push(Attribute::Trash),
-                        _ => (),
-                    }
-                    list_items.push(ListItem {
-                        mailbox_name: mailbox_name.clone(),
-                        attributes,
-                        tags: vec![],
-                    });
                 }
             }
         }
-        //TODO: Add childinfo
 
         // Write response
         data.write_bytes(if !is_lsub {

@@ -4,7 +4,7 @@ use crate::{
     core::{
         client::{Session, SessionData},
         receiver::Request,
-        IntoStatusResponse, StatusResponse,
+        IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::delete::Arguments,
 };
@@ -28,7 +28,7 @@ impl Session {
 impl SessionData {
     pub async fn delete_folder(&self, arguments: Arguments) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.refresh_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes().await {
             debug!("Failed to refresh mailboxes: {}", err);
             return err.into_status_response(arguments.tag.into());
         }
@@ -43,7 +43,7 @@ impl SessionData {
                     .as_ref()
                     .map_or(true, |p| arguments.mailbox_name.starts_with(p))
                 {
-                    for (mailbox_id_, mailbox_name) in account.mailbox_names.iter() {
+                    for (mailbox_name, mailbox_id_) in account.mailbox_names.iter() {
                         if mailbox_name == &arguments.mailbox_name {
                             mailbox_id =
                                 (account.account_id.to_string(), mailbox_id_.to_string()).into();
@@ -51,8 +51,8 @@ impl SessionData {
                         } else if mailbox_name.starts_with(&prefix) {
                             return StatusResponse::no(
                                 arguments.tag.into(),
-                                None,
-                                "Mailbox has children and cannot be deleted.",
+                                ResponseCode::HasChildren.into(),
+                                "Mailbox has children that need to be deleted first.",
                             );
                         }
                     }

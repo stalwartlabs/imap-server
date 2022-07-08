@@ -3,7 +3,7 @@ use tracing::debug;
 use crate::core::{
     client::{Session, SessionData},
     receiver::Request,
-    IntoStatusResponse, StatusResponse,
+    IntoStatusResponse, ResponseCode, StatusResponse,
 };
 
 impl Session {
@@ -52,7 +52,7 @@ impl SessionData {
         subscribe: bool,
     ) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.refresh_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes().await {
             debug!("Failed to refresh mailboxes: {}", err);
             return err.into_status_response(tag.into());
         }
@@ -62,7 +62,21 @@ impl SessionData {
             if let Some(mailbox_id) = self.get_mailbox_by_name(&mailbox_name) {
                 mailbox_id
             } else {
-                return StatusResponse::no(tag.into(), None, "Mailbox does not exist.");
+                let is_all = self.is_all_mailbox(&mailbox_name);
+                return StatusResponse::no(
+                    tag.into(),
+                    if !is_all {
+                        ResponseCode::NonExistent
+                    } else {
+                        ResponseCode::Cannot
+                    }
+                    .into(),
+                    if !is_all {
+                        "Mailbox does not exist."
+                    } else {
+                        "Subscribing to this mailbox is not supported."
+                    },
+                );
             };
 
         // [Un]subscribe mailbox

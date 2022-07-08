@@ -36,7 +36,7 @@ impl Session {
 impl SessionData {
     pub async fn create_folder(&self, arguments: Arguments) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.refresh_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes().await {
             debug!("Failed to refresh mailboxes: {}", err);
             return err.into_status_response(arguments.tag.into());
         }
@@ -48,6 +48,7 @@ impl SessionData {
                 return StatusResponse::no(arguments.tag.into(), None, message);
             }
         };
+        debug_assert!(!params.path.is_empty());
 
         // Build request
         let mut request = self.client.build();
@@ -189,7 +190,7 @@ impl SessionData {
                 if path_item.is_empty() {
                     return Err(Cow::from("Invalid empty path item."));
                 }
-                path.push(name);
+                path.push(path_item);
             }
 
             if path.len() > MAX_MAILBOX_DEPTH {
@@ -204,11 +205,11 @@ impl SessionData {
         let mut parent_mailbox_name = None;
         let mailboxes = self.mailboxes.lock();
         let first_path_item = path.first().unwrap();
-        let account = if first_path_item == &self.config.folder_all {
+        let account = if first_path_item == &self.core.folder_all {
             return Err(Cow::from(
                 "Mailboxes cannot be created under virtual folders.",
             ));
-        } else if first_path_item == &self.config.folder_shared {
+        } else if first_path_item == &self.core.folder_shared {
             // Shared Folders/<username>/<folder>
             if path.len() < 3 {
                 return Err(Cow::from(
@@ -237,23 +238,23 @@ impl SessionData {
         };
 
         // Locate parent mailbox
-        let mailbox_name = path.join("/");
-        if account.mailbox_names.contains_key(&mailbox_name) {
+        let full_path = path.join("/");
+        if account.mailbox_names.contains_key(&full_path) {
             return Err(Cow::from(format!(
                 "Mailbox '{}' already exists.",
-                mailbox_name
+                full_path
             )));
         }
         let path = if path.len() > 1 {
             let mut create_path = Vec::with_capacity(path.len());
-            while let Some(path_item) = path.pop() {
+            while !path.is_empty() {
                 let mailbox_name = path.join("/");
                 if let Some(mailbox_id) = account.mailbox_names.get(&mailbox_name) {
                     parent_mailbox_id = mailbox_id.to_string().into();
                     parent_mailbox_name = mailbox_name.into();
                     break;
                 } else {
-                    create_path.push(path_item);
+                    create_path.push(path.pop().unwrap());
                 }
             }
             create_path.reverse();
@@ -265,15 +266,18 @@ impl SessionData {
         Ok(CreateParams {
             account_id: account.account_id.to_string(),
             path,
+            full_path,
             parent_mailbox_id,
             parent_mailbox_name,
         })
     }
 }
 
+#[derive(Debug)]
 pub struct CreateParams<'x> {
     pub account_id: String,
     pub path: Vec<&'x str>,
+    pub full_path: String,
     pub parent_mailbox_id: Option<String>,
     pub parent_mailbox_name: Option<String>,
 }

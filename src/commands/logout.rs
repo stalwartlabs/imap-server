@@ -13,10 +13,8 @@ impl Session {
             .to_string(),
         )
         .into_bytes();
-        response.extend(
-            StatusResponse::ok(request.tag.into(), None, "LOGOUT - Romanes eunt domus!")
-                .into_bytes(),
-        );
+        response
+            .extend(StatusResponse::ok(request.tag.into(), None, "LOGOUT completed.").into_bytes());
         self.write_bytes(response).await?;
         Err(())
     }

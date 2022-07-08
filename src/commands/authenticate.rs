@@ -8,7 +8,7 @@ use crate::{
         client::{Session, SessionData, State},
         mailbox::fetch_mailboxes,
         receiver::{self, Request},
-        Command, StatusResponse,
+        Command, ResponseCode, StatusResponse,
     },
     protocol::authenticate::Mechanism,
 };
@@ -63,7 +63,7 @@ impl Session {
                                 self.write_bytes(
                                     StatusResponse::no(
                                         args.tag.into(),
-                                        None,
+                                        ResponseCode::Parse.into(),
                                         "Failed to decode challenge.",
                                     )
                                     .into_bytes(),
@@ -85,7 +85,7 @@ impl Session {
                     self.write_bytes(
                         StatusResponse::no(
                             args.tag.into(),
-                            None,
+                            ResponseCode::Cannot.into(),
                             "Authentication mechanism not supported.",
                         )
                         .into_bytes(),
@@ -98,26 +98,35 @@ impl Session {
     }
 
     pub async fn authenticate(&mut self, credentials: Credentials, tag: String) -> Result<(), ()> {
-        match Client::connect(&self.config.jmap_url, credentials).await {
+        match Client::connect(&self.core.jmap_url, credentials).await {
             Ok(client) => {
                 self.state = State::Authenticated {
                     data: Arc::new(SessionData {
                         mailboxes: parking_lot::Mutex::new(
-                            fetch_mailboxes(&client, &self.config.folder_shared)
+                            fetch_mailboxes(&client, &self.core.folder_shared)
                                 .await
                                 .ok_or(())?,
                         ),
                         client,
-                        config: self.config.clone(),
+                        core: self.core.clone(),
                         writer: self.writer.clone(),
                     }),
                 };
+                self.write_bytes(
+                    StatusResponse::ok(tag.into(), None, "Authentication successful").into_bytes(),
+                )
+                .await?;
                 Ok(())
             }
             Err(err) => {
-                debug!("Failed to connect to {}: {}", self.config.jmap_url, err,);
+                debug!("Failed to connect to {}: {}", self.core.jmap_url, err,);
                 self.write_bytes(
-                    StatusResponse::no(tag.into(), None, "Authentication failed").into_bytes(),
+                    StatusResponse::no(
+                        tag.into(),
+                        ResponseCode::AuthenticationFailed.into(),
+                        "Authentication failed",
+                    )
+                    .into_bytes(),
                 )
                 .await?;
 

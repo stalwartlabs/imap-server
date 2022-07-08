@@ -208,7 +208,7 @@ async fn fetch_account_mailboxes(
 }
 
 impl SessionData {
-    pub async fn refresh_mailboxes(&self) -> jmap_client::Result<()> {
+    pub async fn synchronize_mailboxes(&self) -> jmap_client::Result<()> {
         // Shared mailboxes might have changed
         let mut added_accounts = Vec::new();
         if !self.client.is_session_updated() {
@@ -247,7 +247,7 @@ impl SessionData {
             for account_id in added_account_ids {
                 let prefix = format!(
                     "{}/{}",
-                    self.config.folder_shared,
+                    self.core.folder_shared,
                     session.account(&account_id).unwrap().name()
                 );
                 match fetch_account_mailboxes(&self.client, account_id, prefix.into()).await {
@@ -311,7 +311,7 @@ impl SessionData {
             let mailbox_prefix = if account_id != self.client.default_account_id() {
                 format!(
                     "{}/{}",
-                    self.config.folder_shared,
+                    self.core.folder_shared,
                     self.client
                         .session()
                         .account(&account_id)
@@ -360,7 +360,7 @@ impl SessionData {
                 .as_ref()
                 .map_or(true, |p| mailbox_name.starts_with(p))
             {
-                for (mailbox_id_, mailbox_name_) in account.mailbox_names.iter() {
+                for (mailbox_name_, mailbox_id_) in account.mailbox_names.iter() {
                     if mailbox_name_ == mailbox_name {
                         return (account.account_id.to_string(), mailbox_id_.to_string()).into();
                     }
@@ -368,5 +368,9 @@ impl SessionData {
             }
         }
         None
+    }
+
+    pub fn is_all_mailbox(&self, mailbox_name: &str) -> bool {
+        self.core.folder_all == mailbox_name
     }
 }

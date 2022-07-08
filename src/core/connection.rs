@@ -39,7 +39,7 @@ pub async fn handle_conn(
                                 Ok(Some(stream_tx)) => {
                                     debug!("TLS upgrade requested.");
                                     handle_conn_tls(
-                                        match session.config.tls_acceptor.accept(stream_rx.unsplit(stream_tx)).await {
+                                        match session.core.tls_acceptor.accept(stream_rx.unsplit(stream_tx)).await {
                                             Ok(stream) => stream,
                                             Err(e) => {
                                                 debug!("Failed to accept TLS connection: {}", e);

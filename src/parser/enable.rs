@@ -3,19 +3,24 @@ use crate::{
     protocol::{capability::Capability, enable},
 };
 
-pub fn parse_enable(request: Request) -> crate::core::Result<enable::Arguments> {
-    let len = request.tokens.len();
-    if len > 0 {
-        let mut capabilities = Vec::with_capacity(len);
-        for capability in request.tokens {
-            capabilities.push(
-                Capability::parse(&capability.unwrap_bytes())
-                    .map_err(|v| (request.tag.as_str(), v))?,
-            );
+impl Request {
+    pub fn parse_enable(self) -> crate::core::Result<enable::Arguments> {
+        let len = self.tokens.len();
+        if len > 0 {
+            let mut capabilities = Vec::with_capacity(len);
+            for capability in self.tokens {
+                capabilities.push(
+                    Capability::parse(&capability.unwrap_bytes())
+                        .map_err(|v| (self.tag.as_str(), v))?,
+                );
+            }
+            Ok(enable::Arguments {
+                tag: self.tag,
+                capabilities,
+            })
+        } else {
+            Err(self.into_error("Missing arguments."))
         }
-        Ok(enable::Arguments { capabilities })
-    } else {
-        Err(request.into_error("Missing arguments."))
     }
 }
 
@@ -53,11 +58,15 @@ mod tests {
         for (command, arguments) in [(
             "t2 ENABLE IMAP4rev2 CONDSTORE\r\n",
             enable::Arguments {
+                tag: "t2".to_string(),
                 capabilities: vec![Capability::IMAP4rev2, Capability::Condstore],
             },
         )] {
             assert_eq!(
-                super::parse_enable(receiver.parse(&mut command.as_bytes().iter()).unwrap())
+                receiver
+                    .parse(&mut command.as_bytes().iter())
+                    .unwrap()
+                    .parse_enable()
                     .unwrap(),
                 arguments
             );

@@ -158,7 +158,7 @@ impl ResponseCode {
             ResponseCode::HasChildren => b"HASCHILDREN",
             ResponseCode::InUse => b"INUSE",
             ResponseCode::Limit => b"LIMIT",
-            ResponseCode::Nonexistent => b"NONEXISTENT",
+            ResponseCode::NonExistent => b"NONEXISTENT",
             ResponseCode::NoPerm => b"NOPERM",
             ResponseCode::OverQuota => b"OVERQUOTA",
             ResponseCode::Parse => b"PARSE",

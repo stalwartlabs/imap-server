@@ -1,22 +1,39 @@
-use std::{fs::File, io::BufReader, sync::Arc};
+use std::{fs::File, io::BufReader, sync::Arc, time::SystemTime};
 
 use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use tracing::warn;
 
-use super::env_settings::EnvSettings;
-
-pub struct Config {
-    pub tls_acceptor: tokio_rustls::TlsAcceptor,
-    pub jmap_url: String,
-    pub folder_shared: String,
-    pub folder_all: String,
-}
+use super::{env_settings::EnvSettings, Core};
 
 pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1/.well-known/jmap";
 
-pub fn load_config(settings: &EnvSettings) -> Config {
-    Config {
+pub fn load_config(settings: &EnvSettings) -> Core {
+    // Open database and fetch/generate UIDVALIDITY.
+    let db = sled::open(settings.get("db-path").expect("Missing db-path parameter."))
+        .expect("Failed to open database");
+    let uid_validity = if let Some(uid_bytes) = db.get(b"uid").expect("Failed to obtain 'uid' key.")
+    {
+        u32::from_be_bytes(
+            (&uid_bytes[..])
+                .try_into()
+                .expect("Failed to read 'uid' bytes."),
+        )
+    } else {
+        let uid_validity = (SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+            .saturating_sub(946684800)
+            / 60) as u32;
+        db.insert(b"uid", &uid_validity.to_be_bytes()[..])
+            .expect("Failed to write 'uid' key.");
+        uid_validity
+    };
+
+    Core {
+        db,
+        uid_validity,
         tls_acceptor: tokio_rustls::TlsAcceptor::from(Arc::new(load_tls_config(settings))),
         jmap_url: if let Some(jmap_url) = settings.get("jmap-url") {
             jmap_url

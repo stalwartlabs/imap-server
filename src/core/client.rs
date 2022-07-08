@@ -8,14 +8,13 @@ use tracing::debug;
 use crate::protocol::ProtocolVersion;
 
 use super::{
-    config::Config,
     mailbox::Account,
     receiver::{self, Receiver, Request},
-    writer, Command, StatusResponse,
+    writer, Command, Core, StatusResponse,
 };
 
 pub struct Session {
-    pub config: Arc<Config>,
+    pub core: Arc<Core>,
     pub receiver: Receiver,
     pub version: ProtocolVersion,
     pub state: State,
@@ -26,7 +25,7 @@ pub struct Session {
 
 pub struct SessionData {
     pub client: Client,
-    pub config: Arc<Config>,
+    pub core: Arc<Core>,
     pub writer: mpsc::Sender<writer::Event>,
     pub mailboxes: parking_lot::Mutex<Vec<Account>>,
 }
@@ -38,9 +37,9 @@ pub enum State {
 }
 
 impl Session {
-    pub fn new(config: Arc<Config>, peer_addr: SocketAddr, is_tls: bool) -> Self {
+    pub fn new(core: Arc<Core>, peer_addr: SocketAddr, is_tls: bool) -> Self {
         Session {
-            config,
+            core,
             receiver: Receiver::new(),
             version: ProtocolVersion::Rev1,
             state: State::NotAuthenticated { auth_failures: 0 },
@@ -121,7 +120,9 @@ impl Session {
                 Command::List | Command::Lsub => {
                     self.handle_list(request).await?;
                 }
-                Command::Enable => todo!(),
+                Command::Enable => {
+                    self.handle_enable(request).await?;
+                }
                 Command::Select => todo!(),
                 Command::Examine => todo!(),
                 Command::Create => {
@@ -220,6 +221,7 @@ impl Request {
             | Command::Subscribe
             | Command::Unsubscribe
             | Command::List
+            | Command::Lsub
             | Command::Namespace
             | Command::Status
             | Command::Append
@@ -242,20 +244,21 @@ impl Request {
             | Command::Store(_)
             | Command::Copy(_)
             | Command::Move(_)
-            | Command::Lsub
             | Command::Check
             | Command::Sort(_)
-            | Command::Thread(_) => {
-                if let State::Selected { .. } = state {
-                    Ok(self)
-                } else {
-                    Err(StatusResponse::no(
-                        self.tag.into(),
-                        None,
-                        "No mailbox is selected.",
-                    ))
-                }
-            }
+            | Command::Thread(_) => match state {
+                State::NotAuthenticated { .. } => Ok(self),
+                State::Authenticated { .. } => Err(StatusResponse::no(
+                    self.tag.into(),
+                    None,
+                    "No mailbox is selected.",
+                )),
+                State::Selected { .. } => Err(StatusResponse::no(
+                    self.tag.into(),
+                    None,
+                    "Not authenticated.",
+                )),
+            },
         }
     }
 }

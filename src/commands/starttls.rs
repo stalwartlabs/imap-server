@@ -9,8 +9,7 @@ impl Session {
         request: Request,
     ) -> Result<Option<WriteHalf<TcpStream>>, ()> {
         self.write_bytes(
-            StatusResponse::ok(request.tag.into(), None, "Deploying the Cone of Silence.")
-                .into_bytes(),
+            StatusResponse::ok(request.tag.into(), None, "Begin TLS negotiation now").into_bytes(),
         )
         .await?;
 

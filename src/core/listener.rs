@@ -8,7 +8,7 @@ use crate::core::{
     connection::{handle_conn, handle_conn_tls},
 };
 
-use super::config::Config;
+use super::Core;
 
 static SERVER_GREETING: &[u8] = concat!(
     "* OK Stalwart IMAP4rev2 v",
@@ -19,7 +19,7 @@ static SERVER_GREETING: &[u8] = concat!(
 
 pub async fn spawn_listener(
     bind_addr: SocketAddr,
-    config: Arc<Config>,
+    core: Arc<Core>,
     is_tls: bool,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
@@ -35,12 +35,12 @@ pub async fn spawn_listener(
                     match stream {
                         Ok((mut stream, _)) => {
                             let shutdown_rx = shutdown_rx.clone();
-                            let config = config.clone();
+                            let core = core.clone();
                             tokio::spawn(async move {
                                 let peer_addr = stream.peer_addr().unwrap();
 
                                 if is_tls {
-                                    let mut stream = match config.tls_acceptor.accept(stream).await {
+                                    let mut stream = match core.tls_acceptor.accept(stream).await {
                                         Ok(stream) => stream,
                                         Err(e) => {
                                             debug!("Failed to accept TLS connection: {}", e);
@@ -56,7 +56,7 @@ pub async fn spawn_listener(
 
                                     handle_conn_tls(
                                         stream,
-                                        Session::new(config, peer_addr, true),
+                                        Session::new(core, peer_addr, true),
                                         shutdown_rx
                                     ).await;
                                 } else {
@@ -68,7 +68,7 @@ pub async fn spawn_listener(
 
                                     handle_conn(
                                         stream,
-                                        Session::new(config, peer_addr, false),
+                                        Session::new(core, peer_addr, false),
                                         shutdown_rx
                                     ).await;
                                 }
