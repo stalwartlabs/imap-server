@@ -9,7 +9,6 @@ pub mod copy;
 pub mod create;
 pub mod delete;
 pub mod enable;
-pub mod examine;
 pub mod expunge;
 pub mod fetch;
 pub mod list;
@@ -25,7 +24,6 @@ pub mod status;
 pub mod store;
 pub mod subscribe;
 pub mod thread;
-pub mod unsubscribe;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolVersion {
@@ -43,6 +41,9 @@ pub enum Sequence {
         end: Option<u64>,
     },
     LastCommand,
+    List {
+        items: Vec<Sequence>,
+    },
 }
 
 impl Sequence {
@@ -142,7 +143,11 @@ impl ResponseCode {
         buf.extend_from_slice(match self {
             ResponseCode::Alert => b"ALERT",
             ResponseCode::AlreadyExists => b"ALREADYEXISTS",
-            ResponseCode::AppendUid => b"APPENDUID",
+            ResponseCode::AppendUid { uid_validity, uids } => {
+                buf.extend_from_slice(format!("APPENDUID {} ", uid_validity).as_bytes());
+                serialize_sequence(buf, uids);
+                return;
+            }
             ResponseCode::AuthenticationFailed => b"AUTHENTICATIONFAILED",
             ResponseCode::AuthorizationFailed => b"AUTHORIZATIONFAILED",
             ResponseCode::BadCharset => b"BADCHARSET",
@@ -151,7 +156,11 @@ impl ResponseCode {
             ResponseCode::ClientBug => b"CLIENTBUG",
             ResponseCode::Closed => b"CLOSED",
             ResponseCode::ContactAdmin => b"CONTACTADMIN",
-            ResponseCode::CopyUid => b"COPYUID",
+            ResponseCode::CopyUid { uid_validity, uids } => {
+                buf.extend_from_slice(format!("COPYUID {} ", uid_validity).as_bytes());
+                serialize_sequence(buf, uids);
+                return;
+            }
             ResponseCode::Corruption => b"CORRUPTION",
             ResponseCode::Expired => b"EXPIRED",
             ResponseCode::ExpungeIssued => b"EXPUNGEISSUED",
@@ -212,5 +221,43 @@ impl StatusResponse {
         let mut buf = Vec::with_capacity(16);
         self.serialize(&mut buf);
         buf
+    }
+}
+
+impl ProtocolVersion {
+    #[inline(always)]
+    pub fn is_rev2(&self) -> bool {
+        matches!(self, ProtocolVersion::Rev2)
+    }
+
+    #[inline(always)]
+    pub fn is_rev1(&self) -> bool {
+        matches!(self, ProtocolVersion::Rev1)
+    }
+}
+
+pub fn serialize_sequence(buf: &mut Vec<u8>, list: &[u32]) {
+    let mut ids = list.iter().peekable();
+    while let Some(&id) = ids.next() {
+        buf.extend_from_slice(id.to_string().as_bytes());
+        let mut range_id = id;
+        loop {
+            match ids.peek() {
+                Some(&&next_id) if next_id == range_id + 1 => {
+                    range_id += 1;
+                    ids.next();
+                }
+                next => {
+                    if range_id != id {
+                        buf.push(b':');
+                        buf.extend_from_slice(range_id.to_string().as_bytes());
+                    }
+                    if next.is_some() {
+                        buf.push(b',');
+                    }
+                    break;
+                }
+            }
+        }
     }
 }

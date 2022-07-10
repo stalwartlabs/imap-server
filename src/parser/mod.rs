@@ -4,7 +4,6 @@ pub mod copy;
 pub mod create;
 pub mod delete;
 pub mod enable;
-pub mod examine;
 pub mod fetch;
 pub mod list;
 pub mod login;
@@ -18,7 +17,6 @@ pub mod status;
 pub mod store;
 pub mod subscribe;
 pub mod thread;
-pub mod unsubscribe;
 
 use std::{borrow::Cow, fmt::Display};
 
@@ -226,7 +224,7 @@ pub fn parse_integer(value: &[u8]) -> Result<u64> {
         .map_err(|_| Cow::from("Failed to parse integer."))
 }
 
-pub fn parse_sequence_set(value: &[u8]) -> Result<Vec<Sequence>> {
+pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
     let mut sequence_set = Vec::new();
     let mut is_range = false;
     let mut range_start = None;
@@ -277,7 +275,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Vec<Sequence>> {
             }
             b'$' => {
                 if value.len() == 1 {
-                    return Ok(vec![Sequence::LastCommand]);
+                    return Ok(Sequence::LastCommand);
                 } else {
                     return Err(Cow::from("Invalid sequence set, can't parse '$' marker."));
                 }
@@ -344,10 +342,12 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Vec<Sequence>> {
         }
     }
 
-    if !sequence_set.is_empty() {
-        Ok(sequence_set)
-    } else {
-        Err(Cow::from("Invalid empty sequence set."))
+    match sequence_set.len() {
+        1 => Ok(sequence_set.pop().unwrap()),
+        0 => Err(Cow::from("Invalid sequence set, empty.")),
+        _ => Ok(Sequence::List {
+            items: sequence_set,
+        }),
     }
 }
 
@@ -358,52 +358,60 @@ mod tests {
     #[test]
     fn parse_sequence_set() {
         for (sequence, expected_result) in [
-            ("$", vec![Sequence::LastCommand]),
+            ("$", Sequence::LastCommand),
             (
                 "1,3000:3021",
-                vec![
-                    Sequence::Number { value: 1 },
-                    Sequence::Range {
-                        start: 3000.into(),
-                        end: 3021.into(),
-                    },
-                ],
+                Sequence::List {
+                    items: vec![
+                        Sequence::Number { value: 1 },
+                        Sequence::Range {
+                            start: 3000.into(),
+                            end: 3021.into(),
+                        },
+                    ],
+                },
             ),
             (
                 "2,4:7,9,12:*",
-                vec![
-                    Sequence::Number { value: 2 },
-                    Sequence::Range {
-                        start: 4.into(),
-                        end: 7.into(),
-                    },
-                    Sequence::Number { value: 9 },
-                    Sequence::Range {
-                        start: 12.into(),
-                        end: None,
-                    },
-                ],
+                Sequence::List {
+                    items: vec![
+                        Sequence::Number { value: 2 },
+                        Sequence::Range {
+                            start: 4.into(),
+                            end: 7.into(),
+                        },
+                        Sequence::Number { value: 9 },
+                        Sequence::Range {
+                            start: 12.into(),
+                            end: None,
+                        },
+                    ],
+                },
             ),
             (
                 "*:4,5:7",
-                vec![
-                    Sequence::Range {
-                        start: None,
-                        end: 4.into(),
-                    },
-                    Sequence::Range {
-                        start: 5.into(),
-                        end: 7.into(),
-                    },
-                ],
+                Sequence::List {
+                    items: vec![
+                        Sequence::Range {
+                            start: None,
+                            end: 4.into(),
+                        },
+                        Sequence::Range {
+                            start: 5.into(),
+                            end: 7.into(),
+                        },
+                    ],
+                },
             ),
             (
                 "2,4,5",
-                vec![
-                    Sequence::Number { value: 2 },
-                    Sequence::Number { value: 4 },
-                    Sequence::Number { value: 5 },
-                ],
+                Sequence::List {
+                    items: vec![
+                        Sequence::Number { value: 2 },
+                        Sequence::Number { value: 4 },
+                        Sequence::Number { value: 5 },
+                    ],
+                },
             ),
         ] {
             assert_eq!(

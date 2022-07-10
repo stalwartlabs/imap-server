@@ -117,7 +117,7 @@ pub fn utf7_encode(text: &str) -> String {
 
 #[inline(always)]
 pub fn utf7_maybe_decode(text: String, version: ProtocolVersion) -> String {
-    if version == ProtocolVersion::Rev2 {
+    if version.is_rev2() {
         text
     } else {
         utf7_decode(text.as_bytes()).unwrap_or(text)

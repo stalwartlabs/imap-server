@@ -411,7 +411,7 @@ mod tests {
             (
                 "A654 FETCH 2:4 (FLAGS BODY[HEADER.FIELDS (DATE FROM)])\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::range(2.into(), 4.into())],
+                    sequence_set: Sequence::range(2.into(), 4.into()),
                     attributes: vec![
                         Attribute::Flags,
                         Attribute::BodySection {
@@ -428,7 +428,7 @@ mod tests {
             (
                 "A001 FETCH 1 BODY[]\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![Attribute::BodySection {
                         peek: false,
                         sections: vec![],
@@ -439,7 +439,7 @@ mod tests {
             (
                 "A001 FETCH 1 (BODY[HEADER])\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![Attribute::BodySection {
                         peek: false,
                         sections: vec![Section::Header],
@@ -450,7 +450,7 @@ mod tests {
             (
                 "A001 FETCH 1 (BODY.PEEK[HEADER.FIELDS (X-MAILER)])\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![Attribute::BodySection {
                         peek: true,
                         sections: vec![Section::HeaderFields {
@@ -464,7 +464,7 @@ mod tests {
             (
                 "A001 FETCH 1 (BODY[HEADER.FIELDS.NOT (FROM TO SUBJECT)])\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![Attribute::BodySection {
                         peek: false,
                         sections: vec![Section::HeaderFields {
@@ -482,7 +482,7 @@ mod tests {
             (
                 "A001 FETCH 1 (BODY[MIME] BODY[TEXT])\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::BodySection {
                             peek: false,
@@ -500,7 +500,7 @@ mod tests {
             (
                 "A001 FETCH 1 (BODYSTRUCTURE ENVELOPE FLAGS INTERNALDATE UID)\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::BodyStructure,
                         Attribute::Envelope,
@@ -513,7 +513,7 @@ mod tests {
             (
                 "A001 FETCH 1 (RFC822 RFC822.HEADER RFC822.SIZE RFC822.TEXT)\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::Rfc822,
                         Attribute::Rfc822Header,
@@ -536,7 +536,7 @@ mod tests {
                     ")\r\n"
                 ),
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::BodySection {
                             peek: false,
@@ -595,7 +595,7 @@ mod tests {
             (
                 "A001 FETCH 1 ALL\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::Flags,
                         Attribute::InternalDate,
@@ -607,7 +607,7 @@ mod tests {
             (
                 "A001 FETCH 1 FULL\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::Flags,
                         Attribute::InternalDate,
@@ -620,7 +620,7 @@ mod tests {
             (
                 "A001 FETCH 1 FAST\r\n",
                 fetch::Arguments {
-                    sequence_set: vec![Sequence::number(1)],
+                    sequence_set: Sequence::number(1),
                     attributes: vec![
                         Attribute::Flags,
                         Attribute::InternalDate,

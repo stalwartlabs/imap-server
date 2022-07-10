@@ -100,13 +100,26 @@ impl Session {
     pub async fn authenticate(&mut self, credentials: Credentials, tag: String) -> Result<(), ()> {
         match Client::connect(&self.core.jmap_url, credentials).await {
             Ok(client) => {
+                // Fetch mailboxes
+                let mailboxes = fetch_mailboxes(&client, &self.core.folder_shared)
+                    .await
+                    .ok_or(())?;
+
+                // Delete from cache mailboxes that no longer exist on the main account
+                if let Err(mut response) = self
+                    .core
+                    .purge_deleted_mailboxes(mailboxes.first().unwrap())
+                    .await
+                {
+                    response.tag = tag.into();
+                    self.write_bytes(response.into_bytes()).await?;
+                    return Err(());
+                }
+
+                // Create session
                 self.state = State::Authenticated {
                     data: Arc::new(SessionData {
-                        mailboxes: parking_lot::Mutex::new(
-                            fetch_mailboxes(&client, &self.core.folder_shared)
-                                .await
-                                .ok_or(())?,
-                        ),
+                        mailboxes: parking_lot::Mutex::new(mailboxes),
                         client,
                         core: self.core.clone(),
                         writer: self.writer.clone(),

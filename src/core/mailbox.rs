@@ -1,4 +1,4 @@
-use super::client::SessionData;
+use super::{client::SessionData, message::MailboxData};
 use jmap_client::{
     client::Client,
     mailbox::{Property, Role},
@@ -12,10 +12,10 @@ pub struct Mailbox {
     pub is_subscribed: bool,
     pub role: Role,
     pub total_messages: Option<usize>,
-    pub total_unread: Option<usize>,
+    pub total_unseen: Option<usize>,
     pub total_deleted: Option<usize>,
-    pub uid_validity: Option<u64>,
-    pub uid_next: Option<u64>,
+    pub uid_validity: Option<u32>,
+    pub uid_next: Option<u32>,
     pub size: Option<usize>,
 }
 
@@ -178,7 +178,7 @@ async fn fetch_account_mailboxes(
                         is_subscribed: mailbox.is_subscribed(),
                         role: mailbox_role,
                         total_messages: mailbox.total_emails().into(),
-                        total_unread: mailbox.unread_emails().into(),
+                        total_unseen: mailbox.unread_emails().into(),
                         ..Default::default()
                     },
                 );
@@ -294,8 +294,9 @@ impl SessionData {
                             account.state_id = response.unwrap_new_state();
                             account.mailbox_data.values_mut().for_each(|v| {
                                 v.total_deleted = None;
-                                v.total_unread = None;
+                                v.total_unseen = None;
                                 v.total_messages = None;
+                                v.size = None;
                                 v.uid_next = None;
                             });
                             break;
@@ -353,21 +354,33 @@ impl SessionData {
         Ok(())
     }
 
-    pub fn get_mailbox_by_name(&self, mailbox_name: &str) -> Option<(String, String)> {
-        for account in self.mailboxes.lock().iter() {
-            if account
-                .prefix
-                .as_ref()
-                .map_or(true, |p| mailbox_name.starts_with(p))
-            {
-                for (mailbox_name_, mailbox_id_) in account.mailbox_names.iter() {
-                    if mailbox_name_ == mailbox_name {
-                        return (account.account_id.to_string(), mailbox_id_.to_string()).into();
+    pub fn get_mailbox_by_name(&self, mailbox_name: &str) -> Option<MailboxData> {
+        if !self.is_all_mailbox(mailbox_name) {
+            for account in self.mailboxes.lock().iter() {
+                if account
+                    .prefix
+                    .as_ref()
+                    .map_or(true, |p| mailbox_name.starts_with(p))
+                {
+                    for (mailbox_name_, mailbox_id_) in account.mailbox_names.iter() {
+                        if mailbox_name_ == mailbox_name {
+                            return MailboxData {
+                                account_id: account.account_id.to_string(),
+                                mailbox_id: Some(mailbox_id_.to_string()),
+                            }
+                            .into();
+                        }
                     }
                 }
             }
+            None
+        } else {
+            MailboxData {
+                account_id: self.client.default_account_id().to_string(),
+                mailbox_id: None,
+            }
+            .into()
         }
-        None
     }
 
     pub fn is_all_mailbox(&self, mailbox_name: &str) -> bool {

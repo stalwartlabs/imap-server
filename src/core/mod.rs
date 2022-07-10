@@ -9,7 +9,7 @@ pub mod receiver;
 pub mod utf7;
 pub mod writer;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 use jmap_client::core::{
     error::{JMAPError, MethodErrorType, ProblemType},
@@ -18,8 +18,8 @@ use jmap_client::core::{
 
 pub struct Core {
     pub tls_acceptor: tokio_rustls::TlsAcceptor,
-    pub db: sled::Db,
-    pub uid_validity: u32,
+    pub db: Arc<sled::Db>,
+    pub worker_pool: rayon::ThreadPool,
     pub jmap_url: String,
     pub folder_shared: String,
     pub folder_all: String,
@@ -76,6 +76,20 @@ impl Command {
     pub fn is_fetch(&self) -> bool {
         matches!(self, Command::Fetch(_))
     }
+
+    pub fn is_uid(&self) -> bool {
+        matches!(
+            self,
+            Command::Fetch(true)
+                | Command::Search(true)
+                | Command::Copy(true)
+                | Command::Move(true)
+                | Command::Store(true)
+                | Command::Expunge(true)
+                | Command::Sort(true)
+                | Command::Thread(true)
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,7 +113,7 @@ pub enum Flag {
 pub enum ResponseCode {
     Alert,
     AlreadyExists,
-    AppendUid,
+    AppendUid { uid_validity: u32, uids: Vec<u32> },
     AuthenticationFailed,
     AuthorizationFailed,
     BadCharset,
@@ -108,7 +122,7 @@ pub enum ResponseCode {
     ClientBug,
     Closed,
     ContactAdmin,
-    CopyUid,
+    CopyUid { uid_validity: u32, uids: Vec<u32> },
     Corruption,
     Expired,
     ExpungeIssued,

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use jmap_client::mailbox::Role;
 use tracing::debug;
 
@@ -25,7 +23,11 @@ impl Session {
             request.parse_lsub()
         } {
             Ok(arguments) => {
-                spawn_list(self.state.session_data(), self.version, arguments);
+                let data = self.state.session_data();
+                let version = self.version;
+                tokio::spawn(async move {
+                    data.list(arguments, version).await;
+                });
                 Ok(())
             }
             Err(response) => self.write_bytes(response.into_bytes()).await,
@@ -33,8 +35,8 @@ impl Session {
     }
 }
 
-fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Arguments) {
-    tokio::spawn(async move {
+impl SessionData {
+    pub async fn list(&self, arguments: Arguments, version: ProtocolVersion) {
         let (tag, is_lsub, reference_name, mut patterns, selection_options, return_options) =
             match arguments {
                 Arguments::Basic {
@@ -78,9 +80,9 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
             };
 
         // Refresh mailboxes
-        if let Err(err) = data.synchronize_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes().await {
             debug!("Failed to refresh mailboxes: {}", err);
-            data.write_bytes(err.into_status_response(tag.into()).into_bytes())
+            self.write_bytes(err.into_status_response(tag.into()).into_bytes())
                 .await;
             return;
         }
@@ -117,7 +119,7 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
             }
         }
         if recursive_match && !filter_subscribed {
-            data.write_bytes(
+            self.write_bytes(
                 StatusResponse::bad(
                     tag.into(),
                     None,
@@ -139,9 +141,9 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
         let mut list_items = Vec::with_capacity(10);
 
         // Add "All Messages" folder
-        if !filter_subscribed && matches_pattern(&patterns, &data.core.folder_all) {
+        if !filter_subscribed && matches_pattern(&patterns, &self.core.folder_all) {
             list_items.push(ListItem {
-                mailbox_name: data.core.folder_all.clone(),
+                mailbox_name: self.core.folder_all.clone(),
                 attributes: vec![Attribute::All, Attribute::NoInferiors],
                 tags: vec![],
             });
@@ -149,12 +151,12 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
 
         // Add mailboxes
         let mut added_shared_folder = false;
-        for account in data.mailboxes.lock().iter() {
+        for account in self.mailboxes.lock().iter() {
             if let Some(prefix) = &account.prefix {
                 if !added_shared_folder {
-                    if !filter_subscribed && matches_pattern(&patterns, &data.core.folder_shared) {
+                    if !filter_subscribed && matches_pattern(&patterns, &self.core.folder_shared) {
                         list_items.push(ListItem {
-                            mailbox_name: data.core.folder_shared.clone(),
+                            mailbox_name: self.core.folder_shared.clone(),
                             attributes: if include_children {
                                 vec![Attribute::HasChildren, Attribute::NoSelect]
                             } else {
@@ -227,18 +229,36 @@ fn spawn_list(data: Arc<SessionData>, version: ProtocolVersion, arguments: Argum
             }
         }
 
+        // Add status response
+        let mut status_items = Vec::new();
+        if let Some(include_status) = include_status {
+            for list_item in &list_items {
+                match self
+                    .status(list_item.mailbox_name.to_string(), include_status)
+                    .await
+                {
+                    Ok(status) => {
+                        status_items.push(status);
+                    }
+                    Err(err) => {
+                        debug!("Failed to get status: {:?}", err);
+                    }
+                }
+            }
+        }
+
         // Write response
-        data.write_bytes(if !is_lsub {
+        self.write_bytes(if !is_lsub {
             list::Response {
                 list_items,
-                status_items: vec![],
+                status_items,
             }
             .serialize(tag, version)
         } else {
             lsub::Response { list_items }.serialize(tag, version)
         })
         .await;
-    });
+    }
 }
 
 fn matches_pattern(patterns: &[String], mailbox_name: &str) -> bool {

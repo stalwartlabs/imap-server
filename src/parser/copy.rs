@@ -39,10 +39,10 @@ mod tests {
         for (command, arguments) in [(
             "A003 COPY 2:4 MEETING\r\n",
             copy::Arguments {
-                sequence_set: vec![Sequence::Range {
+                sequence_set: Sequence::Range {
                     start: 2.into(),
                     end: 4.into(),
-                }],
+                },
                 mailbox_name: "MEETING".to_string(),
             },
         )] {

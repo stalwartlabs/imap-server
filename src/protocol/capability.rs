@@ -52,7 +52,7 @@ impl ImapResponse for Response {
             capability.serialize(&mut buf);
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "CAPABILITY completed").serialize(&mut buf);
         buf
     }
 }
@@ -77,7 +77,7 @@ mod tests {
             .serialize("a003".to_string(), ProtocolVersion::Rev2),
             concat!(
                 "* CAPABILITY IMAP4rev2 STARTTLS LOGINDISABLED\r\n",
-                "a003 OK completed\r\n"
+                "a003 OK CAPABILITY completed\r\n"
             )
             .as_bytes()
         );

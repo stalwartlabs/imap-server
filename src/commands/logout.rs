@@ -14,7 +14,7 @@ impl Session {
         )
         .into_bytes();
         response
-            .extend(StatusResponse::ok(request.tag.into(), None, "LOGOUT completed.").into_bytes());
+            .extend(StatusResponse::ok(request.tag.into(), None, "LOGOUT completed").into_bytes());
         self.write_bytes(response).await?;
         Err(())
     }

@@ -47,11 +47,15 @@ impl Request {
                     }
                 }
 
-                Ok(status::Arguments {
-                    tag: self.tag,
-                    mailbox_name,
-                    items,
-                })
+                if !items.is_empty() {
+                    Ok(status::Arguments {
+                        tag: self.tag,
+                        mailbox_name,
+                        items,
+                    })
+                } else {
+                    Err((self.tag, "At least one status item is required.").into())
+                }
             }
         }
     }

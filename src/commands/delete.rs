@@ -34,6 +34,7 @@ impl SessionData {
         }
 
         // Validate mailbox
+        let mut delete_uid_cache = false;
         let (account_id, mailbox_id) = {
             let prefix = format!("{}/", arguments.mailbox_name);
             let mut mailbox_id = None;
@@ -45,6 +46,7 @@ impl SessionData {
                 {
                     for (mailbox_name, mailbox_id_) in account.mailbox_names.iter() {
                         if mailbox_name == &arguments.mailbox_name {
+                            delete_uid_cache = account.prefix.is_none();
                             mailbox_id =
                                 (account.account_id.to_string(), mailbox_id_.to_string()).into();
                             break 'outer;
@@ -68,6 +70,14 @@ impl SessionData {
         // Delete mailbox
         if let Err(err) = self.client.mailbox_destroy(&mailbox_id, true).await {
             return err.into_status_response(arguments.tag.into());
+        }
+
+        // Delete UID cache
+        if delete_uid_cache {
+            self.core
+                .delete_mailbox(&account_id, &mailbox_id)
+                .await
+                .ok();
         }
 
         // Update mailbox cache

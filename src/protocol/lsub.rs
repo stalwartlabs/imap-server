@@ -14,7 +14,7 @@ impl ImapResponse for Response {
             list_item.serialize(&mut buf, version, true);
         }
 
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "LSUB completed").serialize(&mut buf);
         buf
     }
 }

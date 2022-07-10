@@ -220,6 +220,12 @@ pub fn parse_filters(
                             .ok_or_else(|| Cow::from("Expected integer"))?
                             .unwrap_bytes(),
                     )?));
+                } else if value.eq_ignore_ascii_case(b"OLD") {
+                    filters.push(Filter::Old);
+                } else if value.eq_ignore_ascii_case(b"NEW") {
+                    filters.push(Filter::New);
+                } else if value.eq_ignore_ascii_case(b"RECENT") {
+                    filters.push(Filter::Recent);
                 } else if value.eq_ignore_ascii_case(b"OR") {
                     if filters_stack.len() > 10 {
                         return Err(Cow::from("Too many nested filters"));
@@ -376,10 +382,12 @@ mod tests {
                     filter: Filter::and([
                         Filter::or([
                             Filter::seq_last_command(),
-                            Filter::SequenceSet(vec![
-                                Sequence::number(1),
-                                Sequence::range(3000.into(), 3021.into()),
-                            ]),
+                            Filter::SequenceSet(Sequence::List {
+                                items: vec![
+                                    Sequence::number(1),
+                                    Sequence::range(3000.into(), 3021.into()),
+                                ],
+                            }),
                         ]),
                         Filter::Text("мать".to_string()),
                     ]),
@@ -449,16 +457,17 @@ mod tests {
                             Filter::To("jane".to_string()),
                             Filter::Bcc("bill".to_string()),
                         ]),
-                        Filter::SequenceSet(vec![
-                            Sequence::number(1),
-                            Sequence::range(30.into(), None),
-                        ]),
-                        Filter::Uid(vec![
-                            Sequence::number(1),
-                            Sequence::number(2),
-                            Sequence::number(3),
-                            Sequence::number(4),
-                        ]),
+                        Filter::SequenceSet(Sequence::List {
+                            items: vec![Sequence::number(1), Sequence::range(30.into(), None)],
+                        }),
+                        Filter::Uid(Sequence::List {
+                            items: vec![
+                                Sequence::number(1),
+                                Sequence::number(2),
+                                Sequence::number(3),
+                                Sequence::number(4),
+                            ],
+                        }),
                         Filter::seq_last_command(),
                     ]),
                 },
@@ -474,10 +483,12 @@ mod tests {
                     result_options: vec![],
                     filter: Filter::and([
                         Filter::seq_range(None, None),
-                        Filter::Uid(vec![
-                            Sequence::range(None, 100.into()),
-                            Sequence::range(100.into(), None),
-                        ]),
+                        Filter::Uid(Sequence::List {
+                            items: vec![
+                                Sequence::range(None, 100.into()),
+                                Sequence::range(100.into(), None),
+                            ],
+                        }),
                         Filter::Flagged,
                         Filter::Draft,
                         Filter::Deleted,

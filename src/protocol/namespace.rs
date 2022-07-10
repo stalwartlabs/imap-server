@@ -16,7 +16,7 @@ impl ImapResponse for Response {
         } else {
             buf.extend_from_slice(b"* NAMESPACE ((\"\" \"/\")) NIL NIL\r\n");
         }
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "NAMESPACE completed").serialize(&mut buf);
         buf
     }
 }

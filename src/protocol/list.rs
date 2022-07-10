@@ -165,7 +165,7 @@ impl ListItem {
         }
         let mut is_first = true;
         for attr in &self.attributes {
-            if version == ProtocolVersion::Rev2 || attr.is_rev1() {
+            if version.is_rev2() || attr.is_rev1() {
                 if is_first {
                     is_first = false;
                 } else {
@@ -178,7 +178,7 @@ impl ListItem {
         let mut extra_tags = Vec::new();
 
         if normalized_mailbox_name != self.mailbox_name {
-            if version == ProtocolVersion::Rev2 {
+            if version.is_rev2() {
                 quoted_string(buf, &self.mailbox_name);
                 extra_tags.push(Tag::OldName(normalized_mailbox_name));
             } else {
@@ -188,7 +188,7 @@ impl ListItem {
             quoted_string(buf, &self.mailbox_name);
         }
 
-        if version == ProtocolVersion::Rev2 && (!extra_tags.is_empty() || !self.tags.is_empty()) {
+        if version.is_rev2() && (!extra_tags.is_empty() || !self.tags.is_empty()) {
             buf.extend_from_slice(b" (");
             for (pos, tag) in extra_tags.iter().chain(self.tags.iter()).enumerate() {
                 if pos > 0 {
@@ -206,15 +206,32 @@ impl ListItem {
 impl ImapResponse for Response {
     fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
+        let mut is_lsub = false;
+
         for list_item in &self.list_items {
+            if version.is_rev1()
+                && !is_lsub
+                && list_item.attributes.contains(&Attribute::Subscribed)
+            {
+                is_lsub = true;
+            }
             list_item.serialize(&mut buf, version, false);
         }
-        if version == ProtocolVersion::Rev2 {
+        if version.is_rev2() {
             for status_item in &self.status_items {
                 status_item.serialize(&mut buf, version);
             }
         }
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(
+            tag.into(),
+            None,
+            if !is_lsub {
+                "LIST completed"
+            } else {
+                "LSUB completed"
+            },
+        )
+        .serialize(&mut buf);
         buf
     }
 }
@@ -321,12 +338,12 @@ mod tests {
                 "* LIST () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
                 "* STATUS \"INBOX\" (MESSAGES 17)\r\n",
                 "* STATUS \"foo\" (MESSAGES 30 UNSEEN 29)\r\n",
-                "A01 OK completed\r\n"
+                "A01 OK LIST completed\r\n"
             ),
             concat!(
                 "* LIST () \"/\" \"INBOX\"\r\n",
                 "* LIST () \"/\" \"foo\"\r\n",
-                "A01 OK completed\r\n"
+                "A01 OK LSUB completed\r\n"
             ),
         )] {
             let response_v1 =

@@ -14,7 +14,7 @@ pub struct Response {
     pub status: StatusItem,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Messages,
     UidNext,
@@ -33,7 +33,7 @@ pub struct StatusItem {
 impl StatusItem {
     pub fn serialize(&self, buf: &mut Vec<u8>, version: ProtocolVersion) {
         buf.extend_from_slice(b"* STATUS ");
-        if version == ProtocolVersion::Rev2 {
+        if version.is_rev2() {
             quoted_string(buf, &self.mailbox_name);
         } else {
             quoted_string(buf, &utf7_encode(&self.mailbox_name));
@@ -61,7 +61,7 @@ impl ImapResponse for Response {
     fn serialize(&self, tag: String, version: super::ProtocolVersion) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         self.status.serialize(&mut buf, version);
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "STATUS completed").serialize(&mut buf);
         buf
     }
 }
@@ -85,7 +85,7 @@ mod tests {
             .serialize("A042".to_string(), ProtocolVersion::Rev2),
             concat!(
                 "* STATUS \"blurdybloop\" (MESSAGES 231 UIDNEXT 44292)\r\n",
-                "A042 OK completed\r\n"
+                "A042 OK STATUS completed\r\n"
             )
             .as_bytes()
         );

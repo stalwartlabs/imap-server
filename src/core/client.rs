@@ -9,6 +9,7 @@ use crate::protocol::ProtocolVersion;
 
 use super::{
     mailbox::Account,
+    message::MailboxData,
     receiver::{self, Receiver, Request},
     writer, Command, Core, StatusResponse,
 };
@@ -31,9 +32,17 @@ pub struct SessionData {
 }
 
 pub enum State {
-    NotAuthenticated { auth_failures: u8 },
-    Authenticated { data: Arc<SessionData> },
-    Selected { data: Arc<SessionData> },
+    NotAuthenticated {
+        auth_failures: u8,
+    },
+    Authenticated {
+        data: Arc<SessionData>,
+    },
+    Selected {
+        data: Arc<SessionData>,
+        mailbox: Arc<MailboxData>,
+        rw: bool,
+    },
 }
 
 impl Session {
@@ -99,32 +108,12 @@ impl Session {
 
         for request in requests {
             match request.command {
-                Command::Capability => {
-                    self.handle_capability(request).await?;
-                }
-                Command::Noop => {
-                    self.handle_noop(request).await?;
-                }
-                Command::Logout => {
-                    self.handle_logout(request).await?;
-                }
-                Command::StartTls => {
-                    return self.handle_starttls(request).await;
-                }
-                Command::Authenticate => {
-                    self.handle_authenticate(request).await?;
-                }
-                Command::Login => {
-                    self.handle_login(request).await?;
-                }
                 Command::List | Command::Lsub => {
                     self.handle_list(request).await?;
                 }
-                Command::Enable => {
-                    self.handle_enable(request).await?;
+                Command::Select | Command::Examine => {
+                    self.handle_select(request).await?;
                 }
-                Command::Select => todo!(),
-                Command::Examine => todo!(),
                 Command::Create => {
                     self.handle_create(request).await?;
                 }
@@ -134,27 +123,64 @@ impl Session {
                 Command::Rename => {
                     self.handle_rename(request).await?;
                 }
-                Command::Subscribe => {
-                    self.handle_subscribe(request).await?;
+                Command::Status => {
+                    self.handle_status(request).await?;
                 }
-                Command::Unsubscribe => {
-                    self.handle_unsubscribe(request).await?;
+                Command::Append => {
+                    self.handle_append(request).await?;
                 }
-                Command::Namespace => todo!(),
-                Command::Status => todo!(),
-                Command::Append => todo!(),
-                Command::Idle => todo!(),
-                Command::Close => todo!(),
-                Command::Unselect => todo!(),
-                Command::Expunge(_) => todo!(),
+                Command::Close => {
+                    self.handle_close(request).await?;
+                }
+                Command::Unselect => {
+                    self.handle_unselect(request).await?;
+                }
+                Command::Expunge(is_uid) => {
+                    self.handle_expunge(request, is_uid).await?;
+                }
                 Command::Search(_) => todo!(),
                 Command::Fetch(_) => todo!(),
-                Command::Store(_) => todo!(),
+                Command::Store(is_uid) => {
+                    self.handle_store(request, is_uid).await?;
+                }
                 Command::Copy(_) => todo!(),
                 Command::Move(_) => todo!(),
-                Command::Check => todo!(),
                 Command::Sort(_) => todo!(),
                 Command::Thread(_) => todo!(),
+                Command::Idle => todo!(), //TODO
+                Command::Subscribe => {
+                    self.handle_subscribe(request, true).await?;
+                }
+                Command::Unsubscribe => {
+                    self.handle_subscribe(request, false).await?;
+                }
+                Command::Namespace => {
+                    self.handle_namespace(request).await?;
+                }
+                Command::Authenticate => {
+                    self.handle_authenticate(request).await?;
+                }
+                Command::Login => {
+                    self.handle_login(request).await?;
+                }
+                Command::Capability => {
+                    self.handle_capability(request).await?;
+                }
+                Command::Enable => {
+                    self.handle_enable(request).await?;
+                }
+                Command::StartTls => {
+                    return self.handle_starttls(request).await;
+                }
+                Command::Noop => {
+                    self.handle_noop(request, false).await?;
+                }
+                Command::Check => {
+                    self.handle_noop(request, true).await?;
+                }
+                Command::Logout => {
+                    self.handle_logout(request).await?;
+                }
             }
         }
 
@@ -247,13 +273,28 @@ impl Request {
             | Command::Check
             | Command::Sort(_)
             | Command::Thread(_) => match state {
-                State::NotAuthenticated { .. } => Ok(self),
-                State::Authenticated { .. } => Err(StatusResponse::no(
+                State::Selected { rw, .. } => {
+                    if *rw
+                        || !matches!(
+                            self.command,
+                            Command::Store(_) | Command::Expunge(_) | Command::Move(_),
+                        )
+                    {
+                        Ok(self)
+                    } else {
+                        Err(StatusResponse::no(
+                            self.tag.into(),
+                            None,
+                            "Not permitted in EXAMINE state.",
+                        ))
+                    }
+                }
+                State::Authenticated { .. } => Err(StatusResponse::bad(
                     self.tag.into(),
                     None,
                     "No mailbox is selected.",
                 )),
-                State::Selected { .. } => Err(StatusResponse::no(
+                State::NotAuthenticated { .. } => Err(StatusResponse::no(
                     self.tag.into(),
                     None,
                     "Not authenticated.",
@@ -274,8 +315,19 @@ impl State {
     pub fn session_data(&self) -> Arc<SessionData> {
         match self {
             State::Authenticated { data } => data.clone(),
-            State::Selected { data } => data.clone(),
+            State::Selected { data, .. } => data.clone(),
             _ => unreachable!(),
         }
+    }
+
+    pub fn mailbox_data(&self) -> (Arc<SessionData>, Arc<MailboxData>, bool) {
+        match self {
+            State::Selected { data, mailbox, rw } => (data.clone(), mailbox.clone(), *rw),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn is_mailbox_selected(&self) -> bool {
+        matches!(self, State::Selected { .. })
     }
 }

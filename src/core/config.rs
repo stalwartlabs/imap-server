@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader, sync::Arc, time::SystemTime};
+use std::{fs::File, io::BufReader, sync::Arc};
 
 use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
@@ -9,31 +9,24 @@ use super::{env_settings::EnvSettings, Core};
 pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1/.well-known/jmap";
 
 pub fn load_config(settings: &EnvSettings) -> Core {
-    // Open database and fetch/generate UIDVALIDITY.
-    let db = sled::open(settings.get("db-path").expect("Missing db-path parameter."))
-        .expect("Failed to open database");
-    let uid_validity = if let Some(uid_bytes) = db.get(b"uid").expect("Failed to obtain 'uid' key.")
-    {
-        u32::from_be_bytes(
-            (&uid_bytes[..])
-                .try_into()
-                .expect("Failed to read 'uid' bytes."),
-        )
-    } else {
-        let uid_validity = (SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
-            .saturating_sub(946684800)
-            / 60) as u32;
-        db.insert(b"uid", &uid_validity.to_be_bytes()[..])
-            .expect("Failed to write 'uid' key.");
-        uid_validity
-    };
-
     Core {
-        db,
-        uid_validity,
+        db: Arc::new(
+            sled::open(
+                settings
+                    .get("cache-dir")
+                    .expect("Missing cache-dir parameter."),
+            )
+            .expect("Failed to open database"),
+        ),
+        worker_pool: rayon::ThreadPoolBuilder::new()
+            .num_threads(
+                settings
+                    .parse("worker-pool-size")
+                    .filter(|v| *v > 0)
+                    .unwrap_or_else(num_cpus::get),
+            )
+            .build()
+            .unwrap(),
         tls_acceptor: tokio_rustls::TlsAcceptor::from(Arc::new(load_tls_config(settings))),
         jmap_url: if let Some(jmap_url) = settings.get("jmap-url") {
             jmap_url

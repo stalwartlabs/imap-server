@@ -2,7 +2,7 @@ use jmap_client::core::query::Operator;
 
 use crate::core::{Flag, StatusResponse};
 
-use super::{quoted_string, ImapResponse, ProtocolVersion, Sequence};
+use super::{quoted_string, serialize_sequence, ImapResponse, ProtocolVersion, Sequence};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
@@ -12,7 +12,7 @@ pub struct Arguments {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
-    pub ids: Vec<u64>,
+    pub ids: Vec<u32>,
     pub min: Option<u64>,
     pub max: Option<u64>,
     pub count: Option<u64>,
@@ -29,7 +29,7 @@ pub enum ResultOption {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Filter {
-    SequenceSet(Vec<Sequence>),
+    SequenceSet(Sequence),
     All,
     Answered,
     Bcc(String),
@@ -53,7 +53,7 @@ pub enum Filter {
     Subject(String),
     Text(String),
     To(String),
-    Uid(Vec<Sequence>),
+    Uid(Sequence),
     Unanswered,
     Undeleted,
     Undraft,
@@ -61,6 +61,11 @@ pub enum Filter {
     Unkeyword(Flag),
     Unseen,
     Operator(Operator, Vec<Filter>),
+
+    // Imap4rev1
+    Recent,
+    New,
+    Old,
 
     // RFC5032
     Older(u64),
@@ -79,18 +84,18 @@ impl Filter {
     }
 
     pub fn seq_last_command() -> Filter {
-        Filter::SequenceSet(vec![Sequence::LastCommand])
+        Filter::SequenceSet(Sequence::LastCommand)
     }
 
     pub fn seq_range(start: Option<u64>, end: Option<u64>) -> Filter {
-        Filter::SequenceSet(vec![Sequence::Range { start, end }])
+        Filter::SequenceSet(Sequence::Range { start, end })
     }
 }
 
 impl ImapResponse for Response {
     fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
-        if version == ProtocolVersion::Rev2 {
+        if version.is_rev2() {
             buf.extend_from_slice(b"* ESEARCH (TAG ");
             quoted_string(&mut buf, &tag);
             buf.extend_from_slice(b")");
@@ -108,29 +113,7 @@ impl ImapResponse for Response {
             }
             if !self.ids.is_empty() {
                 buf.extend_from_slice(b" ALL ");
-                let mut ids = self.ids.iter().peekable();
-                while let Some(&id) = ids.next() {
-                    buf.extend_from_slice(id.to_string().as_bytes());
-                    let mut range_id = id;
-                    loop {
-                        match ids.peek() {
-                            Some(&&next_id) if next_id == range_id + 1 => {
-                                range_id += 1;
-                                ids.next();
-                            }
-                            next => {
-                                if range_id != id {
-                                    buf.push(b':');
-                                    buf.extend_from_slice(range_id.to_string().as_bytes());
-                                }
-                                if next.is_some() {
-                                    buf.push(b',');
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
+                serialize_sequence(&mut buf, &self.ids);
             }
         } else {
             buf.extend_from_slice(b"* SEARCH");
@@ -142,7 +125,7 @@ impl ImapResponse for Response {
             }
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "SEARCH completed").serialize(&mut buf);
         buf
     }
 }
@@ -164,9 +147,9 @@ mod tests {
                 "A283",
                 concat!(
                     "* ESEARCH (TAG \"A283\") COUNT 3 MIN 2 MAX 11 ALL 2,10:11\r\n",
-                    "A283 OK completed\r\n"
+                    "A283 OK SEARCH completed\r\n"
                 ),
-                concat!("* SEARCH 2 10 11\r\n", "A283 OK completed\r\n"),
+                concat!("* SEARCH 2 10 11\r\n", "A283 OK SEARCH completed\r\n"),
             ),
             (
                 super::Response {
@@ -180,11 +163,11 @@ mod tests {
                 "A283",
                 concat!(
                     "* ESEARCH (TAG \"A283\") ALL 1:3,5,10:13,90,92:99\r\n",
-                    "A283 OK completed\r\n"
+                    "A283 OK SEARCH completed\r\n"
                 ),
                 concat!(
                     "* SEARCH 1 2 3 5 10 11 12 13 90 92 93 94 95 96 97 98 99\r\n",
-                    "A283 OK completed\r\n"
+                    "A283 OK SEARCH completed\r\n"
                 ),
             ),
             (
@@ -195,8 +178,11 @@ mod tests {
                     count: None,
                 },
                 "A283",
-                concat!("* ESEARCH (TAG \"A283\")\r\n", "A283 OK completed\r\n"),
-                concat!("* SEARCH\r\n", "A283 OK completed\r\n"),
+                concat!(
+                    "* ESEARCH (TAG \"A283\")\r\n",
+                    "A283 OK SEARCH completed\r\n"
+                ),
+                concat!("* SEARCH\r\n", "A283 OK SEARCH completed\r\n"),
             ),
         ] {
             let response_v1 =

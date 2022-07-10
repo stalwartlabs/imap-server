@@ -7,7 +7,7 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
-    pub sequence_set: Vec<Sequence>,
+    pub sequence_set: Sequence,
     pub attributes: Vec<Attribute>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,7 +17,7 @@ pub struct Response {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FetchItem {
-    pub id: u64,
+    pub id: u32,
     pub items: Vec<DataItem>,
 }
 
@@ -500,7 +500,7 @@ impl ImapResponse for Response {
         for item in &self.items {
             item.serialize(&mut buf);
         }
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "FETCH completed").serialize(&mut buf);
         buf
     }
 }
@@ -865,7 +865,7 @@ mod tests {
                 "RFC822.SIZE 443 ",
                 "RFC822.TEXT {2}\r\nhi ",
                 "RFC822.HEADER {6}\r\nheader)\r\n",
-                "abc OK completed\r\n"
+                "abc OK FETCH completed\r\n"
             )
         );
     }

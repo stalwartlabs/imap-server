@@ -7,7 +7,7 @@ use tokio::{
 };
 
 use crate::{
-    core::{env_settings::EnvSettings, ResponseType, StatusResponse},
+    core::{env_settings::EnvSettings, ResponseType},
     start_imap_server,
 };
 
@@ -499,7 +499,7 @@ fn resources_dir() -> PathBuf {
     resources
 }
 
-fn init_settings(delete_if_exists: bool) -> (EnvSettings, PathBuf) {
+pub fn init_settings(delete_if_exists: bool) -> (EnvSettings, PathBuf) {
     let mut temp_dir = std::env::temp_dir();
     temp_dir.push("stalwart-imap-test");
 

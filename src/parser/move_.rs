@@ -39,10 +39,10 @@ mod tests {
         for (command, arguments) in [(
             "a UID MOVE 42:69 foo\r\n",
             move_::Arguments {
-                sequence_set: vec![Sequence::Range {
+                sequence_set: Sequence::Range {
                     start: 42.into(),
                     end: 69.into(),
-                }],
+                },
                 mailbox_name: "foo".to_string(),
             },
         )] {

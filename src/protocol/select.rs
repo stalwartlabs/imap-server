@@ -16,10 +16,11 @@ pub struct Response {
     pub mailbox: ListItem,
     pub total_messages: usize,
     pub recent_messages: usize,
-    pub unseen_seq: u64,
-    pub uid_validity: u64,
-    pub uid_next: u64,
-    pub read_only: bool,
+    pub unseen_seq: u32,
+    pub uid_validity: u32,
+    pub uid_next: u32,
+    pub is_read_only: bool,
+    pub is_examine: bool,
     pub closed_previous: bool,
 }
 
@@ -35,18 +36,17 @@ impl ImapResponse for Response {
         buf.extend_from_slice(
             b" EXISTS\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
         );
-        if version == ProtocolVersion::Rev1 {
+        if version.is_rev2() {
+            self.mailbox.serialize(&mut buf, version, false);
+        } else {
             buf.extend_from_slice(b"* ");
             buf.extend_from_slice(self.recent_messages.to_string().as_bytes());
             buf.extend_from_slice(b" RECENT\r\n");
-        }
-
-        self.mailbox.serialize(&mut buf, version, false);
-
-        if version == ProtocolVersion::Rev1 {
-            buf.extend_from_slice(b"* OK [UNSEEN ");
-            buf.extend_from_slice(self.unseen_seq.to_string().as_bytes());
-            buf.extend_from_slice(b"]\r\n");
+            if self.unseen_seq > 0 {
+                buf.extend_from_slice(b"* OK [UNSEEN ");
+                buf.extend_from_slice(self.unseen_seq.to_string().as_bytes());
+                buf.extend_from_slice(b"]\r\n");
+            }
         }
         buf.extend_from_slice(
             b"* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
@@ -59,13 +59,17 @@ impl ImapResponse for Response {
 
         StatusResponse::ok(
             tag.into(),
-            if !self.read_only {
+            if !self.is_read_only {
                 ResponseCode::ReadWrite
             } else {
                 ResponseCode::ReadOnly
             }
             .into(),
-            "completed",
+            if !self.is_examine {
+                "SELECT completed"
+            } else {
+                "EXAMINE completed"
+            },
         )
         .serialize(&mut buf);
 
@@ -88,7 +92,8 @@ mod tests {
                     unseen_seq: 3,
                     uid_validity: 3857529045,
                     uid_next: 4392,
-                    read_only: false,
+                    is_read_only: false,
+                    is_examine: false,
                     closed_previous: false,
                 },
                 "A142",
@@ -99,18 +104,17 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
-                    "A142 OK [READ-WRITE] completed\r\n"
+                    "A142 OK [READ-WRITE] SELECT completed\r\n"
                 ),
                 concat!(
                     "* 172 EXISTS\r\n",
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
                     "* 5 RECENT\r\n",
-                    "* LIST () \"/\" \"INBOX\"\r\n",
                     "* OK [UNSEEN 3]\r\n",
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
-                    "A142 OK [READ-WRITE] completed\r\n"
+                    "A142 OK [READ-WRITE] SELECT completed\r\n"
                 ),
             ),
             (
@@ -121,7 +125,8 @@ mod tests {
                     unseen_seq: 3,
                     uid_validity: 3857529045,
                     uid_next: 4392,
-                    read_only: true,
+                    is_read_only: true,
+                    is_examine: false,
                     closed_previous: true,
                 },
                 "A142",
@@ -133,19 +138,18 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
-                    "A142 OK [READ-ONLY] completed\r\n"
+                    "A142 OK [READ-ONLY] SELECT completed\r\n"
                 ),
                 concat!(
                     "* OK [CLOSED] Closed previous mailbox\r\n",
                     "* 172 EXISTS\r\n",
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
                     "* 5 RECENT\r\n",
-                    "* LIST () \"/\" \"~peter/mail/&U,BTFw-/&ZeVnLIqe-\"\r\n",
                     "* OK [UNSEEN 3]\r\n",
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
-                    "A142 OK [READ-ONLY] completed\r\n"
+                    "A142 OK [READ-ONLY] SELECT completed\r\n"
                 ),
             ),
         ] {

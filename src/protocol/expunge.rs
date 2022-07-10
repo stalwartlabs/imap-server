@@ -4,7 +4,7 @@ use super::ImapResponse;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
-    pub ids: Vec<u64>,
+    pub ids: Vec<u32>,
 }
 
 impl ImapResponse for Response {
@@ -15,7 +15,7 @@ impl ImapResponse for Response {
             buf.extend_from_slice(id.to_string().as_bytes());
             buf.extend_from_slice(b" EXPUNGE\r\n");
         }
-        StatusResponse::ok(tag.into(), None, "completed").serialize(&mut buf);
+        StatusResponse::ok(tag.into(), None, "EXPUNGE completed").serialize(&mut buf);
         buf
     }
 }
@@ -33,7 +33,7 @@ mod tests {
                 "* 3 EXPUNGE\r\n",
                 "* 5 EXPUNGE\r\n",
                 "* 8 EXPUNGE\r\n",
-                "A202 OK completed\r\n"
+                "A202 OK EXPUNGE completed\r\n"
             )
             .as_bytes()
         );
