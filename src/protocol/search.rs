@@ -1,21 +1,23 @@
 use jmap_client::core::query::Operator;
 
-use crate::core::{Flag, StatusResponse};
+use crate::core::{Command, Flag, StatusResponse};
 
 use super::{quoted_string, serialize_sequence, ImapResponse, ProtocolVersion, Sequence};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
+    pub tag: String,
     pub result_options: Vec<ResultOption>,
     pub filter: Filter,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
+    pub is_uid: bool,
     pub ids: Vec<u32>,
-    pub min: Option<u64>,
-    pub max: Option<u64>,
-    pub count: Option<u64>,
+    pub min: Option<u32>,
+    pub max: Option<u32>,
+    pub count: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +31,7 @@ pub enum ResultOption {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Filter {
-    SequenceSet(Sequence),
+    Sequence(Sequence, bool),
     All,
     Answered,
     Bcc(String),
@@ -42,18 +44,17 @@ pub enum Filter {
     From(String),
     Header(String, String),
     Keyword(Flag),
-    Larger(u64),
+    Larger(u32),
     On(i64),
     Seen,
     SentBefore(i64),
     SentOn(i64),
     SentSince(i64),
     Since(i64),
-    Smaller(u64),
+    Smaller(u32),
     Subject(String),
     Text(String),
     To(String),
-    Uid(Sequence),
     Unanswered,
     Undeleted,
     Undraft,
@@ -68,8 +69,8 @@ pub enum Filter {
     Old,
 
     // RFC5032
-    Older(u64),
-    Younger(u64),
+    Older(u32),
+    Younger(u32),
 }
 
 impl Filter {
@@ -83,12 +84,12 @@ impl Filter {
         Filter::Operator(Operator::Not, filters.into_iter().collect())
     }
 
-    pub fn seq_last_command() -> Filter {
-        Filter::SequenceSet(Sequence::LastCommand)
+    pub fn seq_saved_search() -> Filter {
+        Filter::Sequence(Sequence::SavedSearch, false)
     }
 
-    pub fn seq_range(start: Option<u64>, end: Option<u64>) -> Filter {
-        Filter::SequenceSet(Sequence::Range { start, end })
+    pub fn seq_range(start: Option<u32>, end: Option<u32>) -> Filter {
+        Filter::Sequence(Sequence::Range { start, end }, false)
     }
 }
 
@@ -125,7 +126,7 @@ impl ImapResponse for Response {
             }
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::ok(tag.into(), None, "SEARCH completed").serialize(&mut buf);
+        StatusResponse::completed(Command::Search(self.is_uid), tag).serialize(&mut buf);
         buf
     }
 }
@@ -139,6 +140,7 @@ mod tests {
         for (response, tag, expected_v2, expected_v1) in [
             (
                 super::Response {
+                    is_uid: false,
                     ids: vec![2, 10, 11],
                     min: 2.into(),
                     max: 11.into(),
@@ -153,6 +155,7 @@ mod tests {
             ),
             (
                 super::Response {
+                    is_uid: false,
                     ids: vec![
                         1, 2, 3, 5, 10, 11, 12, 13, 90, 92, 93, 94, 95, 96, 97, 98, 99,
                     ],
@@ -172,6 +175,7 @@ mod tests {
             ),
             (
                 super::Response {
+                    is_uid: false,
                     ids: vec![],
                     min: None,
                     max: None,

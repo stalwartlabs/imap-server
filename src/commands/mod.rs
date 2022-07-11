@@ -12,6 +12,7 @@ pub mod logout;
 pub mod namespace;
 pub mod noop;
 pub mod rename;
+pub mod search;
 pub mod select;
 pub mod starttls;
 pub mod status;

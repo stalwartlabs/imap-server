@@ -1,16 +1,15 @@
-use crate::core::{client::Session, receiver::Request, StatusResponse};
+use crate::core::{client::Session, receiver::Request, Command, StatusResponse};
 
 impl Session {
     pub async fn handle_noop(&mut self, request: Request, is_check: bool) -> Result<(), ()> {
         self.write_bytes(
-            StatusResponse::ok(
-                request.tag.into(),
-                None,
+            StatusResponse::completed(
                 if !is_check {
-                    "NOOP completed"
+                    Command::Noop
                 } else {
-                    "CHECK completed"
+                    Command::Check
                 },
+                request.tag,
             )
             .into_bytes(),
         )

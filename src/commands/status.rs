@@ -94,42 +94,42 @@ impl SessionData {
                     match item {
                         Status::Messages => {
                             if let Some(value) = mailbox_data.total_messages {
-                                items_response.push((*item, value as u64));
+                                items_response.push((*item, value as u32));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::UidNext => {
                             if let Some(value) = mailbox_data.uid_next {
-                                items_response.push((*item, value as u64));
+                                items_response.push((*item, value as u32));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::UidValidity => {
                             if let Some(value) = mailbox_data.uid_validity {
-                                items_response.push((*item, value as u64));
+                                items_response.push((*item, value as u32));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::Unseen => {
                             if let Some(value) = mailbox_data.total_unseen {
-                                items_response.push((*item, value as u64));
+                                items_response.push((*item, value as u32));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::Deleted => {
                             if let Some(value) = mailbox_data.total_deleted {
-                                items_response.push((*item, value as u64));
+                                items_response.push((*item, value as u32));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::Size => {
                             if let Some(value) = mailbox_data.size {
-                                items_response.push((*item, value as u64));
+                                items_response.push((*item, value as u32));
                             } else {
                                 items_update.push(*item);
                             }
@@ -162,13 +162,13 @@ impl SessionData {
                     mailbox_data.uid_next = status.uid_next.into();
                     mailbox_data.uid_validity = status.uid_validity.into();
                     if items_update.contains(&Status::UidNext) {
-                        items_response.push((Status::UidNext, status.uid_next as u64));
+                        items_response.push((Status::UidNext, status.uid_next as u32));
                     }
                     if items_update.contains(&Status::UidValidity) {
-                        items_response.push((Status::UidValidity, status.uid_validity as u64));
+                        items_response.push((Status::UidValidity, status.uid_validity as u32));
                     }
                     if items_update.contains(&Status::Messages) {
-                        items_response.push((Status::Messages, status.total_messages as u64));
+                        items_response.push((Status::Messages, status.total_messages as u32));
                     }
                     break;
                 }
@@ -246,7 +246,7 @@ impl SessionData {
                             .unwrap_or(0)
                             .into();
                         items_response
-                            .push((Status::Unseen, mailbox_data.total_unseen.unwrap() as u64));
+                            .push((Status::Unseen, mailbox_data.total_unseen.unwrap() as u32));
                     }
                     if items_update.contains(&Status::Deleted) {
                         mailbox_data.total_deleted = responses
@@ -264,7 +264,7 @@ impl SessionData {
                             .unwrap_or(0)
                             .into();
                         items_response
-                            .push((Status::Unseen, mailbox_data.total_deleted.unwrap() as u64));
+                            .push((Status::Unseen, mailbox_data.total_deleted.unwrap() as u32));
                     }
                     break;
                 }
@@ -353,7 +353,7 @@ impl SessionData {
                         )
                         .or_insert_with(Mailbox::default)
                         .size = mailbox_size.into();
-                    items_response.push((Status::Unseen, mailbox_size as u64));
+                    items_response.push((Status::Unseen, mailbox_size as u32));
                     break;
                 }
             }

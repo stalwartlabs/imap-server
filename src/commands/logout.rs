@@ -1,4 +1,4 @@
-use crate::core::{client::Session, receiver::Request, StatusResponse};
+use crate::core::{client::Session, receiver::Request, Command, StatusResponse};
 
 impl Session {
     pub async fn handle_logout(&mut self, request: Request) -> Result<(), ()> {
@@ -13,8 +13,7 @@ impl Session {
             .to_string(),
         )
         .into_bytes();
-        response
-            .extend(StatusResponse::ok(request.tag.into(), None, "LOGOUT completed").into_bytes());
+        response.extend(StatusResponse::completed(Command::Logout, request.tag).into_bytes());
         self.write_bytes(response).await?;
         Err(())
     }

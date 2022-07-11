@@ -1,4 +1,4 @@
-use crate::core::StatusResponse;
+use crate::core::{Command, StatusResponse};
 
 use super::{list::ListItem, ImapResponse, ProtocolVersion};
 
@@ -14,7 +14,7 @@ impl ImapResponse for Response {
             list_item.serialize(&mut buf, version, true);
         }
 
-        StatusResponse::ok(tag.into(), None, "LSUB completed").serialize(&mut buf);
+        StatusResponse::completed(Command::Lsub, tag).serialize(&mut buf);
         buf
     }
 }

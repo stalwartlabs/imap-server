@@ -1,6 +1,8 @@
+use std::{collections::HashSet, fmt::Display};
+
 use jmap_client::core::set::from_timestamp;
 
-use crate::core::{Flag, ResponseCode, ResponseType, StatusResponse};
+use crate::core::{Command, Flag, ResponseCode, ResponseType, StatusResponse};
 
 pub mod append;
 pub mod authenticate;
@@ -34,25 +36,85 @@ pub enum ProtocolVersion {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Sequence {
     Number {
-        value: u64,
+        value: u32,
     },
     Range {
-        start: Option<u64>,
-        end: Option<u64>,
+        start: Option<u32>,
+        end: Option<u32>,
     },
-    LastCommand,
+    SavedSearch,
     List {
         items: Vec<Sequence>,
     },
 }
 
 impl Sequence {
-    pub fn number(value: u64) -> Sequence {
+    pub fn number(value: u32) -> Sequence {
         Sequence::Number { value }
     }
 
-    pub fn range(start: Option<u64>, end: Option<u64>) -> Sequence {
+    pub fn range(start: Option<u32>, end: Option<u32>) -> Sequence {
         Sequence::Range { start, end }
+    }
+
+    pub fn contains(&self, value: u32) -> bool {
+        match self {
+            Sequence::Number { value: number } => *number == value,
+            Sequence::Range { start, end } => match (start, end) {
+                (Some(start), Some(end)) => value >= *start && value <= *end,
+                (Some(start), None) => value >= *start,
+                (None, Some(end)) => value <= *end,
+                (None, None) => true,
+            },
+            Sequence::List { items } => {
+                for item in items {
+                    if item.contains(value) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Sequence::SavedSearch => false,
+        }
+    }
+
+    pub fn try_expand(&self) -> Option<Vec<u32>> {
+        match self {
+            Sequence::Number { value } => Some(vec![*value]),
+            Sequence::List { items } => {
+                let mut result = HashSet::with_capacity(items.len());
+                for item in items {
+                    match item {
+                        Sequence::Number { value } => {
+                            result.insert(*value);
+                        }
+                        Sequence::Range {
+                            start: Some(start),
+                            end: Some(end),
+                        } if *end > *start && (*end - *start) < 1000 => {
+                            result.extend(*start..=*end);
+                        }
+                        Sequence::Range {
+                            start: None,
+                            end: Some(end),
+                        } if *end < 1000 => {
+                            result.extend(0..=*end);
+                        }
+                        _ => return None,
+                    }
+                }
+                Some(result.into_iter().collect())
+            }
+            Sequence::Range {
+                start: Some(start),
+                end: Some(end),
+            } if *end > *start && (*end - *start) < 1000 => Some((*start..=*end).collect()),
+            Sequence::Range {
+                start: None,
+                end: Some(end),
+            } if *end < 1000 => Some((0..=*end).collect()),
+            _ => None,
+        }
     }
 }
 
@@ -258,6 +320,77 @@ pub fn serialize_sequence(buf: &mut Vec<u8>, list: &[u32]) {
                     break;
                 }
             }
+        }
+    }
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Command::Capability => write!(f, "CAPABILITY"),
+            Command::Noop => write!(f, "NOOP"),
+            Command::Logout => write!(f, "LOGOUT"),
+            Command::StartTls => write!(f, "STARTTLS"),
+            Command::Authenticate => write!(f, "AUTHENTICATE"),
+            Command::Login => write!(f, "LOGIN"),
+            Command::Enable => write!(f, "ENABLE"),
+            Command::Select => write!(f, "SELECT"),
+            Command::Examine => write!(f, "EXAMINE"),
+            Command::Create => write!(f, "CREATE"),
+            Command::Delete => write!(f, "DELETE"),
+            Command::Rename => write!(f, "RENAME"),
+            Command::Subscribe => write!(f, "SUBSCRIBE"),
+            Command::Unsubscribe => write!(f, "UNSUBSCRIBE"),
+            Command::List => write!(f, "LIST"),
+            Command::Namespace => write!(f, "NAMESPACE"),
+            Command::Status => write!(f, "STATUS"),
+            Command::Append => write!(f, "APPEND"),
+            Command::Idle => write!(f, "IDLE"),
+            Command::Close => write!(f, "CLOSE"),
+            Command::Unselect => write!(f, "UNSELECT"),
+            Command::Expunge(false) => write!(f, "EXPUNGE"),
+            Command::Search(false) => write!(f, "SEARCH"),
+            Command::Fetch(false) => write!(f, "FETCH"),
+            Command::Store(false) => write!(f, "STORE"),
+            Command::Copy(false) => write!(f, "COPY"),
+            Command::Move(false) => write!(f, "MOVE"),
+            Command::Sort(false) => write!(f, "SORT"),
+            Command::Thread(false) => write!(f, "THREAD"),
+            Command::Expunge(true) => write!(f, "UID EXPUNGE"),
+            Command::Search(true) => write!(f, "UID SEARCH"),
+            Command::Fetch(true) => write!(f, "UID FETCH"),
+            Command::Store(true) => write!(f, "UID STORE"),
+            Command::Copy(true) => write!(f, "UID COPY"),
+            Command::Move(true) => write!(f, "UID MOVE"),
+            Command::Sort(true) => write!(f, "UID SORT"),
+            Command::Thread(true) => write!(f, "UID THREAD"),
+            Command::Lsub => write!(f, "LSUB"),
+            Command::Check => write!(f, "CHECK"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::parse_sequence_set;
+
+    #[test]
+    fn sequence_set_contains() {
+        for (sequence, expected_result) in [
+            ("1,5:10", vec![1, 5, 6, 7, 8, 9, 10]),
+            ("2,4:7,9,12:*", vec![2, 4, 5, 6, 7, 9, 12, 13, 14, 15]),
+            ("*:4,5:7", vec![1, 2, 3, 4, 5, 6, 7]),
+            ("2,4,5", vec![2, 4, 5]),
+        ] {
+            let sequence = parse_sequence_set(sequence.as_bytes()).unwrap();
+
+            assert_eq!(
+                (1..=15)
+                    .into_iter()
+                    .filter(|num| sequence.contains(*num))
+                    .collect::<Vec<_>>(),
+                expected_result
+            );
         }
     }
 }

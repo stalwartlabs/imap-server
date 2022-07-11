@@ -1,4 +1,4 @@
-use crate::core::{utf7::utf7_encode, StatusResponse};
+use crate::core::{utf7::utf7_encode, Command, StatusResponse};
 
 use super::{
     quoted_string,
@@ -222,14 +222,13 @@ impl ImapResponse for Response {
                 status_item.serialize(&mut buf, version);
             }
         }
-        StatusResponse::ok(
-            tag.into(),
-            None,
+        StatusResponse::completed(
             if !is_lsub {
-                "LIST completed"
+                Command::List
             } else {
-                "LSUB completed"
+                Command::Lsub
             },
+            tag,
         )
         .serialize(&mut buf);
         buf

@@ -13,6 +13,8 @@ use crate::{
     protocol::authenticate::Mechanism,
 };
 
+use super::search::SavedSearch;
+
 impl Session {
     pub async fn handle_authenticate(&mut self, request: Request) -> Result<(), ()> {
         match request.parse_authenticate() {
@@ -106,13 +108,14 @@ impl Session {
                     .ok_or(())?;
 
                 // Delete from cache mailboxes that no longer exist on the main account
-                if let Err(mut response) = self
+                if self
                     .core
                     .purge_deleted_mailboxes(mailboxes.first().unwrap())
                     .await
+                    .is_err()
                 {
-                    response.tag = tag.into();
-                    self.write_bytes(response.into_bytes()).await?;
+                    self.write_bytes(StatusResponse::database_failure(tag.into()).into_bytes())
+                        .await?;
                     return Err(());
                 }
 
@@ -120,6 +123,7 @@ impl Session {
                 self.state = State::Authenticated {
                     data: Arc::new(SessionData {
                         mailboxes: parking_lot::Mutex::new(mailboxes),
+                        saved_search: parking_lot::Mutex::new(SavedSearch::None),
                         client,
                         core: self.core.clone(),
                         writer: self.writer.clone(),

@@ -1,4 +1,4 @@
-use crate::core::{ResponseCode, StatusResponse};
+use crate::core::{Command, ResponseCode, StatusResponse};
 
 use super::{
     list::ListItem,
@@ -57,22 +57,20 @@ impl ImapResponse for Response {
         buf.extend_from_slice(self.uid_next.to_string().as_bytes());
         buf.extend_from_slice(b"]\r\n");
 
-        StatusResponse::ok(
-            tag.into(),
-            if !self.is_read_only {
-                ResponseCode::ReadWrite
-            } else {
-                ResponseCode::ReadOnly
-            }
-            .into(),
+        StatusResponse::completed(
             if !self.is_examine {
-                "SELECT completed"
+                Command::Select
             } else {
-                "EXAMINE completed"
+                Command::Examine
             },
+            tag,
         )
+        .with_code(if !self.is_read_only {
+            ResponseCode::ReadWrite
+        } else {
+            ResponseCode::ReadOnly
+        })
         .serialize(&mut buf);
-
         buf
     }
 }

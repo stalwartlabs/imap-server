@@ -316,7 +316,7 @@ pub fn parse_fetch(request: Request) -> crate::core::Result<fetch::Arguments> {
     })
 }
 
-pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Option<(u64, u64)>> {
+pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Option<(u32, u32)>> {
     if tokens.peek().map_or(true, |token| !token.is_lt()) {
         return Ok(None);
     }

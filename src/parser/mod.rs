@@ -18,7 +18,7 @@ pub mod store;
 pub mod subscribe;
 pub mod thread;
 
-use std::{borrow::Cow, fmt::Display};
+use std::borrow::Cow;
 
 use chrono::{DateTime, NaiveDate};
 
@@ -64,52 +64,6 @@ impl Command {
             b"LSUB" => Some(Command::Lsub),
             b"CHECK" => Some(Command::Check),
             _ => None,
-        }
-    }
-}
-
-impl Display for Command {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Command::Capability => write!(f, "CAPABILITY"),
-            Command::Noop => write!(f, "NOOP"),
-            Command::Logout => write!(f, "LOGOUT"),
-            Command::StartTls => write!(f, "STARTTLS"),
-            Command::Authenticate => write!(f, "AUTHENTICATE"),
-            Command::Login => write!(f, "LOGIN"),
-            Command::Enable => write!(f, "ENABLE"),
-            Command::Select => write!(f, "SELECT"),
-            Command::Examine => write!(f, "EXAMINE"),
-            Command::Create => write!(f, "CREATE"),
-            Command::Delete => write!(f, "DELETE"),
-            Command::Rename => write!(f, "RENAME"),
-            Command::Subscribe => write!(f, "SUBSCRIBE"),
-            Command::Unsubscribe => write!(f, "UNSUBSCRIBE"),
-            Command::List => write!(f, "LIST"),
-            Command::Namespace => write!(f, "NAMESPACE"),
-            Command::Status => write!(f, "STATUS"),
-            Command::Append => write!(f, "APPEND"),
-            Command::Idle => write!(f, "IDLE"),
-            Command::Close => write!(f, "CLOSE"),
-            Command::Unselect => write!(f, "UNSELECT"),
-            Command::Expunge(false) => write!(f, "EXPUNGE"),
-            Command::Search(false) => write!(f, "SEARCH"),
-            Command::Fetch(false) => write!(f, "FETCH"),
-            Command::Store(false) => write!(f, "STORE"),
-            Command::Copy(false) => write!(f, "COPY"),
-            Command::Move(false) => write!(f, "MOVE"),
-            Command::Sort(false) => write!(f, "SORT"),
-            Command::Thread(false) => write!(f, "THREAD"),
-            Command::Expunge(true) => write!(f, "UID EXPUNGE"),
-            Command::Search(true) => write!(f, "UID SEARCH"),
-            Command::Fetch(true) => write!(f, "UID FETCH"),
-            Command::Store(true) => write!(f, "UID STORE"),
-            Command::Copy(true) => write!(f, "UID COPY"),
-            Command::Move(true) => write!(f, "UID MOVE"),
-            Command::Sort(true) => write!(f, "UID SORT"),
-            Command::Thread(true) => write!(f, "UID THREAD"),
-            Command::Lsub => write!(f, "LSUB"),
-            Command::Check => write!(f, "CHECK"),
         }
     }
 }
@@ -217,10 +171,10 @@ pub fn parse_date(value: &[u8]) -> Result<i64> {
         .map(|dt| dt.and_hms(0, 0, 0).timestamp())
 }
 
-pub fn parse_integer(value: &[u8]) -> Result<u64> {
+pub fn parse_integer(value: &[u8]) -> Result<u32> {
     std::str::from_utf8(value)
         .map_err(|_| Cow::from("Expected an integer, found an invalid UTF-8 string."))?
-        .parse::<u64>()
+        .parse::<u32>()
         .map_err(|_| Cow::from("Failed to parse integer."))
 }
 
@@ -275,7 +229,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
             }
             b'$' => {
                 if value.len() == 1 {
-                    return Ok(Sequence::LastCommand);
+                    return Ok(Sequence::SavedSearch);
                 } else {
                     return Err(Cow::from("Invalid sequence set, can't parse '$' marker."));
                 }
@@ -358,7 +312,7 @@ mod tests {
     #[test]
     fn parse_sequence_set() {
         for (sequence, expected_result) in [
-            ("$", Sequence::LastCommand),
+            ("$", Sequence::SavedSearch),
             (
                 "1,3000:3021",
                 Sequence::List {

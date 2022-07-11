@@ -13,71 +13,76 @@ use crate::protocol::search::{self, Filter};
 
 use super::{parse_date, parse_integer, parse_sequence_set};
 
-#[allow(clippy::while_let_on_iterator)]
-pub fn parse_search(request: Request) -> crate::core::Result<search::Arguments> {
-    if request.tokens.is_empty() {
-        return Err(request.into_error("Missing search criteria."));
-    }
+impl Request {
+    #[allow(clippy::while_let_on_iterator)]
+    pub fn parse_search(self) -> crate::core::Result<search::Arguments> {
+        if self.tokens.is_empty() {
+            return Err(self.into_error("Missing search criteria."));
+        }
 
-    let mut tokens = request.tokens.into_iter().peekable();
-    let mut result_options = Vec::new();
-    let mut decoder = None;
+        let mut tokens = self.tokens.into_iter().peekable();
+        let mut result_options = Vec::new();
+        let mut decoder = None;
 
-    loop {
-        match tokens.peek() {
-            Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"return") => {
-                tokens.next();
-                if tokens
-                    .next()
-                    .map_or(true, |token| !token.is_parenthesis_open())
-                {
-                    return Err((
-                        request.tag.as_str(),
-                        "Invalid result option, expected parenthesis.",
-                    )
-                        .into());
-                }
-                while let Some(token) = tokens.next() {
-                    match token {
-                        Token::ParenthesisClose => break,
-                        Token::Argument(value) => {
-                            result_options.push(
-                                ResultOption::parse(&value)
-                                    .map_err(|v| (request.tag.as_str(), v))?,
-                            );
-                        }
-                        _ => {
-                            return Err(
-                                (request.tag.as_str(), "Invalid result option argument.").into()
-                            )
+        loop {
+            match tokens.peek() {
+                Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"return") => {
+                    tokens.next();
+                    if tokens
+                        .next()
+                        .map_or(true, |token| !token.is_parenthesis_open())
+                    {
+                        return Err((
+                            self.tag.as_str(),
+                            "Invalid result option, expected parenthesis.",
+                        )
+                            .into());
+                    }
+                    while let Some(token) = tokens.next() {
+                        match token {
+                            Token::ParenthesisClose => break,
+                            Token::Argument(value) => {
+                                result_options.push(
+                                    ResultOption::parse(&value)
+                                        .map_err(|v| (self.tag.as_str(), v))?,
+                                );
+                            }
+                            _ => {
+                                return Err(
+                                    (self.tag.as_str(), "Invalid result option argument.").into()
+                                )
+                            }
                         }
                     }
                 }
+                Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"charset") => {
+                    tokens.next();
+                    decoder = get_charset_decoder(
+                        &tokens
+                            .next()
+                            .ok_or((self.tag.as_str(), "Missing charset."))?
+                            .unwrap_bytes(),
+                    );
+                }
+                _ => break,
             }
-            Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"charset") => {
-                tokens.next();
-                decoder = get_charset_decoder(
-                    &tokens
-                        .next()
-                        .ok_or((request.tag.as_str(), "Missing charset."))?
-                        .unwrap_bytes(),
-                );
-            }
-            _ => break,
         }
-    }
 
-    let mut filters = parse_filters(&mut tokens, decoder).map_err(|v| (request.tag.as_str(), v))?;
-    match filters.len() {
-        0 => Err((request.tag.as_str(), "No filters found in command.").into()),
-        1 => Ok(search::Arguments {
-            result_options,
-            filter: filters.pop().unwrap(),
-        }),
-        _ => Ok(search::Arguments {
-            result_options,
-            filter: Filter::Operator(Operator::And, filters),
-        }),
+        let mut filters =
+            parse_filters(&mut tokens, decoder).map_err(|v| (self.tag.as_str(), v))?;
+        match filters.len() {
+            0 => Err((self.tag.as_str(), "No filters found in command.").into()),
+            1 => Ok(search::Arguments {
+                tag: self.tag,
+                result_options,
+                filter: filters.pop().unwrap(),
+            }),
+            _ => Ok(search::Arguments {
+                tag: self.tag,
+                result_options,
+                filter: Filter::Operator(Operator::And, filters),
+            }),
+        }
     }
 }
 
@@ -183,12 +188,15 @@ pub fn parse_filters(
                 } else if value.eq_ignore_ascii_case(b"TO") {
                     filters.push(Filter::To(decode_argument(tokens, decoder)?));
                 } else if value.eq_ignore_ascii_case(b"UID") {
-                    filters.push(Filter::Uid(parse_sequence_set(
-                        &tokens
-                            .next()
-                            .ok_or_else(|| Cow::from("Missing sequence set."))?
-                            .unwrap_bytes(),
-                    )?));
+                    filters.push(Filter::Sequence(
+                        parse_sequence_set(
+                            &tokens
+                                .next()
+                                .ok_or_else(|| Cow::from("Missing sequence set."))?
+                                .unwrap_bytes(),
+                        )?,
+                        true,
+                    ));
                 } else if value.eq_ignore_ascii_case(b"UNANSWERED") {
                     filters.push(Filter::Unanswered);
                 } else if value.eq_ignore_ascii_case(b"UNDELETED") {
@@ -245,7 +253,7 @@ pub fn parse_filters(
                     operator = Operator::Not;
                     continue;
                 } else {
-                    filters.push(Filter::SequenceSet(parse_sequence_set(&value)?));
+                    filters.push(Filter::Sequence(parse_sequence_set(&value)?, false));
                 }
             }
             Token::ParenthesisOpen => {
@@ -347,6 +355,7 @@ mod tests {
                 b"A282 SEARCH RETURN (MIN COUNT) FLAGGED SINCE 1-Feb-1994 NOT FROM \"Smith\"\r\n"
                     .to_vec(),
                 search::Arguments {
+                    tag: "A282".to_string(),
                     result_options: vec![ResultOption::Min, ResultOption::Count],
                     filter: Filter::and([
                         Filter::Flagged,
@@ -358,6 +367,7 @@ mod tests {
             (
                 b"A283 SEARCH RETURN () FLAGGED SINCE 1-Feb-1994 NOT FROM \"Smith\"\r\n".to_vec(),
                 search::Arguments {
+                    tag: "A283".to_string(),
                     result_options: vec![],
                     filter: Filter::and([
                         Filter::Flagged,
@@ -369,8 +379,9 @@ mod tests {
             (
                 b"A301 SEARCH $ SMALLER 4096\r\n".to_vec(),
                 search::Arguments {
+                    tag: "A301".to_string(),
                     result_options: vec![],
-                    filter: Filter::and([Filter::seq_last_command(), Filter::Smaller(4096)]),
+                    filter: Filter::and([Filter::seq_saved_search(), Filter::Smaller(4096)]),
                 },
             ),
             (
@@ -378,16 +389,20 @@ mod tests {
                     .as_bytes()
                     .to_vec(),
                 search::Arguments {
+                    tag: "P283".to_string(),
                     result_options: vec![],
                     filter: Filter::and([
                         Filter::or([
-                            Filter::seq_last_command(),
-                            Filter::SequenceSet(Sequence::List {
-                                items: vec![
-                                    Sequence::number(1),
-                                    Sequence::range(3000.into(), 3021.into()),
-                                ],
-                            }),
+                            Filter::seq_saved_search(),
+                            Filter::Sequence(
+                                Sequence::List {
+                                    items: vec![
+                                        Sequence::number(1),
+                                        Sequence::range(3000.into(), 3021.into()),
+                                    ],
+                                },
+                                false,
+                            ),
                         ]),
                         Filter::Text("мать".to_string()),
                     ]),
@@ -396,6 +411,7 @@ mod tests {
             (
                 b"F282 SEARCH RETURN (SAVE) KEYWORD $Junk\r\n".to_vec(),
                 search::Arguments {
+                    tag: "F282".to_string(),
                     result_options: vec![ResultOption::Save],
                     filter: Filter::Keyword(Flag::Junk),
                 },
@@ -408,6 +424,7 @@ mod tests {
                 ]
                 .concat(),
                 search::Arguments {
+                    tag: "F282".to_string(),
                     result_options: vec![],
                     filter: Filter::or([
                         Filter::or([
@@ -429,6 +446,7 @@ mod tests {
                 ]
                 .concat(),
                 search::Arguments {
+                    tag: "abc".to_string(),
                     result_options: vec![],
                     filter: Filter::or([
                         Filter::Smaller(10000),
@@ -447,6 +465,7 @@ mod tests {
                 ]
                 .concat(),
                 search::Arguments {
+                    tag: "abc".to_string(),
                     result_options: vec![],
                     filter: Filter::and([
                         Filter::Deleted,
@@ -457,18 +476,24 @@ mod tests {
                             Filter::To("jane".to_string()),
                             Filter::Bcc("bill".to_string()),
                         ]),
-                        Filter::SequenceSet(Sequence::List {
-                            items: vec![Sequence::number(1), Sequence::range(30.into(), None)],
-                        }),
-                        Filter::Uid(Sequence::List {
-                            items: vec![
-                                Sequence::number(1),
-                                Sequence::number(2),
-                                Sequence::number(3),
-                                Sequence::number(4),
-                            ],
-                        }),
-                        Filter::seq_last_command(),
+                        Filter::Sequence(
+                            Sequence::List {
+                                items: vec![Sequence::number(1), Sequence::range(30.into(), None)],
+                            },
+                            false,
+                        ),
+                        Filter::Sequence(
+                            Sequence::List {
+                                items: vec![
+                                    Sequence::number(1),
+                                    Sequence::number(2),
+                                    Sequence::number(3),
+                                    Sequence::number(4),
+                                ],
+                            },
+                            true,
+                        ),
+                        Filter::seq_saved_search(),
                     ]),
                 },
             ),
@@ -480,15 +505,19 @@ mod tests {
                 ]
                 .concat(),
                 search::Arguments {
+                    tag: "abc".to_string(),
                     result_options: vec![],
                     filter: Filter::and([
                         Filter::seq_range(None, None),
-                        Filter::Uid(Sequence::List {
-                            items: vec![
-                                Sequence::range(None, 100.into()),
-                                Sequence::range(100.into(), None),
-                            ],
-                        }),
+                        Filter::Sequence(
+                            Sequence::List {
+                                items: vec![
+                                    Sequence::range(None, 100.into()),
+                                    Sequence::range(100.into(), None),
+                                ],
+                            },
+                            true,
+                        ),
                         Filter::Flagged,
                         Filter::Draft,
                         Filter::Deleted,
@@ -505,6 +534,7 @@ mod tests {
                 ]
                 .concat(),
                 search::Arguments {
+                    tag: "abc".to_string(),
                     result_options: vec![],
                     filter: Filter::and([
                         Filter::not([
@@ -517,7 +547,7 @@ mod tests {
                         Filter::or([
                             Filter::and([Filter::Undeleted, Filter::All]),
                             Filter::and([
-                                Filter::seq_last_command(),
+                                Filter::seq_saved_search(),
                                 Filter::not([Filter::Flagged]),
                             ]),
                         ]),
@@ -532,6 +562,7 @@ mod tests {
                 ]
                 .concat(),
                 search::Arguments {
+                    tag: "B283".to_string(),
                     result_options: vec![ResultOption::Save, ResultOption::Min, ResultOption::Max],
                     filter: Filter::Text("Привет, мир".to_string()),
                 },
@@ -539,6 +570,7 @@ mod tests {
             (
                 b"B283 SEARCH CHARSET BIG5 FROM \"\xa7A\xa6n\xa1A\xa5@\xac\xc9\"\r\n".to_vec(),
                 search::Arguments {
+                    tag: "B283".to_string(),
                     result_options: vec![],
                     filter: Filter::From("你好，世界".to_string()),
                 },
@@ -546,7 +578,10 @@ mod tests {
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
             assert_eq!(
-                super::parse_search(receiver.parse(&mut command.iter()).unwrap())
+                receiver
+                    .parse(&mut command.iter())
+                    .unwrap()
+                    .parse_search()
                     .expect(&command_str),
                 arguments,
                 "{}",

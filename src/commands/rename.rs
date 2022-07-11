@@ -5,7 +5,7 @@ use crate::{
     core::{
         client::{Session, SessionData},
         receiver::Request,
-        IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::rename::Arguments,
 };
@@ -166,7 +166,7 @@ impl SessionData {
                     }
                 }
 
-                StatusResponse::ok(arguments.tag.into(), None, "RENAME completed")
+                StatusResponse::completed(Command::Rename, arguments.tag)
             }
             Err(err) => err.into_status_response(arguments.tag.into()),
         }

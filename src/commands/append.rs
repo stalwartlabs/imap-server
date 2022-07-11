@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::core::{
-    client::Session, receiver::Request, IntoStatusResponse, ResponseCode, StatusResponse,
+    client::Session, receiver::Request, Command, IntoStatusResponse, ResponseCode, StatusResponse,
 };
 
 impl Session {
@@ -53,32 +53,27 @@ impl Session {
                     {
                         Ok(email) => {
                             let jmap_id = email.unwrap_id();
-                            let mut response_code = None;
+                            let mut response =
+                                StatusResponse::completed(Command::Append, arguments.tag);
                             if !jmap_id.is_empty() {
-                                if let Ok(uids) = data
+                                if let Ok((uids, _)) = data
                                     .core
-                                    .jmap_to_uid(mailbox.clone(), vec![jmap_id], true)
+                                    .jmap_to_imap(mailbox.clone(), vec![jmap_id], true, true)
                                     .await
                                 {
                                     if version.is_rev2() {
                                         if let Ok((uid_validity, _)) = data.core.uids(mailbox).await
                                         {
-                                            response_code =
-                                                ResponseCode::AppendUid { uid_validity, uids }
-                                                    .into();
+                                            response =
+                                                response.with_code(ResponseCode::AppendUid {
+                                                    uid_validity,
+                                                    uids,
+                                                });
                                         }
                                     }
                                 }
                             }
-                            data.write_bytes(
-                                StatusResponse::ok(
-                                    arguments.tag.into(),
-                                    response_code,
-                                    "APPEND completed",
-                                )
-                                .into_bytes(),
-                            )
-                            .await;
+                            data.write_bytes(response.into_bytes()).await;
                         }
                         Err(response) => {
                             data.write_bytes(

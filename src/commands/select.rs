@@ -12,6 +12,8 @@ use crate::{
 };
 use std::sync::Arc;
 
+use super::search::SavedSearch;
+
 impl Session {
     pub async fn handle_select(&mut self, request: Request) -> Result<(), ()> {
         let is_select = request.command == Command::Select;
@@ -26,6 +28,7 @@ impl Session {
                             let closed_previous = self.state.is_mailbox_selected();
 
                             // Update state
+                            *data.saved_search.lock() = SavedSearch::None;
                             self.state = State::Selected {
                                 data,
                                 mailbox,

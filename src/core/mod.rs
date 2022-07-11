@@ -186,6 +186,24 @@ impl StatusResponse {
         }
     }
 
+    pub fn database_failure(tag: Option<String>) -> Self {
+        StatusResponse::no(tag, ResponseCode::ContactAdmin.into(), "Database failure.")
+    }
+
+    pub fn completed(command: Command, tag: String) -> Self {
+        StatusResponse::ok(tag.into(), None, format!("{} completed", command))
+    }
+
+    pub fn with_code(mut self, code: ResponseCode) -> Self {
+        self.code = Some(code);
+        self
+    }
+
+    pub fn with_tag(mut self, tag: String) -> Self {
+        self.tag = Some(tag);
+        self
+    }
+
     pub fn no(
         tag: Option<String>,
         code: Option<ResponseCode>,

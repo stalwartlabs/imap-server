@@ -1,4 +1,4 @@
-use crate::core::StatusResponse;
+use crate::core::{Command, StatusResponse};
 
 use super::{authenticate::Mechanism, ImapResponse, ProtocolVersion};
 
@@ -52,7 +52,7 @@ impl ImapResponse for Response {
             capability.serialize(&mut buf);
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::ok(tag.into(), None, "CAPABILITY completed").serialize(&mut buf);
+        StatusResponse::completed(Command::Capability, tag).serialize(&mut buf);
         buf
     }
 }

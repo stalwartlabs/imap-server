@@ -7,7 +7,7 @@ use crate::{
         client::{Session, SessionData},
         message::MailboxData,
         receiver::Request,
-        IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::{expunge, ImapResponse},
 };
@@ -17,26 +17,28 @@ impl Session {
         let (data, mailbox, _) = self.state.mailbox_data();
         match data.expunge(mailbox.clone()).await {
             Ok(Some(jmap_ids)) if !jmap_ids.is_empty() => {
-                match if is_uid {
-                    data.core.jmap_to_uid(mailbox, jmap_ids, false).await
-                } else {
-                    data.core.jmap_to_seqnum(mailbox, jmap_ids, false).await
-                } {
-                    Ok(ids) => {
+                match data
+                    .core
+                    .jmap_to_imap(mailbox, jmap_ids, false, is_uid)
+                    .await
+                {
+                    Ok((ids, _)) => {
                         self.write_bytes(
-                            expunge::Response { ids }.serialize(request.tag, self.version),
+                            expunge::Response { is_uid, ids }.serialize(request.tag, self.version),
                         )
                         .await
                     }
-                    Err(mut response) => {
-                        response.tag = request.tag.into();
-                        self.write_bytes(response.into_bytes()).await
+                    Err(_) => {
+                        self.write_bytes(
+                            StatusResponse::database_failure(request.tag.into()).into_bytes(),
+                        )
+                        .await
                     }
                 }
             }
             Ok(_) => {
                 self.write_bytes(
-                    StatusResponse::ok(request.tag.into(), None, "EXPUNGE completed").into_bytes(),
+                    StatusResponse::completed(Command::Expunge(is_uid), request.tag).into_bytes(),
                 )
                 .await
             }

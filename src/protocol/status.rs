@@ -1,4 +1,4 @@
-use crate::core::{utf7::utf7_encode, StatusResponse};
+use crate::core::{utf7::utf7_encode, Command, StatusResponse};
 
 use super::{quoted_string, ImapResponse, ProtocolVersion};
 
@@ -27,7 +27,7 @@ pub enum Status {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusItem {
     pub mailbox_name: String,
-    pub items: Vec<(Status, u64)>,
+    pub items: Vec<(Status, u32)>,
 }
 
 impl StatusItem {
@@ -61,7 +61,7 @@ impl ImapResponse for Response {
     fn serialize(&self, tag: String, version: super::ProtocolVersion) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         self.status.serialize(&mut buf, version);
-        StatusResponse::ok(tag.into(), None, "STATUS completed").serialize(&mut buf);
+        StatusResponse::completed(Command::Status, tag).serialize(&mut buf);
         buf
     }
 }

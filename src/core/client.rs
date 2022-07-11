@@ -5,7 +5,7 @@ use tokio::{io::WriteHalf, net::TcpStream, sync::mpsc};
 use tokio_rustls::server::TlsStream;
 use tracing::debug;
 
-use crate::protocol::ProtocolVersion;
+use crate::{commands::search::SavedSearch, protocol::ProtocolVersion};
 
 use super::{
     mailbox::Account,
@@ -29,6 +29,7 @@ pub struct SessionData {
     pub core: Arc<Core>,
     pub writer: mpsc::Sender<writer::Event>,
     pub mailboxes: parking_lot::Mutex<Vec<Account>>,
+    pub saved_search: parking_lot::Mutex<SavedSearch>,
 }
 
 pub enum State {

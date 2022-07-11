@@ -1,4 +1,4 @@
-use crate::core::{Flag, StatusResponse};
+use crate::core::{Command, Flag, StatusResponse};
 
 use super::{
     literal_string, quoted_string, quoted_string_or_nil, quoted_timestamp, quoted_timestamp_or_nil,
@@ -12,6 +12,7 @@ pub struct Arguments {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
+    pub is_uid: bool,
     pub items: Vec<FetchItem>,
 }
 
@@ -35,22 +36,22 @@ pub enum Attribute {
     BodySection {
         peek: bool,
         sections: Vec<Section>,
-        partial: Option<(u64, u64)>,
+        partial: Option<(u32, u32)>,
     },
     Uid,
     Binary {
         peek: bool,
-        sections: Vec<u64>,
-        partial: Option<(u64, u64)>,
+        sections: Vec<u32>,
+        partial: Option<(u32, u32)>,
     },
     BinarySize {
-        sections: Vec<u64>,
+        sections: Vec<u32>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Section {
-    Part { num: u64 },
+    Part { num: u32 },
     Header,
     HeaderFields { not: bool, fields: Vec<String> },
     Text,
@@ -60,8 +61,8 @@ pub enum Section {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataItem {
     Binary {
-        sections: Vec<u64>,
-        offset: Option<u64>,
+        sections: Vec<u32>,
+        offset: Option<u32>,
         contents: BodyContents,
     },
     Body {
@@ -72,7 +73,7 @@ pub enum DataItem {
     },
     BodySection {
         sections: Vec<Section>,
-        origin_octet: Option<u64>,
+        origin_octet: Option<u32>,
         contents: String,
     },
     Envelope {
@@ -94,7 +95,7 @@ pub enum DataItem {
         date: i64,
     },
     Uid {
-        uid: u64,
+        uid: u32,
     },
     Rfc822 {
         contents: String,
@@ -500,7 +501,7 @@ impl ImapResponse for Response {
         for item in &self.items {
             item.serialize(&mut buf);
         }
-        StatusResponse::ok(tag.into(), None, "FETCH completed").serialize(&mut buf);
+        StatusResponse::completed(Command::Fetch(self.is_uid), tag).serialize(&mut buf);
         buf
     }
 }
@@ -839,6 +840,7 @@ mod tests {
         assert_eq!(
             String::from_utf8(
                 Response {
+                    is_uid: false,
                     items: vec![FetchItem {
                         id: 123,
                         items: vec![

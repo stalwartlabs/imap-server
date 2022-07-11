@@ -1,7 +1,7 @@
 use crate::core::{
     client::{Session, State},
     receiver::Request,
-    StatusResponse,
+    Command, StatusResponse,
 };
 
 impl Session {
@@ -9,9 +9,7 @@ impl Session {
         self.state = State::Authenticated {
             data: self.state.session_data(),
         };
-        self.write_bytes(
-            StatusResponse::ok(request.tag.into(), None, "UNSELECT completed").into_bytes(),
-        )
-        .await
+        self.write_bytes(StatusResponse::completed(Command::Unselect, request.tag).into_bytes())
+            .await
     }
 }
