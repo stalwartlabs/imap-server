@@ -1,0 +1,177 @@
+BODY (
+   (
+      "TEXT" "plain" (
+         "charset" "utf-8"
+      ) NIL NIL "quoted-printable" 88 3
+   ) (
+      "TEXT" "html" (
+         "charset" "utf-8"
+      ) NIL NIL "quoted-printable" 94 3
+   ) "alternative"
+)
+
+BODYSTRUCTURE (
+   (
+      "TEXT" "plain" (
+         "charset" "utf-8"
+      ) NIL NIL "quoted-printable" 88 3 "42c3362e903b7a03fdc65680ef374c47" (
+         "inline" (
+            
+         )
+      ) NIL NIL
+   ) (
+      "TEXT" "html" (
+         "charset" "utf-8"
+      ) NIL NIL "quoted-printable" 94 3 "c9babbbcea4c673b1dfd6dc95ecb6bd1" (
+         "inline" (
+            
+         )
+      ) NIL NIL
+   ) "alternative" (
+      "boundary" "boundary-string"
+   ) NIL NIL NIL
+)
+
+BODY[] {616}
+From: sender@example.com
+To: recipient@example.com
+Subject: Multipart Email Example
+Content-Type: multipart/alternative; boundary="boundary-string"
+
+--boundary-string
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+Plain text email goes here!
+This is the fallback if email client does not support HTML
+
+--boundary-string
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+<h1>This is the HTML Section!</h1>
+<p>This is what displays in most modern email clients</p>
+
+--boundary-string--
+
+BINARY.SIZE[] 0
+----------------------------------
+BODY[HEADER] {149}
+From: sender@example.com
+To: recipient@example.com
+Subject: Multipart Email Example
+Content-Type: multipart/alternative; boundary="boundary-string"
+
+
+----------------------------------
+BODY[TEXT] {467}
+--boundary-string
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+Plain text email goes here!
+This is the fallback if email client does not support HTML
+
+--boundary-string
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+<h1>This is the HTML Section!</h1>
+<p>This is what displays in most modern email clients</p>
+
+--boundary-string--
+
+----------------------------------
+BODY[MIME] {65}
+Content-Type:  multipart/alternative; boundary="boundary-string"
+
+----------------------------------
+BODY[1] {203}
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+Plain text email goes here!
+This is the fallback if email client does not support HTML
+
+
+BINARY[1] {87}
+Plain text email goes here!
+This is the fallback if email client does not support HTML
+
+BINARY.SIZE[1] 87
+----------------------------------
+BODY[1.HEADER] {115}
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+
+----------------------------------
+BODY[1.TEXT] {88}
+Plain text email goes here!
+This is the fallback if email client does not support HTML
+
+
+----------------------------------
+BODY[1.MIME] {117}
+Content-Type:  text/plain; charset="utf-8"
+Content-Transfer-Encoding:  quoted-printable
+Content-Disposition:  inline
+
+----------------------------------
+BODY[2] {208}
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+<h1>This is the HTML Section!</h1>
+<p>This is what displays in most modern email clients</p>
+
+
+BINARY[2] {93}
+<h1>This is the HTML Section!</h1>
+<p>This is what displays in most modern email clients</p>
+
+BINARY.SIZE[2] 93
+----------------------------------
+BODY[2.HEADER] {114}
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
+
+----------------------------------
+BODY[2.TEXT] {94}
+<h1>This is the HTML Section!</h1>
+<p>This is what displays in most modern email clients</p>
+
+
+----------------------------------
+BODY[2.MIME] {116}
+Content-Type:  text/html; charset="utf-8"
+Content-Transfer-Encoding:  quoted-printable
+Content-Disposition:  inline
+
+----------------------------------
+BODY[HEADER.FIELDS (From To)] {53}
+From:  sender@example.com
+To:  recipient@example.com
+
+----------------------------------
+BODY[HEADER.FIELDS (From To)]<10> {15}
+der@example.com
+----------------------------------
+BODY[HEADER.FIELDS.NOT (Subject Cc)] {118}
+From:  sender@example.com
+To:  recipient@example.com
+Content-Type:  multipart/alternative; boundary="boundary-string"
+
+----------------------------------
+BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
+der@example.com
+----------------------------------

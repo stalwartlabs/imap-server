@@ -88,8 +88,8 @@ impl SessionData {
         let mut mailbox_ids = Vec::new();
         for create_id in create_ids {
             match response.created(&create_id) {
-                Ok(mailbox) => {
-                    mailbox_ids.push(mailbox.unwrap_id());
+                Ok(mut mailbox) => {
+                    mailbox_ids.push(mailbox.take_id());
                 }
                 Err(err) => {
                     return Err(err.to_string().into());
@@ -109,7 +109,7 @@ impl SessionData {
         };
 
         // Update state
-        if let Some(new_state) = response.unwrap_new_state() {
+        if let Some(new_state) = response.take_new_state() {
             account.state_id = new_state;
         }
 

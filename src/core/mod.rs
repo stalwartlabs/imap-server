@@ -287,19 +287,21 @@ impl IntoStatusResponse for jmap_client::Error {
                         .to_string(),
                     ),
                 },
-                ProblemType::Other(_) => {
-                    if err.status().unwrap_or(0) == 429 {
-                        (
-                            ResponseCode::Limit,
-                            "Too many requests, please try again later.".to_string(),
-                        )
-                    } else {
-                        (
-                            ResponseCode::ContactAdmin,
-                            format!("Server error, {}", err.detail().unwrap_or("unknown.")),
-                        )
-                    }
-                }
+                ProblemType::Other(_) => match err.status().unwrap_or(0) {
+                    403 => (
+                        ResponseCode::NoPerm,
+                        "Failed to authenticate with JMAP server, please try to login again."
+                            .to_string(),
+                    ),
+                    429 => (
+                        ResponseCode::Limit,
+                        "Too many requests, please try again later.".to_string(),
+                    ),
+                    _ => (
+                        ResponseCode::ContactAdmin,
+                        format!("Server error, {}", err.detail().unwrap_or("unknown.")),
+                    ),
+                },
             },
             jmap_client::Error::Server(err) => {
                 (ResponseCode::ContactAdmin, format!("Server error, {}", err))

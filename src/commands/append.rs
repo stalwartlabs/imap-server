@@ -51,12 +51,12 @@ impl Session {
                         )
                         .await
                     {
-                        Ok(email) => {
-                            let jmap_id = email.unwrap_id();
+                        Ok(mut email) => {
+                            let jmap_id = email.take_id();
                             let mut response =
                                 StatusResponse::completed(Command::Append, arguments.tag);
                             if !jmap_id.is_empty() {
-                                if let Ok((uids, _)) = data
+                                if let Ok(ids) = data
                                     .core
                                     .jmap_to_imap(mailbox.clone(), vec![jmap_id], true, true)
                                     .await
@@ -67,7 +67,7 @@ impl Session {
                                             response =
                                                 response.with_code(ResponseCode::AppendUid {
                                                     uid_validity,
-                                                    uids,
+                                                    uids: ids.uids,
                                                 });
                                         }
                                     }

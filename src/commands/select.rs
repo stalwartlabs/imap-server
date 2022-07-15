@@ -4,11 +4,7 @@ use crate::{
         receiver::Request,
         Command, ResponseCode, StatusResponse,
     },
-    protocol::{
-        list::ListItem,
-        select::{self},
-        ImapResponse,
-    },
+    protocol::{list::ListItem, select::Response, ImapResponse},
 };
 use std::sync::Arc;
 
@@ -36,7 +32,7 @@ impl Session {
                             };
 
                             self.write_bytes(
-                                select::Response {
+                                Response {
                                     mailbox: ListItem::new(arguments.mailbox_name),
                                     total_messages: status.total_messages,
                                     recent_messages: 0,

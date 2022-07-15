@@ -11,10 +11,10 @@ use crate::{
         client::{Session, SessionData},
         mailbox::Mailbox,
         receiver::Request,
-        IntoStatusResponse, ResponseCode, StatusResponse,
+        Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::{
-        status::{self, Status, StatusItem},
+        status::{Response, Status, StatusItem},
         ImapResponse,
     },
 };
@@ -39,10 +39,8 @@ impl Session {
                     // Fetch status
                     match data.status(arguments.mailbox_name, &arguments.items).await {
                         Ok(status) => {
-                            data.write_bytes(
-                                status::Response { status }.serialize(arguments.tag, version),
-                            )
-                            .await;
+                            data.write_bytes(Response { status }.serialize(arguments.tag, version))
+                                .await;
                         }
                         Err(mut response) => {
                             response.tag = arguments.tag.into();
@@ -184,9 +182,12 @@ impl SessionData {
                     .account_id(&mailbox.account_id)
                     .filter(query::Filter::and(
                         if let Some(mailbox_id) = &mailbox.mailbox_id {
-                            vec![Filter::in_mailbox(mailbox_id), Filter::not_keyword("$seen")]
+                            vec![
+                                Filter::in_mailbox(mailbox_id),
+                                Filter::not_keyword(Flag::Seen.to_jmap()),
+                            ]
                         } else {
-                            vec![Filter::not_keyword("$seen")]
+                            vec![Filter::not_keyword(Flag::Seen.to_jmap())]
                         },
                     ))
                     .calculate_total(true)
@@ -200,10 +201,10 @@ impl SessionData {
                         if let Some(mailbox_id) = &mailbox.mailbox_id {
                             vec![
                                 Filter::in_mailbox(mailbox_id),
-                                Filter::has_keyword("$deleted"),
+                                Filter::has_keyword(Flag::Deleted.to_jmap()),
                             ]
                         } else {
-                            vec![Filter::has_keyword("$deleted")]
+                            vec![Filter::has_keyword(Flag::Deleted.to_jmap())]
                         },
                     ))
                     .calculate_total(true)
@@ -278,7 +279,7 @@ impl SessionData {
                 .session()
                 .core_capabilities()
                 .map(|c| c.max_objects_in_get())
-                .unwrap_or(100);
+                .unwrap_or(500);
             let mut position = 0;
             let mut mailbox_size = 0;
 
@@ -319,7 +320,7 @@ impl SessionData {
                     .unwrap()
                     .unwrap_get_email()
                     .map_err(|err| err.into_status_response(None))?
-                    .unwrap_list();
+                    .take_list();
                 if !emails.is_empty() {
                     let total_emails = response
                         .pop()

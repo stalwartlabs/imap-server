@@ -7,9 +7,9 @@ use crate::{
         client::{Session, SessionData},
         message::MailboxData,
         receiver::Request,
-        Command, IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
-    protocol::{expunge, ImapResponse},
+    protocol::{expunge::Response, ImapResponse},
 };
 
 impl Session {
@@ -22,9 +22,17 @@ impl Session {
                     .jmap_to_imap(mailbox, jmap_ids, false, is_uid)
                     .await
                 {
-                    Ok((ids, _)) => {
+                    Ok(ids) => {
                         self.write_bytes(
-                            expunge::Response { is_uid, ids }.serialize(request.tag, self.version),
+                            Response {
+                                is_uid,
+                                ids: if is_uid {
+                                    ids.uids
+                                } else {
+                                    ids.seqnums.unwrap()
+                                },
+                            }
+                            .serialize(request.tag, self.version),
                         )
                         .await
                     }
@@ -63,10 +71,10 @@ impl SessionData {
                 if let Some(mailbox_id) = &mailbox.mailbox_id {
                     vec![
                         Filter::in_mailbox(mailbox_id),
-                        Filter::has_keyword("$deleted"),
+                        Filter::has_keyword(Flag::Deleted.to_jmap()),
                     ]
                 } else {
-                    vec![Filter::has_keyword("$deleted")]
+                    vec![Filter::has_keyword(Flag::Deleted.to_jmap())]
                 },
             ))
             .result_reference();
@@ -89,6 +97,6 @@ impl SessionData {
             .unwrap()
             .unwrap_set_email()
             .map_err(|err| err.into_status_response(None))?
-            .unwrap_destroyed_ids())
+            .take_destroyed_ids())
     }
 }

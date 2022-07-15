@@ -9,22 +9,22 @@ use tokio::sync::watch;
 use crate::{
     core::{
         client::{Session, SessionData},
-        message::MailboxData,
+        message::{IdMappings, MailboxData},
         receiver::Request,
         Flag, IntoStatusResponse, StatusResponse,
     },
     protocol::{
-        search::{self, Arguments, ResultOption},
+        search::{self, Arguments, Response, ResultOption},
         ImapResponse, Sequence,
     },
 };
 
 pub enum SavedSearch {
     InFlight {
-        rx: watch::Receiver<Arc<Vec<String>>>,
+        rx: watch::Receiver<Arc<IdMappings>>,
     },
     Results {
-        items: Arc<Vec<String>>,
+        items: Arc<IdMappings>,
     },
     None,
 }
@@ -40,7 +40,7 @@ impl Session {
                 let (results_tx, prev_saved_search) =
                     if arguments.result_options.contains(&ResultOption::Save) {
                         let prev_saved_search = Some(data.get_saved_search().await);
-                        let (tx, rx) = watch::channel(Arc::new(Vec::new()));
+                        let (tx, rx) = watch::channel(Arc::new(IdMappings::default()));
                         *data.saved_search.lock() = SavedSearch::InFlight { rx };
                         (tx.into(), prev_saved_search)
                     } else {
@@ -83,8 +83,8 @@ impl SessionData {
         &self,
         arguments: Arguments,
         mailbox: Arc<MailboxData>,
-        results_tx: Option<watch::Sender<Arc<Vec<String>>>>,
-        prev_saved_search: Option<Option<Arc<Vec<String>>>>,
+        results_tx: Option<watch::Sender<Arc<IdMappings>>>,
+        prev_saved_search: Option<Option<Arc<IdMappings>>>,
         is_uid: bool,
     ) -> Result<(search::Response, String), StatusResponse> {
         // Convert IMAP to JMAP query
@@ -103,12 +103,12 @@ impl SessionData {
                 .filter(filter.clone())
                 .calculate_total(true)
                 .position(position);
-            let response = match request.send_query_email().await {
+            let mut response = match request.send_query_email().await {
                 Ok(response) => response,
                 Err(err) => return Err(err.into_status_response(arguments.tag.into())),
             };
             total = response.total().unwrap_or(0);
-            let response = response.unwrap_ids();
+            let response = response.take_ids();
             let response_len = response.len();
             if response_len > 0 {
                 jmap_ids.extend(response);
@@ -121,51 +121,82 @@ impl SessionData {
         }
 
         // Convert to IMAP ids
-        let (imap_ids, jmap_ids) = match self
+        let ids = match self
             .core
-            .jmap_to_imap(mailbox, jmap_ids, true, is_uid)
+            .jmap_to_imap(mailbox, jmap_ids, true, is_uid && results_tx.is_none())
             .await
         {
-            Ok(imap_ids) => imap_ids,
+            Ok(ids) => ids,
             Err(_) => return Err(StatusResponse::database_failure(arguments.tag.into())),
         };
 
         // Calculate min and max
         let min = if arguments.result_options.contains(&ResultOption::Min) {
-            imap_ids.iter().max().copied()
+            (if is_uid {
+                ids.uids.as_ref()
+            } else {
+                ids.seqnums.as_ref().unwrap()
+            })
+            .iter()
+            .max()
+            .copied()
         } else {
             None
         };
         let max = if arguments.result_options.contains(&ResultOption::Max) {
-            imap_ids.iter().min().copied()
+            (if is_uid {
+                ids.uids.as_ref()
+            } else {
+                ids.seqnums.as_ref().unwrap()
+            })
+            .iter()
+            .min()
+            .copied()
         } else {
             None
         };
 
-        // Save results
-        if let Some(results_tx) = results_tx {
-            let save_ids = Arc::new(if min.is_some() && max.is_some() {
-                let mut save_ids = Vec::with_capacity(2);
-                for min_max in [min, max].into_iter().flatten() {
-                    if let Some(pos) = imap_ids.iter().position(|&id| id == min_max) {
-                        if let Some(value) = jmap_ids.get(pos) {
-                            save_ids.push(value.clone());
-                        }
+        // Build results
+        let ids = Arc::new(if min.is_some() && max.is_some() {
+            let mut save_ids = IdMappings {
+                jmap_ids: Vec::with_capacity(2),
+                uids: Vec::with_capacity(2),
+                seqnums: Vec::with_capacity(2).into(),
+            };
+            for min_max in [min, max].into_iter().flatten() {
+                if let Some(pos) = (if is_uid {
+                    ids.uids.as_ref()
+                } else {
+                    ids.seqnums.as_ref().unwrap()
+                })
+                .iter()
+                .position(|&id| id == min_max)
+                {
+                    if let (Some(jmap_id), Some(uid), Some(seqnum)) = (
+                        ids.jmap_ids.get(pos),
+                        ids.uids.get(pos),
+                        ids.seqnums.as_ref().and_then(|ids| ids.get(pos)),
+                    ) {
+                        save_ids.jmap_ids.push(jmap_id.clone());
+                        save_ids.uids.push(*uid);
+                        save_ids.seqnums.as_mut().unwrap().push(*seqnum);
                     }
                 }
-                save_ids
-            } else {
-                jmap_ids
-            });
-            *self.saved_search.lock() = SavedSearch::Results {
-                items: save_ids.clone(),
-            };
-            results_tx.send(save_ids).ok();
+            }
+            save_ids
+        } else {
+            ids
+        });
+
+        // Save results
+        if let Some(results_tx) = results_tx {
+            *self.saved_search.lock() = SavedSearch::Results { items: ids.clone() };
+            results_tx.send(ids.clone()).ok();
         }
 
         // Build response
         Ok((
-            search::Response {
+            Response {
                 is_uid,
                 min,
                 max,
@@ -177,7 +208,11 @@ impl SessionData {
                 ids: if arguments.result_options.is_empty()
                     || arguments.result_options.contains(&ResultOption::All)
                 {
-                    imap_ids
+                    if is_uid {
+                        ids.uids.clone()
+                    } else {
+                        ids.seqnums.as_ref().unwrap().clone()
+                    }
                 } else {
                     vec![]
                 },
@@ -190,7 +225,7 @@ impl SessionData {
         &self,
         filter: search::Filter,
         mailbox: Arc<MailboxData>,
-        prev_saved_search: Option<Option<Arc<Vec<String>>>>,
+        prev_saved_search: Option<Option<Arc<IdMappings>>>,
         is_uid: bool,
     ) -> crate::core::Result<query::Filter<email::query::Filter>> {
         let (imap_filters, mut operator) = match filter {
@@ -213,7 +248,7 @@ impl SessionData {
                         let ids = match (&sequence, &prev_saved_search) {
                             (Sequence::SavedSearch, Some(prev_saved_search)) => {
                                 if let Some(prev_saved_search) = prev_saved_search {
-                                    prev_saved_search.iter().cloned().collect::<Vec<String>>()
+                                    prev_saved_search.clone()
                                 } else {
                                     return Err(StatusResponse::no(
                                         None,
@@ -229,12 +264,10 @@ impl SessionData {
                                     if uid_filter { true } else { is_uid },
                                 )
                                 .await?
-                                .iter()
-                                .cloned()
-                                .collect::<Vec<String>>(),
+                                .clone(),
                         };
 
-                        jmap_filters.push(email::query::Filter::id(ids).into());
+                        jmap_filters.push(email::query::Filter::id(ids.jmap_ids.iter()).into());
                     }
                     search::Filter::All => (),
                     search::Filter::From(text) => {
@@ -422,7 +455,7 @@ impl SessionData {
         })
     }
 
-    pub async fn get_saved_search(&self) -> Option<Arc<Vec<String>>> {
+    pub async fn get_saved_search(&self) -> Option<Arc<IdMappings>> {
         let mut rx = match &*self.saved_search.lock() {
             SavedSearch::InFlight { rx } => rx.clone(),
             SavedSearch::Results { items } => {
@@ -439,7 +472,7 @@ impl SessionData {
 }
 
 impl SavedSearch {
-    pub async fn unwrap(&self) -> Option<Arc<Vec<String>>> {
+    pub async fn unwrap(&self) -> Option<Arc<IdMappings>> {
         match self {
             SavedSearch::InFlight { rx } => {
                 let mut rx = rx.clone();

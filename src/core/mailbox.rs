@@ -83,7 +83,7 @@ async fn fetch_account_mailboxes(
         .session()
         .core_capabilities()
         .map(|c| c.max_objects_in_get())
-        .unwrap_or(100);
+        .unwrap_or(500);
     let mut position = 0;
     let mut result = Vec::with_capacity(10);
     let mut state_id = String::new();
@@ -113,8 +113,8 @@ async fn fetch_account_mailboxes(
             ));
         }
         let mut get_response = response.pop().unwrap().unwrap_get_mailbox()?;
-        state_id = get_response.unwrap_state();
-        let mailboxes_part = get_response.unwrap_list();
+        state_id = get_response.take_state();
+        let mailboxes_part = get_response.take_list();
         let total_mailboxes = response
             .pop()
             .unwrap()
@@ -271,7 +271,7 @@ impl SessionData {
 
         let mut changed_account_ids = Vec::new();
         for response in request.send().await?.unwrap_method_responses() {
-            let response = match response.unwrap_changes_mailbox() {
+            let mut response = match response.unwrap_changes_mailbox() {
                 Ok(response) => response,
                 Err(err) => {
                     debug!("Failed to fetch mailbox changes: {}", err);
@@ -287,11 +287,11 @@ impl SessionData {
                             .updated_properties()
                             .map_or(true, |p| p.is_empty() || p.iter().any(|p| !p.is_count())))
                 {
-                    changed_account_ids.push(response.unwrap_account_id());
+                    changed_account_ids.push(response.take_account_id());
                 } else {
                     for account in self.mailboxes.lock().iter_mut() {
                         if account.account_id == response.account_id() {
-                            account.state_id = response.unwrap_new_state();
+                            account.state_id = response.take_new_state();
                             account.mailbox_data.values_mut().for_each(|v| {
                                 v.total_deleted = None;
                                 v.total_unseen = None;

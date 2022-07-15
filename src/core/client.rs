@@ -139,8 +139,12 @@ impl Session {
                 Command::Expunge(is_uid) => {
                     self.handle_expunge(request, is_uid).await?;
                 }
-                Command::Search(_) => todo!(),
-                Command::Fetch(_) => todo!(),
+                Command::Search(is_uid) => {
+                    self.handle_search(request, is_uid).await?;
+                }
+                Command::Fetch(is_uid) => {
+                    self.handle_fetch(request, is_uid).await?;
+                }
                 Command::Store(is_uid) => {
                     self.handle_store(request, is_uid).await?;
                 }

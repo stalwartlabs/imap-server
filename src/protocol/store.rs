@@ -19,12 +19,12 @@ pub enum Operation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Response {
+pub struct Response<'x> {
     pub is_uid: bool,
-    pub items: Vec<FetchItem>,
+    pub items: Vec<FetchItem<'x>>,
 }
 
-impl ImapResponse for Response {
+impl<'x> ImapResponse for Response<'x> {
     fn serialize(&self, tag: String, _version: super::ProtocolVersion) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         for item in &self.items {

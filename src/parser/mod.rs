@@ -305,6 +305,18 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
     }
 }
 
+pub trait PushUnique<T> {
+    fn push_unique(&mut self, value: T);
+}
+
+impl<T: PartialEq> PushUnique<T> for Vec<T> {
+    fn push_unique(&mut self, value: T) {
+        if !self.contains(&value) {
+            self.push(value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::protocol::Sequence;
