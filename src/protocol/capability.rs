@@ -1,6 +1,6 @@
 use crate::core::{Command, StatusResponse};
 
-use super::{authenticate::Mechanism, ImapResponse, ProtocolVersion};
+use super::{authenticate::Mechanism, ImapResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
@@ -44,7 +44,7 @@ impl Capability {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String, _imap_rev: ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         buf.extend_from_slice(b"* CAPABILITY");
         for capability in self.capabilities.iter() {
@@ -61,7 +61,7 @@ impl ImapResponse for Response {
 mod tests {
     use crate::protocol::{
         capability::{Capability, Response},
-        ImapResponse, ProtocolVersion,
+        ImapResponse,
     };
 
     #[test]
@@ -74,7 +74,7 @@ mod tests {
                     Capability::LoginDisabled
                 ],
             }
-            .serialize("a003".to_string(), ProtocolVersion::Rev2),
+            .serialize("a003".to_string()),
             concat!(
                 "* CAPABILITY IMAP4rev2 STARTTLS LOGINDISABLED\r\n",
                 "a003 OK CAPABILITY completed\r\n"

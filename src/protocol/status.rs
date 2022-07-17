@@ -1,6 +1,6 @@
 use crate::core::{utf7::utf7_encode, Command, StatusResponse};
 
-use super::{quoted_string, ImapResponse, ProtocolVersion};
+use super::{quoted_string, ImapResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
@@ -11,6 +11,7 @@ pub struct Arguments {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
+    pub is_rev2: bool,
     pub status: StatusItem,
 }
 
@@ -31,9 +32,9 @@ pub struct StatusItem {
 }
 
 impl StatusItem {
-    pub fn serialize(&self, buf: &mut Vec<u8>, version: ProtocolVersion) {
+    pub fn serialize(&self, buf: &mut Vec<u8>, is_rev2: bool) {
         buf.extend_from_slice(b"* STATUS ");
-        if version.is_rev2() {
+        if is_rev2 {
             quoted_string(buf, &self.mailbox_name);
         } else {
             quoted_string(buf, &utf7_encode(&self.mailbox_name));
@@ -58,9 +59,9 @@ impl StatusItem {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String, version: super::ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
-        self.status.serialize(&mut buf, version);
+        self.status.serialize(&mut buf, self.is_rev2);
         StatusResponse::completed(Command::Status, tag).serialize(&mut buf);
         buf
     }
@@ -70,7 +71,7 @@ impl ImapResponse for Response {
 mod tests {
     use crate::protocol::{
         status::{Status, StatusItem},
-        ImapResponse, ProtocolVersion,
+        ImapResponse,
     };
 
     #[test]
@@ -81,8 +82,9 @@ mod tests {
                     mailbox_name: "blurdybloop".to_string(),
                     items: vec![(Status::Messages, 231), (Status::UidNext, 44292)]
                 },
+                is_rev2: true,
             }
-            .serialize("A042".to_string(), ProtocolVersion::Rev2),
+            .serialize("A042".to_string()),
             concat!(
                 "* STATUS \"blurdybloop\" (MESSAGES 231 UIDNEXT 44292)\r\n",
                 "A042 OK STATUS completed\r\n"

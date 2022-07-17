@@ -39,10 +39,10 @@ pub fn load_config(settings: &EnvSettings) -> Core {
         } else {
             "Shared Folders".to_string()
         },
-        folder_all: if let Some(folder_shared) = settings.get("name-shared") {
-            folder_shared
+        folder_all: if let Some(folder_all) = settings.get("name-all") {
+            folder_all
         } else {
-            "All Messages".to_string()
+            "All Mail".to_string()
         },
     }
 }

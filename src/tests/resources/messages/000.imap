@@ -7,9 +7,9 @@ BODY (
       ) NIL NIL NIL 112 4
    ) (
       (
-         "TEXT" "basic" NIL NIL NIL "base64" 86 3
+         "audio" "basic" NIL NIL NIL "base64" 86
       ) (
-         "TEXT" "jpeg" NIL NIL NIL "base64" 45 2
+         "image" "jpeg" NIL NIL NIL "base64" 45
       ) "parallel"
    ) (
       "TEXT" "enriched" NIL NIL NIL NIL 141 6
@@ -29,9 +29,9 @@ BODYSTRUCTURE (
       ) NIL NIL NIL 112 4 "4529f576a224984e4c435e7ce97bca38" NIL NIL NIL
    ) (
       (
-         "TEXT" "basic" NIL NIL NIL "base64" 86 3 "85e9dc977fa0214015db65a30451e1f8" NIL NIL NIL
+         "audio" "basic" NIL NIL NIL "base64" 86 "85e9dc977fa0214015db65a30451e1f8" NIL NIL NIL
       ) (
-         "TEXT" "jpeg" NIL NIL NIL "base64" 45 2 "3a07cec657fb40c359551edb14552ed1" NIL NIL NIL
+         "image" "jpeg" NIL NIL NIL "base64" 45 "3a07cec657fb40c359551edb14552ed1" NIL NIL NIL
       ) "parallel" (
          "boundary" "unique-boundary-2"
       ) NIL NIL NIL
@@ -330,9 +330,7 @@ Content-Transfer-Encoding: base64
     mu-law-format audio data goes here ...
 
 
-BINARY[3.1] {85}
-... base64-encoded 8000 Hz single-channel
-    mu-law-format audio data goes here ...
+* NO [UNKNOWN-CTE] Failed to decode part 3.1 of message 0.
 
 BINARY.SIZE[3.1] 85
 ----------------------------------
@@ -360,8 +358,7 @@ Content-Transfer-Encoding: base64
 ... base64-encoded image data goes here ...
 
 
-BINARY[3.2] {44}
-... base64-encoded image data goes here ...
+* NO [UNKNOWN-CTE] Failed to decode part 3.2 of message 0.
 
 BINARY.SIZE[3.2] 44
 ----------------------------------

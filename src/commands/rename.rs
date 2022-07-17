@@ -30,7 +30,7 @@ impl Session {
 impl SessionData {
     pub async fn rename_folder(&self, arguments: Arguments) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
 
             return err.into_status_response(arguments.tag.into());

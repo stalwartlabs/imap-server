@@ -21,11 +21,10 @@ impl Session {
         match request.parse_store() {
             Ok(arguments) => {
                 let (data, mailbox, _) = self.state.mailbox_data();
-                let version = self.version;
 
                 tokio::spawn(async move {
                     let bytes = match data.store(arguments, mailbox, is_uid).await {
-                        Ok((response, tag)) => response.serialize(tag, version),
+                        Ok((response, tag)) => response.serialize(tag),
                         Err(response) => response.into_bytes(),
                     };
                     data.write_bytes(bytes).await;

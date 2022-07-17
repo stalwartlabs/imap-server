@@ -3,7 +3,7 @@ use crate::core::{utf7::utf7_encode, Command, StatusResponse};
 use super::{
     quoted_string,
     status::{Status, StatusItem},
-    ImapResponse, ProtocolVersion,
+    ImapResponse,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +29,8 @@ pub enum Arguments {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
+    pub is_rev2: bool,
+    pub is_lsub: bool,
     pub list_items: Vec<ListItem>,
     pub status_items: Vec<StatusItem>,
 }
@@ -156,29 +158,24 @@ impl ListItem {
         }
     }
 
-    pub fn serialize(&self, buf: &mut Vec<u8>, version: ProtocolVersion, as_lsub: bool) {
+    pub fn serialize(&self, buf: &mut Vec<u8>, is_rev2: bool, is_lsub: bool) {
         let normalized_mailbox_name = utf7_encode(&self.mailbox_name);
-        if !as_lsub {
+        if !is_lsub {
             buf.extend_from_slice(b"* LIST (");
         } else {
             buf.extend_from_slice(b"* LSUB (");
         }
-        let mut is_first = true;
-        for attr in &self.attributes {
-            if version.is_rev2() || attr.is_rev1() {
-                if is_first {
-                    is_first = false;
-                } else {
-                    buf.push(b' ');
-                }
-                attr.serialize(buf);
+        for (pos, attr) in self.attributes.iter().enumerate() {
+            if pos > 0 {
+                buf.push(b' ');
             }
+            attr.serialize(buf);
         }
         buf.extend_from_slice(b") \"/\" ");
         let mut extra_tags = Vec::new();
 
         if normalized_mailbox_name != self.mailbox_name {
-            if version.is_rev2() {
+            if is_rev2 {
                 quoted_string(buf, &self.mailbox_name);
                 extra_tags.push(Tag::OldName(normalized_mailbox_name));
             } else {
@@ -188,7 +185,7 @@ impl ListItem {
             quoted_string(buf, &self.mailbox_name);
         }
 
-        if version.is_rev2() && (!extra_tags.is_empty() || !self.tags.is_empty()) {
+        if !extra_tags.is_empty() || !self.tags.is_empty() {
             buf.extend_from_slice(b" (");
             for (pos, tag) in extra_tags.iter().chain(self.tags.iter()).enumerate() {
                 if pos > 0 {
@@ -204,26 +201,19 @@ impl ListItem {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
-        let mut is_lsub = false;
 
         for list_item in &self.list_items {
-            if version.is_rev1()
-                && !is_lsub
-                && list_item.attributes.contains(&Attribute::Subscribed)
-            {
-                is_lsub = true;
-            }
-            list_item.serialize(&mut buf, version, false);
+            list_item.serialize(&mut buf, self.is_rev2, self.is_lsub);
         }
-        if version.is_rev2() {
-            for status_item in &self.status_items {
-                status_item.serialize(&mut buf, version);
-            }
+
+        for status_item in &self.status_items {
+            status_item.serialize(&mut buf, self.is_rev2);
         }
+
         StatusResponse::completed(
-            if !is_lsub {
+            if !self.is_lsub {
                 Command::List
             } else {
                 Command::Lsub
@@ -239,7 +229,7 @@ impl ImapResponse for Response {
 mod tests {
     use crate::protocol::{
         status::{Status, StatusItem},
-        ImapResponse, ProtocolVersion,
+        ImapResponse,
     };
 
     use super::{Attribute, ChildInfo, ListItem, Tag};
@@ -266,7 +256,7 @@ mod tests {
                     "* LIST (\\NoInferiors \\Drafts) \"/\" \"中國書店\" ",
                     "(\"OLDNAME\" (\"&Ti1XC2b4Xpc-\"))\r\n"
                 ),
-                "* LIST (\\NoInferiors) \"/\" \"&Ti1XC2b4Xpc-\"\r\n",
+                "* LIST (\\NoInferiors \\Drafts) \"/\" \"&Ti1XC2b4Xpc-\"\r\n",
             ),
             (
                 super::ListItem {
@@ -278,7 +268,10 @@ mod tests {
                     "* LIST (\\Subscribed \\Remote) \"/\" \"☺\" ",
                     "(\"OLDNAME\" (\"&Jjo-\") \"CHILDINFO\" (\"SUBSCRIBED\"))\r\n"
                 ),
-                "* LIST () \"/\" \"&Jjo-\"\r\n",
+                concat!(
+                    "* LIST (\\Subscribed \\Remote) \"/\" \"&Jjo-\" ",
+                    "(\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n"
+                ),
             ),
             (
                 super::ListItem {
@@ -287,14 +280,14 @@ mod tests {
                     tags: vec![Tag::ChildInfo(vec![ChildInfo::Subscribed])],
                 },
                 "* LIST (\\HasNoChildren) \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
-                "* LIST () \"/\" \"foo\"\r\n",
+                "* LIST (\\HasNoChildren) \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
             ),
         ] {
             let mut buf_1 = Vec::with_capacity(100);
             let mut buf_2 = Vec::with_capacity(100);
 
-            response.serialize(&mut buf_1, ProtocolVersion::Rev1, false);
-            response.serialize(&mut buf_2, ProtocolVersion::Rev2, false);
+            response.serialize(&mut buf_1, false, false);
+            response.serialize(&mut buf_2, true, false);
 
             let response_v1 = String::from_utf8(buf_1).unwrap();
             let response_v2 = String::from_utf8(buf_2).unwrap();
@@ -306,7 +299,7 @@ mod tests {
 
     #[test]
     fn serialize_list() {
-        for (response, tag, expected_v2, expected_v1) in [(
+        for (mut response, tag, expected_v2, expected_v1) in [(
             super::Response {
                 list_items: vec![
                     ListItem {
@@ -330,6 +323,8 @@ mod tests {
                         items: vec![(Status::Messages, 30), (Status::Unseen, 29)],
                     },
                 ],
+                is_lsub: false,
+                is_rev2: true,
             },
             "A01",
             concat!(
@@ -340,17 +335,16 @@ mod tests {
                 "A01 OK LIST completed\r\n"
             ),
             concat!(
-                "* LIST () \"/\" \"INBOX\"\r\n",
-                "* LIST () \"/\" \"foo\"\r\n",
+                "* LSUB (\\Subscribed) \"/\" \"INBOX\"\r\n",
+                "* LSUB () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
                 "A01 OK LSUB completed\r\n"
             ),
         )] {
-            let response_v1 =
-                String::from_utf8(response.serialize(tag.to_string(), ProtocolVersion::Rev1))
-                    .unwrap();
-            let response_v2 =
-                String::from_utf8(response.serialize(tag.to_string(), ProtocolVersion::Rev2))
-                    .unwrap();
+            let response_v2 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            response.is_rev2 = false;
+            response.is_lsub = true;
+            response.status_items.clear();
+            let response_v1 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
 
             assert_eq!(response_v2, expected_v2);
             assert_eq!(response_v1, expected_v1);

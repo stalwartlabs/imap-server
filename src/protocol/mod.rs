@@ -7,7 +7,7 @@ use crate::core::{Command, Flag, ResponseCode, ResponseType, StatusResponse};
 pub mod append;
 pub mod authenticate;
 pub mod capability;
-pub mod copy;
+pub mod copy_move;
 pub mod create;
 pub mod delete;
 pub mod enable;
@@ -15,13 +15,10 @@ pub mod expunge;
 pub mod fetch;
 pub mod list;
 pub mod login;
-pub mod lsub;
-pub mod move_;
 pub mod namespace;
 pub mod rename;
 pub mod search;
 pub mod select;
-pub mod sort;
 pub mod status;
 pub mod store;
 pub mod subscribe;
@@ -119,7 +116,7 @@ impl Sequence {
 }
 
 pub trait ImapResponse {
-    fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8>;
+    fn serialize(&self, tag: String) -> Vec<u8>;
 }
 
 pub fn quoted_string(buf: &mut Vec<u8>, text: &str) {

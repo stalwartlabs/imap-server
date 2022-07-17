@@ -7,7 +7,7 @@ use crate::{
     protocol::fetch::{self, Attribute, Section},
 };
 
-use super::{parse_integer, parse_sequence_set, PushUnique};
+use super::{parse_integer, parse_long_integer, parse_sequence_set, PushUnique};
 
 impl Request {
     #[allow(clippy::while_let_on_iterator)]
@@ -285,6 +285,29 @@ impl Request {
                         } else {
                             Attribute::BinarySize { sections }
                         });
+                    } else if value.eq_ignore_ascii_case(b"PREVIEW") {
+                        attributes.push_unique(Attribute::Preview {
+                            lazy: if let Some(Token::ParenthesisOpen) = tokens.peek() {
+                                tokens.next();
+                                let mut is_lazy = false;
+                                while let Some(token) = tokens.next() {
+                                    match token {
+                                        Token::ParenthesisClose => break,
+                                        Token::Argument(value) => {
+                                            if value.eq_ignore_ascii_case(b"LAZY") {
+                                                is_lazy = true;
+                                            }
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                                is_lazy
+                            } else {
+                                false
+                            },
+                        });
+                    } else if value.eq_ignore_ascii_case(b"MODSEQ") {
+                        attributes.push_unique(Attribute::ModSeq);
                     } else {
                         return Err((
                             self.tag,
@@ -317,11 +340,42 @@ impl Request {
             }
         }
 
+        // CONDSTORE parameters
+        let mut changed_since = None;
+        if let Some(Token::ParenthesisOpen) = tokens.peek() {
+            tokens.next();
+            while let Some(token) = tokens.next() {
+                match token {
+                    Token::Argument(param) if param.eq_ignore_ascii_case(b"CHANGEDSINCE") => {
+                        changed_since = parse_long_integer(
+                            &tokens
+                                .next()
+                                .ok_or((self.tag.as_str(), "Missing CHANGEDSINCE parameter."))?
+                                .unwrap_bytes(),
+                        )
+                        .map_err(|v| (self.tag.as_str(), v))?
+                        .into();
+                    }
+                    Token::ParenthesisClose => {
+                        break;
+                    }
+                    _ => {
+                        return Err((
+                            self.tag.as_str(),
+                            Cow::from(format!("Unsupported parameter '{}'.", token)),
+                        )
+                            .into());
+                    }
+                }
+            }
+        }
+
         if !attributes.is_empty() {
             Ok(fetch::Arguments {
                 tag: self.tag,
                 sequence_set,
                 attributes,
+                changed_since,
             })
         } else {
             Err((self.tag, "No data items to fetch specified.").into())
@@ -437,6 +491,7 @@ mod tests {
                             partial: None,
                         },
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -449,6 +504,7 @@ mod tests {
                         sections: vec![],
                         partial: None,
                     }],
+                    changed_since: None,
                 },
             ),
             (
@@ -461,21 +517,26 @@ mod tests {
                         sections: vec![Section::Header],
                         partial: None,
                     }],
+                    changed_since: None,
                 },
             ),
             (
-                "A001 FETCH 1 (BODY.PEEK[HEADER.FIELDS (X-MAILER)])\r\n",
+                "A001 FETCH 1 (BODY.PEEK[HEADER.FIELDS (X-MAILER)] PREVIEW(LAZY))\r\n",
                 fetch::Arguments {
                     tag: "A001".to_string(),
                     sequence_set: Sequence::number(1),
-                    attributes: vec![Attribute::BodySection {
-                        peek: true,
-                        sections: vec![Section::HeaderFields {
-                            not: false,
-                            fields: vec!["X-MAILER".to_string()],
-                        }],
-                        partial: None,
-                    }],
+                    attributes: vec![
+                        Attribute::BodySection {
+                            peek: true,
+                            sections: vec![Section::HeaderFields {
+                                not: false,
+                                fields: vec!["X-MAILER".to_string()],
+                            }],
+                            partial: None,
+                        },
+                        Attribute::Preview { lazy: true },
+                    ],
+                    changed_since: None,
                 },
             ),
             (
@@ -495,10 +556,11 @@ mod tests {
                         }],
                         partial: None,
                     }],
+                    changed_since: None,
                 },
             ),
             (
-                "A001 FETCH 1 (BODY[MIME] BODY[TEXT])\r\n",
+                "A001 FETCH 1 (BODY[MIME] BODY[TEXT] PREVIEW)\r\n",
                 fetch::Arguments {
                     tag: "A001".to_string(),
                     sequence_set: Sequence::number(1),
@@ -513,7 +575,9 @@ mod tests {
                             sections: vec![Section::Text],
                             partial: None,
                         },
+                        Attribute::Preview { lazy: false },
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -528,6 +592,7 @@ mod tests {
                         Attribute::InternalDate,
                         Attribute::Uid,
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -541,6 +606,7 @@ mod tests {
                         Attribute::Rfc822Size,
                         Attribute::Rfc822Text,
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -612,6 +678,7 @@ mod tests {
                             sections: vec![9, 1],
                         },
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -625,6 +692,7 @@ mod tests {
                         Attribute::Rfc822Size,
                         Attribute::Envelope,
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -639,6 +707,7 @@ mod tests {
                         Attribute::Envelope,
                         Attribute::Body,
                     ],
+                    changed_since: None,
                 },
             ),
             (
@@ -651,6 +720,16 @@ mod tests {
                         Attribute::InternalDate,
                         Attribute::Rfc822Size,
                     ],
+                    changed_since: None,
+                },
+            ),
+            (
+                "s100 UID FETCH 1:* (FLAGS MODSEQ) (CHANGEDSINCE 12345)\r\n",
+                fetch::Arguments {
+                    tag: "s100".to_string(),
+                    sequence_set: Sequence::range(1.into(), None),
+                    attributes: vec![Attribute::Flags, Attribute::ModSeq],
+                    changed_since: 12345.into(),
                 },
             ),
         ] {

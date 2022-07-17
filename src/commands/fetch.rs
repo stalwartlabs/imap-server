@@ -9,7 +9,7 @@ use crate::{
         client::{Session, SessionData},
         message::MailboxData,
         receiver::Request,
-        Command, Flag, IntoStatusResponse, StatusResponse,
+        Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     parser::PushUnique,
     protocol::fetch::{
@@ -84,10 +84,12 @@ impl SessionData {
                 Attribute::InternalDate => {
                     properties.push(Property::ReceivedAt);
                 }
+                Attribute::Preview { .. } => {
+                    properties.push_unique(Property::Preview);
+                }
                 Attribute::Rfc822Size => {
                     properties.push(Property::Size);
                 }
-                Attribute::Uid => (),
                 Attribute::Rfc822Header | Attribute::BodyStructure => {
                     /*
                         Note that this did not result in \Seen being set, because
@@ -114,6 +116,7 @@ impl SessionData {
                     needs_blobs = true;
                     properties.push_unique(Property::BlobId);
                 }
+                Attribute::Uid | Attribute::ModSeq => (),
             }
         }
         if set_seen_flags {
@@ -270,6 +273,11 @@ impl SessionData {
                                 items.push(DataItem::InternalDate { date });
                             }
                         }
+                        Attribute::Preview { .. } => {
+                            items.push(DataItem::Preview {
+                                contents: email.preview().map(|p| p.into()),
+                            });
+                        }
                         Attribute::Rfc822Size => {
                             items.push(DataItem::Rfc822Size { size: email.size() });
                         }
@@ -344,17 +352,40 @@ impl SessionData {
 
                         Attribute::Binary {
                             sections, partial, ..
-                        } => {
-                            if let Some(contents) =
-                                message.as_ref().unwrap().binary(sections, *partial, 0)
-                            {
+                        } => match message.as_ref().unwrap().binary(sections, *partial, 0) {
+                            Ok(Some(contents)) => {
                                 items.push(DataItem::Binary {
                                     sections: sections.to_vec(),
                                     offset: partial.map(|(start, _)| start),
                                     contents,
                                 });
                             }
-                        }
+                            Err(_) => {
+                                self.write_bytes(
+                                    StatusResponse::no(
+                                        None,
+                                        ResponseCode::UnknownCte.into(),
+                                        format!(
+                                            "Failed to decode part {} of message {}.",
+                                            sections
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect::<Vec<_>>()
+                                                .join("."),
+                                            if is_uid {
+                                                ids.uids[id_pos]
+                                            } else {
+                                                ids.seqnums.as_ref().unwrap()[id_pos]
+                                            }
+                                        ),
+                                    )
+                                    .into_bytes(),
+                                )
+                                .await;
+                                continue;
+                            }
+                            _ => (),
+                        },
                         Attribute::BinarySize { sections } => {
                             if let Some(size) = message.as_ref().unwrap().binary_size(sections, 0) {
                                 items.push(DataItem::BinarySize {
@@ -363,6 +394,7 @@ impl SessionData {
                                 });
                             }
                         }
+                        Attribute::ModSeq => todo!(),
                     }
                 }
 
@@ -452,7 +484,7 @@ trait AsImapDataItem<'x> {
         sections: &[u32],
         partial: Option<(u32, u32)>,
         depth: usize,
-    ) -> Option<BodyContents>;
+    ) -> Result<Option<BodyContents>, ()>;
     fn binary_size(&self, sections: &[u32], depth: usize) -> Option<usize>;
     fn as_body_part(&self, raw_message: &[u8], part_id: usize, is_extended: bool) -> BodyPart;
     fn envelope(&self) -> Envelope;
@@ -621,21 +653,6 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         }
 
         match &part.body {
-            PartType::Html(_) | PartType::Text(_) => BodyPart::Text {
-                fields,
-                body_size_lines: body
-                    .as_ref()
-                    .map(|b| b.iter().filter(|&&ch| ch == b'\n').count())
-                    .unwrap_or(0),
-                body_md5,
-                extension,
-            },
-            PartType::Binary(_) | PartType::InlineBinary(_) => BodyPart::Basic {
-                body_type: content_type.as_ref().map(|ct| ct.c_type.as_ref().into()),
-                fields,
-                body_md5,
-                extension,
-            },
             PartType::Multipart(parts) => BodyPart::Multipart {
                 body_parts: Vec::with_capacity(parts.len()),
                 body_subtype: content_type
@@ -653,6 +670,28 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 body_md5,
                 extension,
             },
+            _ => {
+                match content_type
+                    .as_ref()
+                    .map(|ct| Cow::from(ct.c_type.as_ref()))
+                {
+                    Some(ct) if ct == "text" => BodyPart::Text {
+                        fields,
+                        body_size_lines: body
+                            .as_ref()
+                            .map(|b| b.iter().filter(|&&ch| ch == b'\n').count())
+                            .unwrap_or(0),
+                        body_md5,
+                        extension,
+                    },
+                    body_type => BodyPart::Basic {
+                        body_type,
+                        fields,
+                        body_md5,
+                        extension,
+                    },
+                }
+            }
         }
     }
 
@@ -776,17 +815,21 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         sections: &[u32],
         partial: Option<(u32, u32)>,
         depth: usize,
-    ) -> Option<BodyContents> {
+    ) -> Result<Option<BodyContents>, ()> {
         let mut message = self;
         let mut part = self.get_root_part();
         let mut sections_iter = sections.iter().peekable();
 
         while let Some(section) = sections_iter.next() {
-            part = message.parts.get(
-                *part
-                    .get_sub_parts()?
-                    .get((*section).saturating_sub(1) as usize)?,
-            )?;
+            part = if let Some(part) = part
+                .get_sub_parts()
+                .and_then(|p| p.get((*section).saturating_sub(1) as usize))
+                .and_then(|p| message.parts.get(*p))
+            {
+                part
+            } else {
+                return Ok(None);
+            };
             if let (PartType::Message(nested_message), Some(_)) = (&part.body, sections_iter.peek())
             {
                 match nested_message {
@@ -796,34 +839,42 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                     }
                     MessageAttachment::Raw(raw_message) => {
                         if depth < 10 {
-                            return Message::parse(raw_message)?
-                                .binary(
-                                    &sections_iter.cloned().collect::<Vec<_>>(),
-                                    partial,
-                                    depth + 1,
-                                )
-                                .map(|bytes| bytes.into_owned());
+                            return if let Some(message) = Message::parse(raw_message) {
+                                message
+                                    .binary(
+                                        &sections_iter.cloned().collect::<Vec<_>>(),
+                                        partial,
+                                        depth + 1,
+                                    )
+                                    .map(|result| result.map(|bytes| bytes.into_owned()))
+                            } else {
+                                Ok(None)
+                            };
                         } else {
-                            return None;
+                            return Ok(None);
                         }
                     }
                 }
             }
         }
 
-        match &part.body {
-            PartType::Text(text) | PartType::Html(text) => {
-                BodyContents::Text(text.as_ref().into()).into()
-            }
-            PartType::Binary(bytes)
-            | PartType::InlineBinary(bytes)
-            | PartType::Message(MessageAttachment::Raw(bytes)) => {
-                BodyContents::Bytes(bytes.as_ref().into()).into()
-            }
-            PartType::Message(MessageAttachment::Parsed(message)) => {
-                BodyContents::Bytes(message.raw_message.as_ref().into()).into()
-            }
-            PartType::Multipart(_) => None,
+        if !part.is_encoding_problem {
+            Ok(match &part.body {
+                PartType::Text(text) | PartType::Html(text) => {
+                    BodyContents::Text(text.as_ref().into()).into()
+                }
+                PartType::Binary(bytes)
+                | PartType::InlineBinary(bytes)
+                | PartType::Message(MessageAttachment::Raw(bytes)) => {
+                    BodyContents::Bytes(bytes.as_ref().into()).into()
+                }
+                PartType::Message(MessageAttachment::Parsed(message)) => {
+                    BodyContents::Bytes(message.raw_message.as_ref().into()).into()
+                }
+                PartType::Multipart(_) => None,
+            })
+        } else {
+            Err(())
         }
     }
 
@@ -1048,7 +1099,10 @@ mod tests {
 
     use mail_parser::Message;
 
-    use crate::protocol::fetch::{BodyContents, DataItem, Section};
+    use crate::{
+        core::{ResponseCode, StatusResponse},
+        protocol::fetch::{BodyContents, DataItem, Section},
+    };
 
     use super::AsImapDataItem;
 
@@ -1142,19 +1196,39 @@ mod tests {
                                 .serialize(&mut buf);
 
                                 if is_first {
-                                    if let Some(contents) = message.binary(&sections, None, 0) {
-                                        buf.push(b'\n');
-                                        DataItem::Binary {
-                                            sections: sections.clone(),
-                                            offset: None,
-                                            contents: match contents {
-                                                BodyContents::Bytes(_) => {
-                                                    BodyContents::Text("[binary content]".into())
-                                                }
-                                                text => text,
-                                            },
+                                    match message.binary(&sections, None, 0) {
+                                        Ok(Some(contents)) => {
+                                            buf.push(b'\n');
+                                            DataItem::Binary {
+                                                sections: sections.clone(),
+                                                offset: None,
+                                                contents: match contents {
+                                                    BodyContents::Bytes(_) => BodyContents::Text(
+                                                        "[binary content]".into(),
+                                                    ),
+                                                    text => text,
+                                                },
+                                            }
+                                            .serialize(&mut buf);
                                         }
-                                        .serialize(&mut buf);
+                                        Ok(None) => (),
+                                        Err(_) => {
+                                            buf.push(b'\n');
+                                            StatusResponse::no(
+                                                None,
+                                                ResponseCode::UnknownCte.into(),
+                                                format!(
+                                                    "Failed to decode part {} of message {}.",
+                                                    sections
+                                                        .iter()
+                                                        .map(|s| s.to_string())
+                                                        .collect::<Vec<_>>()
+                                                        .join("."),
+                                                    0
+                                                ),
+                                            )
+                                            .serialize(&mut buf);
+                                        }
                                     }
 
                                     if let Some(size) = message.binary_size(&sections, 0) {

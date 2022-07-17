@@ -11,39 +11,44 @@ use crate::{
 
 use super::search::parse_filters;
 
-#[allow(clippy::while_let_on_iterator)]
-pub fn parse_thread(request: Request) -> crate::core::Result<thread::Arguments> {
-    if request.tokens.is_empty() {
-        return Err(request.into_error("Missing thread criteria."));
-    }
+impl Request {
+    #[allow(clippy::while_let_on_iterator)]
+    pub fn parse_thread(self) -> crate::core::Result<thread::Arguments> {
+        if self.tokens.is_empty() {
+            return Err(self.into_error("Missing thread criteria."));
+        }
 
-    let mut tokens = request.tokens.into_iter().peekable();
-    let algorithm = Algorithm::parse(
-        &tokens
-            .next()
-            .ok_or((request.tag.as_str(), "Missing threading algorithm."))?
-            .unwrap_bytes(),
-    )
-    .map_err(|v| (request.tag.as_str(), v))?;
+        let mut tokens = self.tokens.into_iter().peekable();
+        let algorithm = Algorithm::parse(
+            &tokens
+                .next()
+                .ok_or((self.tag.as_str(), "Missing threading algorithm."))?
+                .unwrap_bytes(),
+        )
+        .map_err(|v| (self.tag.as_str(), v))?;
 
-    let decoder = get_charset_decoder(
-        &tokens
-            .next()
-            .ok_or((request.tag.as_str(), "Missing charset."))?
-            .unwrap_bytes(),
-    );
+        let decoder = get_charset_decoder(
+            &tokens
+                .next()
+                .ok_or((self.tag.as_str(), "Missing charset."))?
+                .unwrap_bytes(),
+        );
 
-    let mut filters = parse_filters(&mut tokens, decoder).map_err(|v| (request.tag.as_str(), v))?;
-    match filters.len() {
-        0 => Err((request.tag.as_str(), "No filters found in command.").into()),
-        1 => Ok(thread::Arguments {
-            algorithm,
-            filter: filters.pop().unwrap(),
-        }),
-        _ => Ok(thread::Arguments {
-            algorithm,
-            filter: Filter::Operator(Operator::And, filters),
-        }),
+        let mut filters =
+            parse_filters(&mut tokens, decoder).map_err(|v| (self.tag.as_str(), v))?;
+        match filters.len() {
+            0 => Err((self.tag.as_str(), "No filters found in command.").into()),
+            1 => Ok(thread::Arguments {
+                algorithm,
+                filter: filters.pop().unwrap(),
+                tag: self.tag,
+            }),
+            _ => Ok(thread::Arguments {
+                algorithm,
+                filter: Filter::Operator(Operator::And, filters),
+                tag: self.tag,
+            }),
+        }
     }
 }
 
@@ -84,6 +89,7 @@ mod tests {
                 thread::Arguments {
                     algorithm: Algorithm::OrderedSubject,
                     filter: Filter::Since(952214400),
+                    tag: "A283".to_string(),
                 },
             ),
             (
@@ -91,13 +97,17 @@ mod tests {
                 thread::Arguments {
                     algorithm: Algorithm::References,
                     filter: Filter::Text("gewp".to_string()),
+                    tag: "A284".to_string(),
                 },
             ),
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
 
             assert_eq!(
-                super::parse_thread(receiver.parse(&mut command.iter()).unwrap())
+                receiver
+                    .parse(&mut command.iter())
+                    .unwrap()
+                    .parse_thread()
                     .expect(&command_str),
                 arguments,
                 "{}",

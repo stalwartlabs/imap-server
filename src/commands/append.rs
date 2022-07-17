@@ -9,7 +9,6 @@ impl Session {
         match request.parse_append() {
             Ok(arguments) => {
                 let data = self.state.session_data();
-                let version = self.version;
                 let mailbox =
                     if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
                         if mailbox.mailbox_id.is_some() {
@@ -31,7 +30,7 @@ impl Session {
                             .write_bytes(
                                 StatusResponse::no(
                                     arguments.tag.into(),
-                                    ResponseCode::NonExistent.into(),
+                                    ResponseCode::TryCreate.into(),
                                     "Mailbox does not exist.",
                                 )
                                 .into_bytes(),
@@ -61,15 +60,11 @@ impl Session {
                                     .jmap_to_imap(mailbox.clone(), vec![jmap_id], true, true)
                                     .await
                                 {
-                                    if version.is_rev2() {
-                                        if let Ok((uid_validity, _)) = data.core.uids(mailbox).await
-                                        {
-                                            response =
-                                                response.with_code(ResponseCode::AppendUid {
-                                                    uid_validity,
-                                                    uids: ids.uids,
-                                                });
-                                        }
+                                    if let Ok((uid_validity, _)) = data.core.uids(mailbox).await {
+                                        response = response.with_code(ResponseCode::AppendUid {
+                                            uid_validity,
+                                            uids: ids.uids,
+                                        });
                                     }
                                 }
                             }

@@ -13,7 +13,7 @@ impl Session {
                     None
                 },
             }
-            .serialize(request.tag, self.version),
+            .serialize(request.tag),
         )
         .await
     }

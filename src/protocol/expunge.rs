@@ -9,7 +9,7 @@ pub struct Response {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String, _version: super::ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         for id in &self.ids {
             buf.extend_from_slice(b"* ");
@@ -23,7 +23,7 @@ impl ImapResponse for Response {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{ImapResponse, ProtocolVersion};
+    use crate::protocol::ImapResponse;
 
     #[test]
     fn serialize_expunge() {
@@ -32,7 +32,7 @@ mod tests {
                 is_uid: false,
                 ids: vec![3, 5, 8]
             }
-            .serialize("A202".to_string(), ProtocolVersion::Rev2),
+            .serialize("A202".to_string()),
             concat!(
                 "* 3 EXPUNGE\r\n",
                 "* 5 EXPUNGE\r\n",

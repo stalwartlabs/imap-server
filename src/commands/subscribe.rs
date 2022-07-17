@@ -38,7 +38,7 @@ impl SessionData {
         subscribe: bool,
     ) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
             return err.into_status_response(tag.into());
         }

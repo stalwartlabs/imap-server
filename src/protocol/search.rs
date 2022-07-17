@@ -2,18 +2,41 @@ use jmap_client::core::query::Operator;
 
 use crate::core::{Command, Flag, StatusResponse};
 
-use super::{quoted_string, serialize_sequence, ImapResponse, ProtocolVersion, Sequence};
+use super::{quoted_string, serialize_sequence, ImapResponse, Sequence};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
     pub tag: String,
+    pub is_esearch: bool,
+    pub sort: Option<Vec<Comparator>>,
     pub result_options: Vec<ResultOption>,
     pub filter: Filter,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Sort {
+    Arrival,
+    Cc,
+    Date,
+    From,
+    DisplayFrom,
+    Size,
+    Subject,
+    To,
+    DisplayTo,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Comparator {
+    pub sort: Sort,
+    pub ascending: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
     pub is_uid: bool,
+    pub is_esearch: bool,
+    pub is_sort: bool,
     pub ids: Vec<u32>,
     pub min: Option<u32>,
     pub max: Option<u32>,
@@ -27,6 +50,7 @@ pub enum ResultOption {
     All,
     Count,
     Save,
+    Context,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,9 +92,20 @@ pub enum Filter {
     New,
     Old,
 
-    // RFC5032
+    // RFC5032 - WITHIN
     Older(u32),
     Younger(u32),
+
+    // RFC4551 - CONDSTORE
+    ModSeq((u64, ModSeqEntry)),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModSeqEntry {
+    Shared(Flag),
+    Private(Flag),
+    All(Flag),
+    None,
 }
 
 impl Filter {
@@ -94,9 +129,9 @@ impl Filter {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
-        if version.is_rev2() {
+        if self.is_esearch {
             buf.extend_from_slice(b"* ESEARCH (TAG ");
             quoted_string(&mut buf, &tag);
             buf.extend_from_slice(b")");
@@ -117,7 +152,11 @@ impl ImapResponse for Response {
                 serialize_sequence(&mut buf, &self.ids);
             }
         } else {
-            buf.extend_from_slice(b"* SEARCH");
+            if !self.is_sort {
+                buf.extend_from_slice(b"* SEARCH");
+            } else {
+                buf.extend_from_slice(b"* SORT");
+            }
             if !self.ids.is_empty() {
                 for id in &self.ids {
                     buf.push(b' ');
@@ -126,21 +165,31 @@ impl ImapResponse for Response {
             }
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::completed(Command::Search(self.is_uid), tag).serialize(&mut buf);
+        StatusResponse::completed(
+            if !self.is_sort {
+                Command::Search(self.is_uid)
+            } else {
+                Command::Sort(self.is_uid)
+            },
+            tag,
+        )
+        .serialize(&mut buf);
         buf
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{ImapResponse, ProtocolVersion};
+    use crate::protocol::ImapResponse;
 
     #[test]
     fn serialize_search() {
-        for (response, tag, expected_v2, expected_v1) in [
+        for (mut response, tag, expected_v2, expected_v1) in [
             (
                 super::Response {
                     is_uid: false,
+                    is_esearch: true,
+                    is_sort: false,
                     ids: vec![2, 10, 11],
                     min: 2.into(),
                     max: 11.into(),
@@ -156,6 +205,8 @@ mod tests {
             (
                 super::Response {
                     is_uid: false,
+                    is_esearch: true,
+                    is_sort: false,
                     ids: vec![
                         1, 2, 3, 5, 10, 11, 12, 13, 90, 92, 93, 94, 95, 96, 97, 98, 99,
                     ],
@@ -176,6 +227,8 @@ mod tests {
             (
                 super::Response {
                     is_uid: false,
+                    is_esearch: true,
+                    is_sort: false,
                     ids: vec![],
                     min: None,
                     max: None,
@@ -189,12 +242,9 @@ mod tests {
                 concat!("* SEARCH\r\n", "A283 OK SEARCH completed\r\n"),
             ),
         ] {
-            let response_v1 =
-                String::from_utf8(response.serialize(tag.to_string(), ProtocolVersion::Rev1))
-                    .unwrap();
-            let response_v2 =
-                String::from_utf8(response.serialize(tag.to_string(), ProtocolVersion::Rev2))
-                    .unwrap();
+            let response_v2 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            response.is_esearch = false;
+            let response_v1 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
 
             assert_eq!(response_v2, expected_v2);
             assert_eq!(response_v1, expected_v1);

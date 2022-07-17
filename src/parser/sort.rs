@@ -3,75 +3,92 @@ use mail_parser::decoders::charsets::map::get_charset_decoder;
 
 use crate::{
     core::receiver::{Request, Token},
-    protocol::{
-        search::Filter,
-        sort::{self, Comparator, Sort},
-    },
+    protocol::search::{Arguments, Comparator, Filter, Sort},
 };
 
-use super::search::parse_filters;
+use super::search::{parse_filters, parse_result_options};
 
-#[allow(clippy::while_let_on_iterator)]
-pub fn parse_sort(request: Request) -> crate::core::Result<sort::Arguments> {
-    if request.tokens.is_empty() {
-        return Err(request.into_error("Missing sort criteria."));
-    }
-
-    let mut tokens = request.tokens.into_iter().peekable();
-    let mut sort = Vec::new();
-
-    if tokens
-        .next()
-        .map_or(true, |token| !token.is_parenthesis_open())
-    {
-        return Err((
-            request.tag.as_str(),
-            "Expected sort criteria between parentheses.",
-        )
-            .into());
-    }
-
-    let mut is_ascending = true;
-    while let Some(token) = tokens.next() {
-        match token {
-            Token::ParenthesisClose => break,
-            Token::Argument(value) => {
-                if value.eq_ignore_ascii_case(b"REVERSE") {
-                    is_ascending = false;
-                } else {
-                    sort.push(Comparator {
-                        sort: Sort::parse(&value).map_err(|v| (request.tag.as_str(), v))?,
-                        ascending: is_ascending,
-                    });
-                    is_ascending = true;
-                }
-            }
-            _ => return Err((request.tag.as_str(), "Invalid result option argument.").into()),
+impl Request {
+    #[allow(clippy::while_let_on_iterator)]
+    pub fn parse_sort(self) -> crate::core::Result<Arguments> {
+        if self.tokens.is_empty() {
+            return Err(self.into_error("Missing sort criteria."));
         }
-    }
 
-    if sort.is_empty() {
-        return Err((request.tag.as_str(), "Missing sort criteria.").into());
-    }
+        let mut tokens = self.tokens.into_iter().peekable();
+        let mut sort = Vec::new();
 
-    let decoder = get_charset_decoder(
-        &tokens
+        let (result_options, is_esearch) = match tokens.peek() {
+            Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"return") => {
+                tokens.next();
+                (
+                    parse_result_options(&mut tokens).map_err(|v| (self.tag.as_str(), v))?,
+                    true,
+                )
+            }
+            _ => (Vec::new(), false),
+        };
+
+        if tokens
             .next()
-            .ok_or((request.tag.as_str(), "Missing charset."))?
-            .unwrap_bytes(),
-    );
+            .map_or(true, |token| !token.is_parenthesis_open())
+        {
+            return Err((
+                self.tag.as_str(),
+                "Expected sort criteria between parentheses.",
+            )
+                .into());
+        }
 
-    let mut filters = parse_filters(&mut tokens, decoder).map_err(|v| (request.tag.as_str(), v))?;
-    match filters.len() {
-        0 => Err((request.tag.as_str(), "No filters found in command.").into()),
-        1 => Ok(sort::Arguments {
-            sort,
-            filter: filters.pop().unwrap(),
-        }),
-        _ => Ok(sort::Arguments {
-            sort,
-            filter: Filter::Operator(Operator::And, filters),
-        }),
+        let mut is_ascending = true;
+        while let Some(token) = tokens.next() {
+            match token {
+                Token::ParenthesisClose => break,
+                Token::Argument(value) => {
+                    if value.eq_ignore_ascii_case(b"REVERSE") {
+                        is_ascending = false;
+                    } else {
+                        sort.push(Comparator {
+                            sort: Sort::parse(&value).map_err(|v| (self.tag.as_str(), v))?,
+                            ascending: is_ascending,
+                        });
+                        is_ascending = true;
+                    }
+                }
+                _ => return Err((self.tag.as_str(), "Invalid result option argument.").into()),
+            }
+        }
+
+        if sort.is_empty() {
+            return Err((self.tag.as_str(), "Missing sort criteria.").into());
+        }
+
+        let decoder = get_charset_decoder(
+            &tokens
+                .next()
+                .ok_or((self.tag.as_str(), "Missing charset."))?
+                .unwrap_bytes(),
+        );
+
+        let mut filters =
+            parse_filters(&mut tokens, decoder).map_err(|v| (self.tag.as_str(), v))?;
+        match filters.len() {
+            0 => Err((self.tag.as_str(), "No filters found in command.").into()),
+            1 => Ok(Arguments {
+                sort: sort.into(),
+                result_options,
+                filter: filters.pop().unwrap(),
+                is_esearch,
+                tag: self.tag,
+            }),
+            _ => Ok(Arguments {
+                sort: sort.into(),
+                result_options,
+                filter: Filter::Operator(Operator::And, filters),
+                is_esearch,
+                tag: self.tag,
+            }),
+        }
     }
 }
 
@@ -105,11 +122,8 @@ impl Sort {
 mod tests {
 
     use crate::{
-        core::receiver::Receiver,
-        protocol::{
-            search::Filter,
-            sort::{self, Comparator, Sort},
-        },
+        core::{receiver::Receiver, Flag},
+        protocol::search::{Arguments, Comparator, Filter, ResultOption, Sort},
     };
 
     #[test]
@@ -119,17 +133,21 @@ mod tests {
         for (command, arguments) in [
             (
                 b"A282 SORT (SUBJECT) UTF-8 SINCE 1-Feb-1994\r\n".to_vec(),
-                sort::Arguments {
+                Arguments {
                     sort: vec![Comparator {
                         sort: Sort::Subject,
                         ascending: true,
-                    }],
+                    }]
+                    .into(),
                     filter: Filter::Since(760060800),
+                    result_options: Vec::new(),
+                    is_esearch: false,
+                    tag: "A282".to_string(),
                 },
             ),
             (
                 b"A283 SORT (SUBJECT REVERSE DATE) UTF-8 ALL\r\n".to_vec(),
-                sort::Arguments {
+                Arguments {
                     sort: vec![
                         Comparator {
                             sort: Sort::Subject,
@@ -139,18 +157,26 @@ mod tests {
                             sort: Sort::Date,
                             ascending: false,
                         },
-                    ],
+                    ]
+                    .into(),
                     filter: Filter::All,
+                    result_options: Vec::new(),
+                    is_esearch: false,
+                    tag: "A283".to_string(),
                 },
             ),
             (
                 b"A284 SORT (SUBJECT) US-ASCII TEXT \"not in mailbox\"\r\n".to_vec(),
-                sort::Arguments {
+                Arguments {
                     sort: vec![Comparator {
                         sort: Sort::Subject,
                         ascending: true,
-                    }],
+                    }]
+                    .into(),
                     filter: Filter::Text("not in mailbox".to_string()),
+                    result_options: Vec::new(),
+                    is_esearch: false,
+                    tag: "A284".to_string(),
                 },
             ),
             (
@@ -159,7 +185,7 @@ mod tests {
                     b"\"\xe5\xd1\xcd\xc8\xc7 \xc8\xc7\xe4\xd9\xc7\xe4\xe5\"\r\n".to_vec(),
                 ]
                 .concat(),
-                sort::Arguments {
+                Arguments {
                     sort: vec![
                         Comparator {
                             sort: Sort::Arrival,
@@ -169,15 +195,40 @@ mod tests {
                             sort: Sort::From,
                             ascending: true,
                         },
-                    ],
+                    ]
+                    .into(),
                     filter: Filter::Subject("مرحبا بالعالم".to_string()),
+                    result_options: Vec::new(),
+                    is_esearch: false,
+                    tag: "A284".to_string(),
+                },
+            ),
+            (
+                [
+                    b"E01 UID SORT RETURN (COUNT) (REVERSE DATE) ".to_vec(),
+                    b"UTF-8 UNDELETED UNKEYWORD $Junk\r\n".to_vec(),
+                ]
+                .concat(),
+                Arguments {
+                    sort: vec![Comparator {
+                        sort: Sort::Date,
+                        ascending: false,
+                    }]
+                    .into(),
+                    filter: Filter::and(vec![Filter::Undeleted, Filter::Unkeyword(Flag::Junk)]),
+                    result_options: vec![ResultOption::Count],
+                    is_esearch: true,
+                    tag: "E01".to_string(),
                 },
             ),
         ] {
             let command_str = String::from_utf8_lossy(&command).into_owned();
 
             assert_eq!(
-                super::parse_sort(receiver.parse(&mut command.iter()).unwrap())
+                receiver
+                    .parse(&mut command.iter())
+                    .unwrap()
+                    .parse_sort()
                     .expect(&command_str),
                 arguments,
                 "{}",

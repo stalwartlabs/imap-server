@@ -11,7 +11,7 @@ use crate::{
         list::{
             self, Arguments, Attribute, ChildInfo, ListItem, ReturnOption, SelectionOption, Tag,
         },
-        lsub, ImapResponse, ProtocolVersion,
+        ImapResponse, ProtocolVersion,
     },
 };
 
@@ -80,7 +80,7 @@ impl SessionData {
             };
 
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes().await {
+        if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
             self.write_bytes(err.into_status_response(tag.into()).into_bytes())
                 .await;
@@ -140,7 +140,7 @@ impl SessionData {
 
         let mut list_items = Vec::with_capacity(10);
 
-        // Add "All Messages" folder
+        // Add "All Mail" folder
         if !filter_subscribed && matches_pattern(&patterns, &self.core.folder_all) {
             list_items.push(ListItem {
                 mailbox_name: self.core.folder_all.clone(),
@@ -248,15 +248,15 @@ impl SessionData {
         }
 
         // Write response
-        self.write_bytes(if !is_lsub {
+        self.write_bytes(
             list::Response {
+                is_rev2: version.is_rev2(),
+                is_lsub,
                 list_items,
                 status_items,
             }
-            .serialize(tag, version)
-        } else {
-            lsub::Response { list_items }.serialize(tag, version)
-        })
+            .serialize(tag),
+        )
         .await;
     }
 }

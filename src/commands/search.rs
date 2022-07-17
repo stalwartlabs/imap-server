@@ -30,11 +30,19 @@ pub enum SavedSearch {
 }
 
 impl Session {
-    pub async fn handle_search(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
-        match request.parse_search() {
+    pub async fn handle_search(
+        &mut self,
+        request: Request,
+        is_sort: bool,
+        is_uid: bool,
+    ) -> Result<(), ()> {
+        match if !is_sort {
+            request.parse_search(self.version)
+        } else {
+            request.parse_sort()
+        } {
             Ok(arguments) => {
                 let (data, mailbox, _) = self.state.mailbox_data();
-                let version = self.version;
 
                 // Create channel for results
                 let (results_tx, prev_saved_search) =
@@ -58,7 +66,7 @@ impl Session {
                         )
                         .await
                     {
-                        Ok((response, tag)) => response.serialize(tag, version),
+                        Ok((response, tag)) => response.serialize(tag),
                         Err(response) => {
                             if let Some(prev_saved_search) = prev_saved_search {
                                 *data.saved_search.lock() = prev_saved_search
@@ -91,6 +99,24 @@ impl SessionData {
         let filter = self
             .imap_filter_to_jmap(arguments.filter, mailbox.clone(), prev_saved_search, is_uid)
             .await?;
+        let sort = arguments.sort.map(|sort| {
+            sort.into_iter()
+                .map(|comp| {
+                    match comp.sort {
+                        search::Sort::Arrival => email::query::Comparator::received_at(),
+                        search::Sort::Cc => email::query::Comparator::cc(),
+                        search::Sort::Date => email::query::Comparator::sent_at(),
+                        search::Sort::From => email::query::Comparator::from(),
+                        search::Sort::DisplayFrom => email::query::Comparator::from(),
+                        search::Sort::Size => email::query::Comparator::size(),
+                        search::Sort::Subject => email::query::Comparator::subject(),
+                        search::Sort::To => email::query::Comparator::to(),
+                        search::Sort::DisplayTo => email::query::Comparator::to(),
+                    }
+                    .is_ascending(comp.ascending)
+                })
+                .collect::<Vec<_>>()
+        });
 
         // Build query
         let mut position = 0;
@@ -98,11 +124,14 @@ impl SessionData {
         let mut total;
         loop {
             let mut request = self.client.build();
-            request
+            let query_request = request
                 .query_email()
                 .filter(filter.clone())
                 .calculate_total(true)
                 .position(position);
+            if let Some(sort) = &sort {
+                query_request.sort(sort.clone());
+            }
             let mut response = match request.send_query_email().await {
                 Ok(response) => response,
                 Err(err) => return Err(err.into_status_response(arguments.tag.into())),
@@ -208,14 +237,20 @@ impl SessionData {
                 ids: if arguments.result_options.is_empty()
                     || arguments.result_options.contains(&ResultOption::All)
                 {
-                    if is_uid {
+                    let mut ids = if is_uid {
                         ids.uids.clone()
                     } else {
                         ids.seqnums.as_ref().unwrap().clone()
+                    };
+                    if sort.is_none() {
+                        ids.sort_unstable();
                     }
+                    ids
                 } else {
                     vec![]
                 },
+                is_sort: sort.is_some(),
+                is_esearch: arguments.is_esearch,
             },
             arguments.tag,
         ))
@@ -435,6 +470,7 @@ impl SessionData {
                         operator = new_operator;
                         imap_filters = new_imap_filters.into_iter();
                     }
+                    search::Filter::ModSeq(_) => todo!(),
                 }
             }
 

@@ -32,7 +32,7 @@ impl Session {
                                     ids.seqnums.unwrap()
                                 },
                             }
-                            .serialize(request.tag, self.version),
+                            .serialize(request.tag),
                         )
                         .await
                     }

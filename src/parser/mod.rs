@@ -1,6 +1,6 @@
 pub mod append;
 pub mod authenticate;
-pub mod copy;
+pub mod copy_move;
 pub mod create;
 pub mod delete;
 pub mod enable;
@@ -8,7 +8,6 @@ pub mod fetch;
 pub mod list;
 pub mod login;
 pub mod lsub;
-pub mod move_;
 pub mod rename;
 pub mod search;
 pub mod select;
@@ -175,6 +174,13 @@ pub fn parse_integer(value: &[u8]) -> Result<u32> {
     std::str::from_utf8(value)
         .map_err(|_| Cow::from("Expected an integer, found an invalid UTF-8 string."))?
         .parse::<u32>()
+        .map_err(|_| Cow::from("Failed to parse integer."))
+}
+
+pub fn parse_long_integer(value: &[u8]) -> Result<u64> {
+    std::str::from_utf8(value)
+        .map_err(|_| Cow::from("Expected an integer, found an invalid UTF-8 string."))?
+        .parse::<u64>()
         .map_err(|_| Cow::from("Failed to parse integer."))
 }
 

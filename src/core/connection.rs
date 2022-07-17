@@ -106,9 +106,20 @@ pub async fn handle_conn_tls(
                 match result {
                     Ok(Ok(bytes_read)) => {
                         if bytes_read > 0 {
-                            if session.ingest(&buf[..bytes_read]).await.is_err() {
-                                debug!("Disconnecting client.");
-                                return;
+                            match &session.idle_tx {
+                                None => {
+                                    if session.ingest(&buf[..bytes_read]).await.is_err() {
+                                        debug!("Disconnecting client.");
+                                        return;
+                                    }
+                                },
+                                Some(idle_tx) => {
+                                    if bytes_read >= 4 && &buf[..4] == b"DONE" {
+                                        debug!("Stopping IDLE.");
+                                        idle_tx.send(false).ok();
+                                        session.idle_tx = None;
+                                    }
+                                },
                             }
                         } else {
                             debug!("IMAP connection closed by {}", session.peer_addr);

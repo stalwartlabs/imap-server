@@ -1,7 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use jmap_client::client::Client;
-use tokio::{io::WriteHalf, net::TcpStream, sync::mpsc};
+use tokio::{
+    io::WriteHalf,
+    net::TcpStream,
+    sync::{mpsc, watch},
+};
 use tokio_rustls::server::TlsStream;
 use tracing::debug;
 
@@ -22,6 +26,7 @@ pub struct Session {
     pub peer_addr: SocketAddr,
     pub is_tls: bool,
     pub writer: mpsc::Sender<writer::Event>,
+    pub idle_tx: Option<watch::Sender<bool>>,
 }
 
 pub struct SessionData {
@@ -56,6 +61,7 @@ impl Session {
             peer_addr,
             is_tls,
             writer: writer::spawn_writer(),
+            idle_tx: None,
         }
     }
 
@@ -140,7 +146,7 @@ impl Session {
                     self.handle_expunge(request, is_uid).await?;
                 }
                 Command::Search(is_uid) => {
-                    self.handle_search(request, is_uid).await?;
+                    self.handle_search(request, false, is_uid).await?;
                 }
                 Command::Fetch(is_uid) => {
                     self.handle_fetch(request, is_uid).await?;
@@ -148,11 +154,21 @@ impl Session {
                 Command::Store(is_uid) => {
                     self.handle_store(request, is_uid).await?;
                 }
-                Command::Copy(_) => todo!(),
-                Command::Move(_) => todo!(),
-                Command::Sort(_) => todo!(),
-                Command::Thread(_) => todo!(),
-                Command::Idle => todo!(), //TODO
+                Command::Copy(is_uid) => {
+                    self.handle_copy_move(request, false, is_uid).await?;
+                }
+                Command::Move(is_uid) => {
+                    self.handle_copy_move(request, true, is_uid).await?;
+                }
+                Command::Sort(is_uid) => {
+                    self.handle_search(request, false, is_uid).await?;
+                }
+                Command::Thread(is_uid) => {
+                    self.handle_thread(request, is_uid).await?;
+                }
+                Command::Idle => {
+                    self.handle_idle(request).await?;
+                }
                 Command::Subscribe => {
                     self.handle_subscribe(request, true).await?;
                 }

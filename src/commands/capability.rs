@@ -18,7 +18,7 @@ impl Session {
             capabilities.push(Capability::StartTLS);
             capabilities.push(Capability::LoginDisabled);
         }
-        self.write_bytes(Response { capabilities }.serialize(request.tag, self.version))
+        self.write_bytes(Response { capabilities }.serialize(request.tag))
             .await
     }
 }

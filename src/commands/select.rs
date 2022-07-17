@@ -19,7 +19,7 @@ impl Session {
                 if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
                     // Syncronize messages
                     let mailbox = Arc::new(mailbox);
-                    match data.synchronize_messages(mailbox.clone()).await {
+                    match data.synchronize_messages(mailbox.clone(), false).await {
                         Ok(status) => {
                             let closed_previous = self.state.is_mailbox_selected();
 
@@ -42,8 +42,10 @@ impl Session {
                                     is_read_only: !is_select,
                                     is_examine: !is_select,
                                     closed_previous,
+                                    is_rev2: self.version.is_rev2(),
+                                    highest_modseq: 0,
                                 }
-                                .serialize(arguments.tag, self.version),
+                                .serialize(arguments.tag),
                             )
                             .await
                         }

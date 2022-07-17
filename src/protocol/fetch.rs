@@ -12,6 +12,7 @@ pub struct Arguments {
     pub tag: String,
     pub sequence_set: Sequence,
     pub attributes: Vec<Attribute>,
+    pub changed_since: Option<u64>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response<'x> {
@@ -50,6 +51,10 @@ pub enum Attribute {
     BinarySize {
         sections: Vec<u32>,
     },
+    Preview {
+        lazy: bool,
+    },
+    ModSeq,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +111,12 @@ pub enum DataItem<'x> {
     },
     Rfc822Text {
         contents: Cow<'x, str>,
+    },
+    Preview {
+        contents: Option<Cow<'x, str>>,
+    },
+    ModSeq {
+        mod_seq: u64,
     },
 }
 
@@ -758,6 +769,19 @@ impl<'x> DataItem<'x> {
                 buf.extend_from_slice(b"RFC822.TEXT ");
                 literal_string(buf, contents);
             }
+            DataItem::Preview { contents } => {
+                buf.extend_from_slice(b"PREVIEW ");
+                if let Some(contents) = contents {
+                    literal_string(buf, contents);
+                } else {
+                    buf.extend_from_slice(b"NIL");
+                }
+            }
+            DataItem::ModSeq { mod_seq } => {
+                buf.extend_from_slice(b"MODSEQ (");
+                buf.extend_from_slice(mod_seq.to_string().as_bytes());
+                buf.push(b')');
+            }
         }
     }
 }
@@ -778,7 +802,7 @@ impl<'x> FetchItem<'x> {
 }
 
 impl<'x> ImapResponse for Response<'x> {
-    fn serialize(&self, tag: String, _version: super::ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(128);
         for item in &self.items {
             item.serialize(&mut buf);
@@ -830,10 +854,7 @@ impl<'x> ImapResponse for Response<'x> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        core::Flag,
-        protocol::{ImapResponse, ProtocolVersion},
-    };
+    use crate::{core::Flag, protocol::ImapResponse};
 
     use super::{
         Address, AddressGroup, BodyPart, BodyPartExtension, BodyPartFields, DataItem, EmailAddress,
@@ -1303,7 +1324,7 @@ mod tests {
                         ],
                     }],
                 }
-                .serialize("abc".to_string(), ProtocolVersion::Rev1),
+                .serialize("abc".to_string()),
             )
             .unwrap(),
             concat!(

@@ -27,7 +27,7 @@ impl Session {
                 let data = self.state.session_data();
                 tokio::spawn(async move {
                     // Refresh mailboxes
-                    if let Err(err) = data.synchronize_mailboxes().await {
+                    if let Err(err) = data.synchronize_mailboxes(false).await {
                         debug!("Failed to refresh mailboxes: {}", err);
                         data.write_bytes(
                             err.into_status_response(arguments.tag.into()).into_bytes(),
@@ -39,8 +39,14 @@ impl Session {
                     // Fetch status
                     match data.status(arguments.mailbox_name, &arguments.items).await {
                         Ok(status) => {
-                            data.write_bytes(Response { status }.serialize(arguments.tag, version))
-                                .await;
+                            data.write_bytes(
+                                Response {
+                                    status,
+                                    is_rev2: version.is_rev2(),
+                                }
+                                .serialize(arguments.tag),
+                            )
+                            .await;
                         }
                         Err(mut response) => {
                             response.tag = arguments.tag.into();
@@ -143,7 +149,7 @@ impl SessionData {
             || items_update.contains(&Status::UidValidity)
             || items_update.contains(&Status::Messages)
         {
-            let status = self.synchronize_messages(mailbox.clone()).await?;
+            let status = self.synchronize_messages(mailbox.clone(), false).await?;
             for account in self.mailboxes.lock().iter_mut() {
                 if account.account_id == mailbox.account_id {
                     let mailbox_data = account

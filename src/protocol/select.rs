@@ -1,15 +1,12 @@
 use crate::core::{Command, ResponseCode, StatusResponse};
 
-use super::{
-    list::ListItem,
-    ImapResponse,
-    ProtocolVersion::{self},
-};
+use super::{list::ListItem, ImapResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
     pub tag: String,
     pub mailbox_name: String,
+    pub condstore: bool,
 }
 
 pub struct Response {
@@ -21,11 +18,13 @@ pub struct Response {
     pub uid_next: u32,
     pub is_read_only: bool,
     pub is_examine: bool,
+    pub is_rev2: bool,
     pub closed_previous: bool,
+    pub highest_modseq: u64,
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String, version: ProtocolVersion) -> Vec<u8> {
+    fn serialize(&self, tag: String) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
         if self.closed_previous {
             StatusResponse::ok(None, ResponseCode::Closed.into(), "Closed previous mailbox")
@@ -36,8 +35,8 @@ impl ImapResponse for Response {
         buf.extend_from_slice(
             b" EXISTS\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
         );
-        if version.is_rev2() {
-            self.mailbox.serialize(&mut buf, version, false);
+        if self.is_rev2 {
+            self.mailbox.serialize(&mut buf, self.is_rev2, false);
         } else {
             buf.extend_from_slice(b"* ");
             buf.extend_from_slice(self.recent_messages.to_string().as_bytes());
@@ -55,6 +54,8 @@ impl ImapResponse for Response {
         buf.extend_from_slice(self.uid_validity.to_string().as_bytes());
         buf.extend_from_slice(b"]\r\n* OK [UIDNEXT ");
         buf.extend_from_slice(self.uid_next.to_string().as_bytes());
+        buf.extend_from_slice(b"]\r\n* OK [HIGHESTMODSEQ ");
+        buf.extend_from_slice(self.highest_modseq.to_string().as_bytes());
         buf.extend_from_slice(b"]\r\n");
 
         StatusResponse::completed(
@@ -77,11 +78,11 @@ impl ImapResponse for Response {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{list::ListItem, ImapResponse, ProtocolVersion};
+    use crate::protocol::{list::ListItem, ImapResponse};
 
     #[test]
     fn serialize_select() {
-        for (response, tag, expected_v2, expected_v1) in [
+        for (mut response, tag, expected_v2, expected_v1) in [
             (
                 super::Response {
                     mailbox: ListItem::new("INBOX"),
@@ -93,6 +94,8 @@ mod tests {
                     is_read_only: false,
                     is_examine: false,
                     closed_previous: false,
+                    is_rev2: true,
+                    highest_modseq: 100,
                 },
                 "A142",
                 concat!(
@@ -102,6 +105,7 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
+                    "* OK [HIGHESTMODSEQ 100]\r\n",
                     "A142 OK [READ-WRITE] SELECT completed\r\n"
                 ),
                 concat!(
@@ -112,6 +116,7 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
+                    "* OK [HIGHESTMODSEQ 100]\r\n",
                     "A142 OK [READ-WRITE] SELECT completed\r\n"
                 ),
             ),
@@ -126,16 +131,20 @@ mod tests {
                     is_read_only: true,
                     is_examine: false,
                     closed_previous: true,
+                    is_rev2: true,
+                    highest_modseq: 123,
                 },
                 "A142",
                 concat!(
                     "* OK [CLOSED] Closed previous mailbox\r\n",
                     "* 172 EXISTS\r\n",
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
-                    "* LIST () \"/\" \"~peter/mail/台北/日本語\" (\"OLDNAME\" (\"~peter/mail/&U,BTFw-/&ZeVnLIqe-\"))\r\n",
+                    "* LIST () \"/\" \"~peter/mail/台北/日本語\" (\"OLDNAME\" ",
+                    "(\"~peter/mail/&U,BTFw-/&ZeVnLIqe-\"))\r\n",
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
+                    "* OK [HIGHESTMODSEQ 123]\r\n",
                     "A142 OK [READ-ONLY] SELECT completed\r\n"
                 ),
                 concat!(
@@ -147,12 +156,14 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
+                    "* OK [HIGHESTMODSEQ 123]\r\n",
                     "A142 OK [READ-ONLY] SELECT completed\r\n"
                 ),
             ),
         ] {
-            let response_v1 = String::from_utf8(response.serialize(tag.to_string(), ProtocolVersion::Rev1)).unwrap();
-            let response_v2 = String::from_utf8(response.serialize(tag.to_string(), ProtocolVersion::Rev2)).unwrap();
+            let response_v2 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            response.is_rev2 = false;
+            let response_v1 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
 
             assert_eq!(response_v2, expected_v2);
             assert_eq!(response_v1, expected_v1);

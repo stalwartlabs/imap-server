@@ -8,14 +8,15 @@ use mail_parser::decoders::charsets::DecoderFnc;
 
 use crate::core::receiver::{Request, Token};
 use crate::core::Flag;
-use crate::protocol::search::ResultOption;
 use crate::protocol::search::{self, Filter};
+use crate::protocol::search::{ModSeqEntry, ResultOption};
+use crate::protocol::ProtocolVersion;
 
-use super::{parse_date, parse_integer, parse_sequence_set};
+use super::{parse_date, parse_integer, parse_long_integer, parse_sequence_set};
 
 impl Request {
     #[allow(clippy::while_let_on_iterator)]
-    pub fn parse_search(self) -> crate::core::Result<search::Arguments> {
+    pub fn parse_search(self, version: ProtocolVersion) -> crate::core::Result<search::Arguments> {
         if self.tokens.is_empty() {
             return Err(self.into_error("Missing search criteria."));
         }
@@ -23,37 +24,15 @@ impl Request {
         let mut tokens = self.tokens.into_iter().peekable();
         let mut result_options = Vec::new();
         let mut decoder = None;
+        let mut is_esearch = version.is_rev2();
 
         loop {
             match tokens.peek() {
                 Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"return") => {
                     tokens.next();
-                    if tokens
-                        .next()
-                        .map_or(true, |token| !token.is_parenthesis_open())
-                    {
-                        return Err((
-                            self.tag.as_str(),
-                            "Invalid result option, expected parenthesis.",
-                        )
-                            .into());
-                    }
-                    while let Some(token) = tokens.next() {
-                        match token {
-                            Token::ParenthesisClose => break,
-                            Token::Argument(value) => {
-                                result_options.push(
-                                    ResultOption::parse(&value)
-                                        .map_err(|v| (self.tag.as_str(), v))?,
-                                );
-                            }
-                            _ => {
-                                return Err(
-                                    (self.tag.as_str(), "Invalid result option argument.").into()
-                                )
-                            }
-                        }
-                    }
+                    is_esearch = true;
+                    result_options =
+                        parse_result_options(&mut tokens).map_err(|v| (self.tag.as_str(), v))?;
                 }
                 Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"charset") => {
                     tokens.next();
@@ -70,20 +49,49 @@ impl Request {
 
         let mut filters =
             parse_filters(&mut tokens, decoder).map_err(|v| (self.tag.as_str(), v))?;
+
         match filters.len() {
             0 => Err((self.tag.as_str(), "No filters found in command.").into()),
             1 => Ok(search::Arguments {
                 tag: self.tag,
                 result_options,
                 filter: filters.pop().unwrap(),
+                sort: None,
+                is_esearch,
             }),
             _ => Ok(search::Arguments {
                 tag: self.tag,
                 result_options,
                 filter: Filter::Operator(Operator::And, filters),
+                sort: None,
+                is_esearch,
             }),
         }
     }
+}
+
+pub fn parse_result_options(
+    tokens: &mut Peekable<IntoIter<Token>>,
+) -> super::Result<Vec<ResultOption>> {
+    let mut result_options = Vec::new();
+    if tokens
+        .next()
+        .map_or(true, |token| !token.is_parenthesis_open())
+    {
+        return Err(Cow::from("Invalid result option, expected parenthesis."));
+    }
+
+    for token in tokens {
+        match token {
+            Token::ParenthesisClose => break,
+            Token::Argument(value) => {
+                result_options.push(ResultOption::parse(&value)?);
+            }
+            _ => return Err(Cow::from("Invalid result option argument.")),
+        }
+    }
+
+    Ok(result_options)
 }
 
 pub fn parse_filters(
@@ -234,6 +242,58 @@ pub fn parse_filters(
                     filters.push(Filter::New);
                 } else if value.eq_ignore_ascii_case(b"RECENT") {
                     filters.push(Filter::Recent);
+                } else if value.eq_ignore_ascii_case(b"MODSEQ") {
+                    let param = tokens
+                        .next()
+                        .ok_or_else(|| Cow::from("Missing MODSEQ parameters."))?
+                        .unwrap_bytes();
+                    if param.is_empty() || param.iter().any(|ch| !ch.is_ascii_digit()) {
+                        if param.len() <= 7 || !param.starts_with(b"/flags/") {
+                            return Err(format!(
+                                "Unsupported MODSEQ parameter '{}'.",
+                                String::from_utf8_lossy(&param)
+                            )
+                            .into());
+                        }
+                        let flag = Flag::parse_imap((&param[7..]).to_vec())?;
+                        let mod_seq_entry = match tokens.next() {
+                            Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"all") => {
+                                ModSeqEntry::All(flag)
+                            }
+                            Some(Token::Argument(value))
+                                if value.eq_ignore_ascii_case(b"shared") =>
+                            {
+                                ModSeqEntry::Shared(flag)
+                            }
+                            Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"priv") => {
+                                ModSeqEntry::Private(flag)
+                            }
+                            Some(token) => {
+                                return Err(
+                                    format!("Unsupported MODSEQ parameter '{}'.", token).into()
+                                );
+                            }
+                            None => {
+                                return Err("Missing MODSEQ entry-type-req parameter.".into());
+                            }
+                        };
+                        filters.push(Filter::ModSeq((
+                            parse_long_integer(
+                                &tokens
+                                    .next()
+                                    .ok_or_else(|| {
+                                        Cow::from("Missing MODSEQ mod-sequence-valzer parameter.")
+                                    })?
+                                    .unwrap_bytes(),
+                            )?,
+                            mod_seq_entry,
+                        )));
+                    } else {
+                        filters.push(Filter::ModSeq((
+                            parse_long_integer(&param)?,
+                            ModSeqEntry::None,
+                        )));
+                    }
                 } else if value.eq_ignore_ascii_case(b"OR") {
                     if filters_stack.len() > 10 {
                         return Err(Cow::from("Too many nested filters"));
@@ -330,6 +390,8 @@ impl ResultOption {
             Ok(Self::Count)
         } else if value.eq_ignore_ascii_case(b"save") {
             Ok(Self::Save)
+        } else if value.eq_ignore_ascii_case(b"context") {
+            Ok(Self::Context)
         } else {
             Err(format!("Invalid result option {:?}", String::from_utf8_lossy(value)).into())
         }
@@ -341,8 +403,8 @@ mod tests {
     use crate::{
         core::{receiver::Receiver, Flag},
         protocol::{
-            search::{self, Filter, ResultOption},
-            Sequence,
+            search::{self, Filter, ModSeqEntry, ResultOption},
+            ProtocolVersion, Sequence,
         },
     };
 
@@ -362,6 +424,8 @@ mod tests {
                         Filter::Since(760060800),
                         Filter::not([Filter::From("Smith".to_string())]),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -374,6 +438,8 @@ mod tests {
                         Filter::Since(760060800),
                         Filter::not([Filter::From("Smith".to_string())]),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -382,6 +448,8 @@ mod tests {
                     tag: "A301".to_string(),
                     result_options: vec![],
                     filter: Filter::and([Filter::seq_saved_search(), Filter::Smaller(4096)]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -406,6 +474,8 @@ mod tests {
                         ]),
                         Filter::Text("мать".to_string()),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -414,6 +484,8 @@ mod tests {
                     tag: "F282".to_string(),
                     result_options: vec![ResultOption::Save],
                     filter: Filter::Keyword(Flag::Junk),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -436,6 +508,8 @@ mod tests {
                             Filter::Cc("john@doe.com".to_string()),
                         ]),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -455,6 +529,8 @@ mod tests {
                             Filter::Header("From".to_string(), "dr. ravioli".to_string()),
                         ]),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -495,6 +571,8 @@ mod tests {
                         ),
                         Filter::seq_saved_search(),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -524,6 +602,8 @@ mod tests {
                         Filter::Answered,
                         Filter::or([Filter::SentOn(1668902400), Filter::Larger(8196)]),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -553,6 +633,8 @@ mod tests {
                         ]),
                         Filter::Keyword(Flag::Keyword("tps report".to_string())),
                     ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -565,6 +647,8 @@ mod tests {
                     tag: "B283".to_string(),
                     result_options: vec![ResultOption::Save, ResultOption::Min, ResultOption::Max],
                     filter: Filter::Text("Привет, мир".to_string()),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
             (
@@ -573,6 +657,31 @@ mod tests {
                     tag: "B283".to_string(),
                     result_options: vec![],
                     filter: Filter::From("你好，世界".to_string()),
+                    is_esearch: true,
+                    sort: None,
+                },
+            ),
+            (
+                b"a SEARCH MODSEQ \"/flags/\\draft\" all 620162338\r\n".to_vec(),
+                search::Arguments {
+                    tag: "a".to_string(),
+                    result_options: vec![],
+                    filter: Filter::ModSeq((620162338, ModSeqEntry::All(Flag::Draft))),
+                    is_esearch: true,
+                    sort: None,
+                },
+            ),
+            (
+                b"t SEARCH OR NOT MODSEQ 720162338 LARGER 50000\r\n".to_vec(),
+                search::Arguments {
+                    tag: "t".to_string(),
+                    result_options: vec![],
+                    filter: Filter::or(vec![
+                        Filter::not(vec![Filter::ModSeq((720162338, ModSeqEntry::None))]),
+                        Filter::Larger(50000),
+                    ]),
+                    is_esearch: true,
+                    sort: None,
                 },
             ),
         ] {
@@ -581,7 +690,7 @@ mod tests {
                 receiver
                     .parse(&mut command.iter())
                     .unwrap()
-                    .parse_search()
+                    .parse_search(ProtocolVersion::Rev2)
                     .expect(&command_str),
                 arguments,
                 "{}",

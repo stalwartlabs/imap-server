@@ -207,8 +207,24 @@ async fn fetch_account_mailboxes(
     Ok(account)
 }
 
+#[derive(Debug, Default)]
+pub struct MailboxSync {
+    pub added: Vec<String>,
+    pub changed: Vec<String>,
+    pub deleted: Vec<String>,
+}
+
 impl SessionData {
-    pub async fn synchronize_mailboxes(&self) -> jmap_client::Result<()> {
+    pub async fn synchronize_mailboxes(
+        &self,
+        return_changes: bool,
+    ) -> jmap_client::Result<Option<MailboxSync>> {
+        let mut changes = if return_changes {
+            MailboxSync::default().into()
+        } else {
+            None
+        };
+
         // Shared mailboxes might have changed
         let mut added_accounts = Vec::new();
         if !self.client.is_session_updated() {
@@ -225,6 +241,13 @@ impl SessionData {
                         new_accounts.push(account);
                     } else {
                         debug!("Removed unlinked shared account {}", account.account_id);
+
+                        // Add unshared mailboxes to deleted list
+                        if let Some(changes) = &mut changes {
+                            for (mailbox_name, _) in account.mailbox_names {
+                                changes.deleted.push(mailbox_name);
+                            }
+                        }
                     }
                 }
 
@@ -286,6 +309,7 @@ impl SessionData {
                             .arguments()
                             .updated_properties()
                             .map_or(true, |p| p.is_empty() || p.iter().any(|p| !p.is_count())))
+                    || changes.is_some()
                 {
                     changed_account_ids.push(response.take_account_id());
                 } else {
@@ -342,16 +366,61 @@ impl SessionData {
                     .iter()
                     .position(|a| a.account_id == changed_account.account_id)
                 {
+                    // Add changes and deletions
+                    if let Some(changes) = &mut changes {
+                        let old_account = &mailboxes[pos];
+                        let new_account = &changed_account;
+
+                        // Add new mailboxes
+                        for (mailbox_name, mailbox_id) in new_account.mailbox_names.iter() {
+                            if let Some(old_mailbox) = old_account.mailbox_data.get(mailbox_id) {
+                                if let Some(mailbox) = new_account.mailbox_data.get(mailbox_id) {
+                                    if mailbox.total_messages != old_mailbox.total_messages
+                                        || mailbox.total_unseen != old_mailbox.total_unseen
+                                    {
+                                        changes.changed.push(mailbox_name.to_string());
+                                    }
+                                }
+                            } else {
+                                changes.added.push(mailbox_name.to_string());
+                            }
+                        }
+
+                        // Add deleted mailboxes
+                        for (mailbox_name, mailbox_id) in &old_account.mailbox_names {
+                            if !new_account.mailbox_data.contains_key(mailbox_id) {
+                                changes.deleted.push(mailbox_name.to_string());
+                            }
+                        }
+                    }
+
                     mailboxes[pos] = changed_account;
                 } else {
+                    // Add newly shared accounts
+                    if let Some(changes) = &mut changes {
+                        changes
+                            .added
+                            .extend(changed_account.mailbox_names.keys().cloned());
+                    }
+
                     mailboxes.push(changed_account);
                 }
             }
 
-            mailboxes.extend(added_accounts);
+            if !added_accounts.is_empty() {
+                // Add newly shared accounts
+                if let Some(changes) = &mut changes {
+                    for added_account in &added_accounts {
+                        changes
+                            .added
+                            .extend(added_account.mailbox_names.keys().cloned());
+                    }
+                }
+                mailboxes.extend(added_accounts);
+            }
         }
 
-        Ok(())
+        Ok(changes)
     }
 
     pub fn get_mailbox_by_name(&self, mailbox_name: &str) -> Option<MailboxData> {
