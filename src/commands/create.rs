@@ -38,14 +38,14 @@ impl SessionData {
         // Refresh mailboxes
         if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
-            return err.into_status_response(arguments.tag.into());
+            return err.into_status_response().with_tag(arguments.tag);
         }
 
         // Validate mailbox name
         let mut params = match self.validate_mailbox_create(&arguments.mailbox_name) {
             Ok(response) => response,
             Err(message) => {
-                return StatusResponse::no(arguments.tag.into(), None, message);
+                return StatusResponse::no(message).with_tag(arguments.tag);
             }
         };
         debug_assert!(!params.path.is_empty());
@@ -69,13 +69,14 @@ impl SessionData {
                 if let Err(message) =
                     self.add_created_mailboxes(&mut params, create_ids, &mut response)
                 {
-                    StatusResponse::no(arguments.tag.into(), None, message)
+                    StatusResponse::no(message)
                 } else {
-                    StatusResponse::ok(arguments.tag.into(), None, "Mailbox created.")
+                    StatusResponse::ok("Mailbox created.")
                 }
             }
-            Err(err) => err.into_status_response(arguments.tag.into()),
+            Err(err) => err.into_status_response(),
         }
+        .with_tag(arguments.tag)
     }
 
     pub fn add_created_mailboxes(
@@ -110,7 +111,7 @@ impl SessionData {
 
         // Update state
         if let Some(new_state) = response.take_new_state() {
-            account.state_id = new_state;
+            account.mailbox_state = new_state;
         }
 
         // Add mailboxes

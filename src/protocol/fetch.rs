@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::core::{Command, Flag, StatusResponse};
+use crate::core::Flag;
 
 use super::{
     literal_string, quoted_string, quoted_string_or_nil, quoted_timestamp, quoted_timestamp_or_nil,
@@ -13,6 +13,7 @@ pub struct Arguments {
     pub sequence_set: Sequence,
     pub attributes: Vec<Attribute>,
     pub changed_since: Option<u64>,
+    pub include_vanished: bool,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response<'x> {
@@ -116,7 +117,7 @@ pub enum DataItem<'x> {
         contents: Option<Cow<'x, str>>,
     },
     ModSeq {
-        mod_seq: u64,
+        modseq: u32,
     },
 }
 
@@ -777,9 +778,9 @@ impl<'x> DataItem<'x> {
                     buf.extend_from_slice(b"NIL");
                 }
             }
-            DataItem::ModSeq { mod_seq } => {
+            DataItem::ModSeq { modseq } => {
                 buf.extend_from_slice(b"MODSEQ (");
-                buf.extend_from_slice(mod_seq.to_string().as_bytes());
+                buf.extend_from_slice(modseq.to_string().as_bytes());
                 buf.push(b')');
             }
         }
@@ -802,12 +803,11 @@ impl<'x> FetchItem<'x> {
 }
 
 impl<'x> ImapResponse for Response<'x> {
-    fn serialize(&self, tag: String) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(128);
         for item in &self.items {
             item.serialize(&mut buf);
         }
-        StatusResponse::completed(Command::Fetch(self.is_uid), tag).serialize(&mut buf);
         buf
     }
 }
@@ -1324,7 +1324,7 @@ mod tests {
                         ],
                     }],
                 }
-                .serialize("abc".to_string()),
+                .serialize(),
             )
             .unwrap(),
             concat!(
@@ -1333,7 +1333,6 @@ mod tests {
                 "RFC822.SIZE 443 ",
                 "RFC822.TEXT {2}\r\nhi ",
                 "RFC822.HEADER {6}\r\nheader)\r\n",
-                "abc OK FETCH completed\r\n"
             )
         );
     }

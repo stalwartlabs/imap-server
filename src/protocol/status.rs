@@ -1,18 +1,12 @@
-use crate::core::{utf7::utf7_encode, Command, StatusResponse};
+use crate::core::utf7::utf7_encode;
 
-use super::{quoted_string, ImapResponse};
+use super::quoted_string;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
     pub tag: String,
     pub mailbox_name: String,
     pub items: Vec<Status>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Response {
-    pub is_rev2: bool,
-    pub status: StatusItem,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,6 +17,7 @@ pub enum Status {
     Unseen,
     Deleted,
     Size,
+    HighestModSeq,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +46,7 @@ impl StatusItem {
                 Status::Unseen => b"UNSEEN ",
                 Status::Deleted => b"DELETED ",
                 Status::Size => b"SIZE ",
+                Status::HighestModSeq => b"HIGHESTMODSEQ ",
             });
             buf.extend_from_slice(amount.to_string().as_bytes());
         }
@@ -58,38 +54,22 @@ impl StatusItem {
     }
 }
 
-impl ImapResponse for Response {
-    fn serialize(&self, tag: String) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(64);
-        self.status.serialize(&mut buf, self.is_rev2);
-        StatusResponse::completed(Command::Status, tag).serialize(&mut buf);
-        buf
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{
-        status::{Status, StatusItem},
-        ImapResponse,
-    };
+    use crate::protocol::status::{Status, StatusItem};
 
     #[test]
     fn serialize_status() {
+        let mut buf = Vec::new();
+        StatusItem {
+            mailbox_name: "blurdybloop".to_string(),
+            items: vec![(Status::Messages, 231), (Status::UidNext, 44292)],
+        }
+        .serialize(&mut buf, true);
+
         assert_eq!(
-            &super::Response {
-                status: StatusItem {
-                    mailbox_name: "blurdybloop".to_string(),
-                    items: vec![(Status::Messages, 231), (Status::UidNext, 44292)]
-                },
-                is_rev2: true,
-            }
-            .serialize("A042".to_string()),
-            concat!(
-                "* STATUS \"blurdybloop\" (MESSAGES 231 UIDNEXT 44292)\r\n",
-                "A042 OK STATUS completed\r\n"
-            )
-            .as_bytes()
+            &buf,
+            concat!("* STATUS \"blurdybloop\" (MESSAGES 231 UIDNEXT 44292)\r\n",).as_bytes()
         );
     }
 }

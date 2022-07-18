@@ -7,7 +7,7 @@ use crate::{
     protocol::fetch::{self, Attribute, Section},
 };
 
-use super::{parse_integer, parse_long_integer, parse_sequence_set, PushUnique};
+use super::{parse_number, parse_sequence_set, PushUnique};
 
 impl Request {
     #[allow(clippy::while_let_on_iterator)]
@@ -198,7 +198,7 @@ impl Request {
                                         Section::Mime
                                     } else {
                                         Section::Part {
-                                            num: parse_integer(&value)
+                                            num: parse_number::<u32>(&value)
                                                 .map_err(|v| (self.tag.as_str(), v))?,
                                         }
                                     };
@@ -257,7 +257,7 @@ impl Request {
                             match token {
                                 Token::Argument(value) => {
                                     sections.push(
-                                        parse_integer(&value)
+                                        parse_number::<u32>(&value)
                                             .map_err(|v| (self.tag.as_str(), v))?,
                                     );
                                 }
@@ -342,12 +342,13 @@ impl Request {
 
         // CONDSTORE parameters
         let mut changed_since = None;
+        let mut include_vanished = false;
         if let Some(Token::ParenthesisOpen) = tokens.peek() {
             tokens.next();
             while let Some(token) = tokens.next() {
                 match token {
                     Token::Argument(param) if param.eq_ignore_ascii_case(b"CHANGEDSINCE") => {
-                        changed_since = parse_long_integer(
+                        changed_since = parse_number::<u64>(
                             &tokens
                                 .next()
                                 .ok_or((self.tag.as_str(), "Missing CHANGEDSINCE parameter."))?
@@ -355,6 +356,9 @@ impl Request {
                         )
                         .map_err(|v| (self.tag.as_str(), v))?
                         .into();
+                    }
+                    Token::Argument(param) if param.eq_ignore_ascii_case(b"VANISHED") => {
+                        include_vanished = true;
                     }
                     Token::ParenthesisClose => {
                         break;
@@ -376,6 +380,7 @@ impl Request {
                 sequence_set,
                 attributes,
                 changed_since,
+                include_vanished,
             })
         } else {
             Err((self.tag, "No data items to fetch specified.").into())
@@ -389,7 +394,7 @@ pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Op
     }
     tokens.next();
 
-    let start = parse_integer(
+    let start = parse_number::<u32>(
         &tokens
             .next()
             .ok_or_else(|| Cow::from("Missing partial start."))?
@@ -400,7 +405,7 @@ pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Op
         return Err("Expected '.' after partial start.".into());
     }
 
-    let end = parse_integer(
+    let end = parse_number::<u32>(
         &tokens
             .next()
             .ok_or_else(|| Cow::from("Missing partial end."))?
@@ -492,6 +497,7 @@ mod tests {
                         },
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -505,6 +511,7 @@ mod tests {
                         partial: None,
                     }],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -518,6 +525,7 @@ mod tests {
                         partial: None,
                     }],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -537,6 +545,7 @@ mod tests {
                         Attribute::Preview { lazy: true },
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -557,6 +566,7 @@ mod tests {
                         partial: None,
                     }],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -578,6 +588,7 @@ mod tests {
                         Attribute::Preview { lazy: false },
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -593,6 +604,7 @@ mod tests {
                         Attribute::Uid,
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -607,6 +619,7 @@ mod tests {
                         Attribute::Rfc822Text,
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -679,6 +692,7 @@ mod tests {
                         },
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -693,6 +707,7 @@ mod tests {
                         Attribute::Envelope,
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -708,6 +723,7 @@ mod tests {
                         Attribute::Body,
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
@@ -721,15 +737,17 @@ mod tests {
                         Attribute::Rfc822Size,
                     ],
                     changed_since: None,
+                    include_vanished: false,
                 },
             ),
             (
-                "s100 UID FETCH 1:* (FLAGS MODSEQ) (CHANGEDSINCE 12345)\r\n",
+                "s100 UID FETCH 1:* (FLAGS MODSEQ) (CHANGEDSINCE 12345 VANISHED)\r\n",
                 fetch::Arguments {
                     tag: "s100".to_string(),
                     sequence_set: Sequence::range(1.into(), None),
                     attributes: vec![Attribute::Flags, Attribute::ModSeq],
                     changed_since: 12345.into(),
+                    include_vanished: true,
                 },
             ),
         ] {

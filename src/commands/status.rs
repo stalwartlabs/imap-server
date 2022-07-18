@@ -11,12 +11,9 @@ use crate::{
         client::{Session, SessionData},
         mailbox::Mailbox,
         receiver::Request,
-        Flag, IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
-    protocol::{
-        status::{Response, Status, StatusItem},
-        ImapResponse,
-    },
+    protocol::status::{Status, StatusItem},
 };
 
 impl Session {
@@ -30,7 +27,9 @@ impl Session {
                     if let Err(err) = data.synchronize_mailboxes(false).await {
                         debug!("Failed to refresh mailboxes: {}", err);
                         data.write_bytes(
-                            err.into_status_response(arguments.tag.into()).into_bytes(),
+                            err.into_status_response()
+                                .with_tag(arguments.tag)
+                                .into_bytes(),
                         )
                         .await;
                         return;
@@ -39,12 +38,12 @@ impl Session {
                     // Fetch status
                     match data.status(arguments.mailbox_name, &arguments.items).await {
                         Ok(status) => {
+                            let mut buf = Vec::with_capacity(32);
+                            status.serialize(&mut buf, version.is_rev2());
                             data.write_bytes(
-                                Response {
-                                    status,
-                                    is_rev2: version.is_rev2(),
-                                }
-                                .serialize(arguments.tag),
+                                StatusResponse::completed(Command::Status)
+                                    .with_tag(arguments.tag)
+                                    .serialize(buf),
                             )
                             .await;
                         }
@@ -71,11 +70,9 @@ impl SessionData {
         let mailbox = if let Some(mailbox) = self.get_mailbox_by_name(&mailbox_name) {
             Arc::new(mailbox)
         } else {
-            return Err(StatusResponse::no(
-                None,
-                ResponseCode::NonExistent.into(),
-                "Mailbox does not exist.",
-            ));
+            return Err(
+                StatusResponse::no("Mailbox does not exist.").with_code(ResponseCode::NonExistent)
+            );
         };
 
         // Make sure all requested fields are up to date
@@ -134,6 +131,13 @@ impl SessionData {
                         Status::Size => {
                             if let Some(value) = mailbox_data.size {
                                 items_response.push((*item, value as u32));
+                            } else {
+                                items_update.push(*item);
+                            }
+                        }
+                        Status::HighestModSeq => {
+                            if let Some(value) = account.modseq {
+                                items_response.push((*item, value));
                             } else {
                                 items_update.push(*item);
                             }
@@ -219,7 +223,7 @@ impl SessionData {
             let mut responses = request
                 .send()
                 .await
-                .map_err(|err| err.into_status_response(None))?
+                .map_err(|err| err.into_status_response())?
                 .unwrap_method_responses()
                 .into_iter();
 
@@ -241,14 +245,11 @@ impl SessionData {
                         mailbox_data.total_unseen = responses
                             .next()
                             .ok_or_else(|| {
-                                StatusResponse::no(
-                                    None,
-                                    ResponseCode::ContactAdmin.into(),
-                                    "Invalid JMAP server response",
-                                )
+                                StatusResponse::no("Invalid JMAP server response")
+                                    .with_code(ResponseCode::ContactAdmin)
                             })?
                             .unwrap_query_email()
-                            .map_err(|err| err.into_status_response(None))?
+                            .map_err(|err| err.into_status_response())?
                             .total()
                             .unwrap_or(0)
                             .into();
@@ -259,14 +260,11 @@ impl SessionData {
                         mailbox_data.total_deleted = responses
                             .next()
                             .ok_or_else(|| {
-                                StatusResponse::no(
-                                    None,
-                                    ResponseCode::ContactAdmin.into(),
-                                    "Invalid JMAP server response",
-                                )
+                                StatusResponse::no("Invalid JMAP server response")
+                                    .with_code(ResponseCode::ContactAdmin)
                             })?
                             .unwrap_query_email()
-                            .map_err(|err| err.into_status_response(None))?
+                            .map_err(|err| err.into_status_response())?
                             .total()
                             .unwrap_or(0)
                             .into();
@@ -310,29 +308,26 @@ impl SessionData {
                 let mut response = request
                     .send()
                     .await
-                    .map_err(|err| err.into_status_response(None))?
+                    .map_err(|err| err.into_status_response())?
                     .unwrap_method_responses();
 
                 if response.len() != 2 {
-                    return Err(StatusResponse::no(
-                        None,
-                        ResponseCode::ContactAdmin.into(),
-                        "Invalid JMAP server response.",
-                    ));
+                    return Err(StatusResponse::no("Invalid JMAP server response.")
+                        .with_code(ResponseCode::ContactAdmin));
                 }
 
                 let emails = response
                     .pop()
                     .unwrap()
                     .unwrap_get_email()
-                    .map_err(|err| err.into_status_response(None))?
+                    .map_err(|err| err.into_status_response())?
                     .take_list();
                 if !emails.is_empty() {
                     let total_emails = response
                         .pop()
                         .unwrap()
                         .unwrap_query_email()
-                        .map_err(|err| err.into_status_response(None))?
+                        .map_err(|err| err.into_status_response())?
                         .total()
                         .unwrap_or(0);
                     position += emails.len();
@@ -364,6 +359,19 @@ impl SessionData {
                     break;
                 }
             }
+        }
+
+        // Update Modseq
+        if items_update.contains(&Status::HighestModSeq) {
+            let modseq = self.synchronize_state(&mailbox.account_id).await?;
+            // Update cache
+            for account in self.mailboxes.lock().iter_mut() {
+                if account.account_id == mailbox.account_id {
+                    account.modseq = modseq.into();
+                    break;
+                }
+            }
+            items_response.push((Status::HighestModSeq, modseq));
         }
 
         // Generate response

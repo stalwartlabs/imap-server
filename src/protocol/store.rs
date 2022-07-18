@@ -1,4 +1,4 @@
-use crate::core::{Command, Flag, StatusResponse};
+use crate::core::Flag;
 
 use super::{fetch::FetchItem, ImapResponse, Sequence};
 
@@ -21,17 +21,15 @@ pub enum Operation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response<'x> {
-    pub is_uid: bool,
     pub items: Vec<FetchItem<'x>>,
 }
 
 impl<'x> ImapResponse for Response<'x> {
-    fn serialize(&self, tag: String) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         for item in &self.items {
             item.serialize(&mut buf);
         }
-        StatusResponse::completed(Command::Store(self.is_uid), tag).serialize(&mut buf);
         buf
     }
 }

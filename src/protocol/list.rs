@@ -1,4 +1,4 @@
-use crate::core::{utf7::utf7_encode, Command, StatusResponse};
+use crate::core::utf7::utf7_encode;
 
 use super::{
     quoted_string,
@@ -201,7 +201,7 @@ impl ListItem {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
 
         for list_item in &self.list_items {
@@ -211,16 +211,6 @@ impl ImapResponse for Response {
         for status_item in &self.status_items {
             status_item.serialize(&mut buf, self.is_rev2);
         }
-
-        StatusResponse::completed(
-            if !self.is_lsub {
-                Command::List
-            } else {
-                Command::Lsub
-            },
-            tag,
-        )
-        .serialize(&mut buf);
         buf
     }
 }
@@ -299,7 +289,7 @@ mod tests {
 
     #[test]
     fn serialize_list() {
-        for (mut response, tag, expected_v2, expected_v1) in [(
+        for (mut response, _tag, expected_v2, expected_v1) in [(
             super::Response {
                 list_items: vec![
                     ListItem {
@@ -332,19 +322,17 @@ mod tests {
                 "* LIST () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
                 "* STATUS \"INBOX\" (MESSAGES 17)\r\n",
                 "* STATUS \"foo\" (MESSAGES 30 UNSEEN 29)\r\n",
-                "A01 OK LIST completed\r\n"
             ),
             concat!(
                 "* LSUB (\\Subscribed) \"/\" \"INBOX\"\r\n",
                 "* LSUB () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
-                "A01 OK LSUB completed\r\n"
             ),
         )] {
-            let response_v2 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            let response_v2 = String::from_utf8(response.clone().serialize()).unwrap();
             response.is_rev2 = false;
             response.is_lsub = true;
             response.status_items.clear();
-            let response_v1 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            let response_v1 = String::from_utf8(response.serialize()).unwrap();
 
             assert_eq!(response_v2, expected_v2);
             assert_eq!(response_v1, expected_v1);

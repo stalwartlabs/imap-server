@@ -14,31 +14,52 @@ use crate::{
 
 impl Session {
     pub async fn handle_expunge(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
-        let (data, mailbox, _) = self.state.mailbox_data();
+        let (data, mailbox, is_rw, _) = self.state.select_data();
+        if !is_rw {
+            return self
+                .write_bytes(
+                    StatusResponse::no("EXPUNGE only allowed in SELECT mode.")
+                        .with_tag(request.tag)
+                        .into_bytes(),
+                )
+                .await;
+        }
+
         match data.expunge(mailbox.clone()).await {
             Ok(Some(jmap_ids)) if !jmap_ids.is_empty() => {
                 match data
                     .core
-                    .jmap_to_imap(mailbox, jmap_ids, false, is_uid)
+                    .jmap_to_imap(mailbox, jmap_ids, false, is_uid || self.is_qresync)
                     .await
                 {
                     Ok(ids) => {
                         self.write_bytes(
-                            Response {
-                                is_uid,
-                                ids: if is_uid {
-                                    ids.uids
-                                } else {
-                                    ids.seqnums.unwrap()
-                                },
-                            }
-                            .serialize(request.tag),
+                            StatusResponse::completed(Command::Expunge(is_uid))
+                                .with_tag(request.tag)
+                                .serialize(
+                                    Response {
+                                        is_uid,
+                                        is_qresync: self.is_qresync,
+                                        ids: {
+                                            let mut ids = if is_uid || self.is_qresync {
+                                                ids.uids
+                                            } else {
+                                                ids.seqnums.unwrap()
+                                            };
+                                            ids.sort_unstable();
+                                            ids
+                                        },
+                                    }
+                                    .serialize(),
+                                ),
                         )
                         .await
                     }
                     Err(_) => {
                         self.write_bytes(
-                            StatusResponse::database_failure(request.tag.into()).into_bytes(),
+                            StatusResponse::database_failure()
+                                .with_tag(request.tag)
+                                .into_bytes(),
                         )
                         .await
                     }
@@ -46,7 +67,9 @@ impl Session {
             }
             Ok(_) => {
                 self.write_bytes(
-                    StatusResponse::completed(Command::Expunge(is_uid), request.tag).into_bytes(),
+                    StatusResponse::completed(Command::Expunge(is_uid))
+                        .with_tag(request.tag)
+                        .into_bytes(),
                 )
                 .await
             }
@@ -82,21 +105,18 @@ impl SessionData {
         let mut response = request
             .send()
             .await
-            .map_err(|err| err.into_status_response(None))?
+            .map_err(|err| err.into_status_response())?
             .unwrap_method_responses();
         if response.len() != 2 {
-            return Err(StatusResponse::no(
-                None,
-                ResponseCode::ContactAdmin.into(),
-                "Invalid JMAP server response",
-            ));
+            return Err(StatusResponse::no("Invalid JMAP server response")
+                .with_code(ResponseCode::ContactAdmin));
         }
 
         Ok(response
             .pop()
             .unwrap()
             .unwrap_set_email()
-            .map_err(|err| err.into_status_response(None))?
+            .map_err(|err| err.into_status_response())?
             .take_destroyed_ids())
     }
 }

@@ -18,7 +18,6 @@ pub struct MailboxData {
 }
 
 pub struct MailboxStatus {
-    pub state_id: String,
     pub uid_next: u32,
     pub uid_validity: u32,
     pub deleted_messages: Vec<u32>,
@@ -33,10 +32,14 @@ pub struct IdMappings {
     pub seqnums: Option<Vec<u32>>,
 }
 
-const JMAP_TO_UID: u8 = 0;
-const UID_TO_JMAP: u8 = 1;
-const UID_NEXT: u8 = 2;
-const UID_VALIDITY: u8 = 3;
+pub const JMAP_TO_UID: u8 = 0;
+pub const UID_TO_JMAP: u8 = 1;
+pub const UID_NEXT: u8 = 2;
+pub const UID_VALIDITY: u8 = 3;
+pub const MODSEQ_TO_STATE: u8 = 4;
+pub const STATE_TO_MODSEQ: u8 = 5;
+pub const HIGHEST_MODSEQ: u8 = 6;
+pub const JMAP_DELETED_IDS: u8 = 7;
 
 impl SessionData {
     pub async fn synchronize_messages(
@@ -45,7 +48,6 @@ impl SessionData {
         include_deleted: bool,
     ) -> Result<MailboxStatus, StatusResponse> {
         let mut valid_ids = Vec::new();
-        let mut state_id = String::new();
         let mut position = 0;
         let mut total_messages = 0;
 
@@ -63,8 +65,7 @@ impl SessionData {
             let mut response = request
                 .send_query_email()
                 .await
-                .map_err(|err| err.into_status_response(None))?;
-            state_id = response.take_query_state();
+                .map_err(|err| err.into_status_response())?;
             total_messages = response.total().unwrap_or(0);
             let emails = response.take_ids();
 
@@ -84,16 +85,33 @@ impl SessionData {
             .core
             .update_uids(mailbox, valid_ids, include_deleted)
             .await
-            .map_err(|_| StatusResponse::database_failure(None))?;
+            .map_err(|_| StatusResponse::database_failure())?;
 
         Ok(MailboxStatus {
-            state_id,
             uid_next: update_result.uid_next,
             uid_validity: update_result.uid_validity,
             total_messages,
             added_messages: update_result.added_messages,
             deleted_messages: update_result.deleted_messages,
         })
+    }
+
+    pub async fn synchronize_state(&self, account_id: &str) -> Result<u32, StatusResponse> {
+        let mut request = self.client.build();
+        request
+            .get_email()
+            .account_id(account_id)
+            .ids(Vec::<&str>::new());
+        let mut response = request
+            .send_get_email()
+            .await
+            .map_err(|err| err.into_status_response())?;
+
+        // Update modseq
+        self.core
+            .state_to_modseq(account_id, response.take_state())
+            .await
+            .map_err(|_| StatusResponse::database_failure())
     }
 
     pub async fn imap_sequence_to_jmap(
@@ -107,11 +125,11 @@ impl SessionData {
                 .imap_sequence_to_jmap(mailbox, sequence, is_uid)
                 .await
                 .map(Arc::new)
-                .map_err(|_| StatusResponse::database_failure(None))
+                .map_err(|_| StatusResponse::database_failure())
         } else {
             self.get_saved_search()
                 .await
-                .ok_or_else(|| StatusResponse::no(None, None, "No saved search found."))
+                .ok_or_else(|| StatusResponse::no("No saved search found."))
         }
     }
 }
@@ -176,9 +194,29 @@ impl Core {
                 if key.len() > prefix.len() {
                     seq_num += 1;
                     if !jmap_ids_map.remove(&key[prefix.len()..]) {
+                        // Delete mappings from cache
                         for key in [&key[..], &serialize_key(&mailbox, UID_TO_JMAP, &value)[..]] {
                             batch.remove(key);
                         }
+
+                        // Add UID to deleted messages
+                        let mut buf = Vec::with_capacity(
+                            (key.len() - prefix.len()) + std::mem::size_of::<u64>(),
+                        );
+                        buf.extend_from_slice(&key[prefix.len()..]);
+                        buf.extend_from_slice(
+                            &SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0)
+                                .to_be_bytes(),
+                        );
+                        batch.insert(
+                            serialize_key(&mailbox, JMAP_DELETED_IDS, &value),
+                            &key[prefix.len()..],
+                        );
+                        //TODO: Delete old deleted IDs after X days
+
                         has_deletions = true;
                         if include_deleted {
                             deleted_messages.push(seq_num);
@@ -322,6 +360,52 @@ impl Core {
                     jmap_ids,
                 })
             }
+        })
+        .await
+    }
+
+    pub async fn jmap_deletions_to_imap(
+        &self,
+        mailbox: Arc<MailboxData>,
+        jmap_ids: Vec<String>,
+    ) -> Result<Vec<u32>, ()> {
+        if jmap_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let db = self.db.clone();
+        self.spawn_worker(move || {
+            let mut uids = Vec::with_capacity(jmap_ids.len());
+
+            for jmap_id in &jmap_ids {
+                let jmap_id = jmap_id.as_bytes();
+                let uid = if let Some(uid) = db
+                    .get(serialize_key(&mailbox, JMAP_TO_UID, jmap_id))
+                    .map_err(|err| {
+                    error!("Failed to get key: {}", err);
+                })? {
+                    u32::from_be_bytes((&uid[..]).try_into().map_err(|_| {
+                        error!("Failed to convert bytes to u32.");
+                    })?)
+                } else if let Some(uid) = db
+                    .get(serialize_key(&mailbox, JMAP_DELETED_IDS, jmap_id))
+                    .map_err(|err| {
+                        error!("Failed to get key: {}", err);
+                    })?
+                {
+                    u32::from_be_bytes((&uid[..std::mem::size_of::<u32>()]).try_into().map_err(
+                        |_| {
+                            error!("Failed to convert bytes to u32.");
+                        },
+                    )?)
+                } else {
+                    continue;
+                };
+
+                uids.push(uid);
+            }
+
+            Ok(uids)
         })
         .await
     }
@@ -691,7 +775,24 @@ fn serialize_uid_validity_key(mailbox: &MailboxData) -> Vec<u8> {
     buf
 }
 
-fn increment_uid(old: Option<&[u8]>) -> Option<Vec<u8>> {
+pub fn serialize_modseq(account_id: &[u8], value: &[u8], separator: u8) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(account_id.len() + value.len() + 2);
+    buf.extend_from_slice(account_id);
+    buf.push(0);
+    buf.extend_from_slice(value);
+    buf.push(separator);
+    buf
+}
+
+pub fn serialize_highestmodseq(account_id: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(account_id.len() + 2);
+    buf.extend_from_slice(account_id);
+    buf.push(0);
+    buf.push(HIGHEST_MODSEQ);
+    buf
+}
+
+pub fn increment_uid(old: Option<&[u8]>) -> Option<Vec<u8>> {
     match old {
         Some(bytes) => u32::from_be_bytes(bytes.try_into().ok()?) + 1,
         None => 0,
@@ -967,10 +1068,11 @@ mod tests {
 
         core.purge_deleted_mailboxes(&Account {
             account_id: "john".to_string(),
-            state_id: String::new(),
             prefix: None,
             mailbox_names: BTreeMap::new(),
             mailbox_data: HashMap::from_iter([("folder_id".to_string(), Mailbox::default())]),
+            mailbox_state: String::new(),
+            modseq: None,
         })
         .await
         .unwrap();

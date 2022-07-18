@@ -33,14 +33,14 @@ impl SessionData {
         if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
 
-            return err.into_status_response(arguments.tag.into());
+            return err.into_status_response().with_tag(arguments.tag);
         }
 
         // Validate mailbox name
         let mut params = match self.validate_mailbox_create(&arguments.new_mailbox_name) {
             Ok(response) => response,
             Err(message) => {
-                return StatusResponse::no(arguments.tag.into(), None, message);
+                return StatusResponse::no(message).with_tag(arguments.tag);
             }
         };
 
@@ -53,22 +53,21 @@ impl SessionData {
                         mailbox_id = mailbox_id_.to_string().into();
                         break;
                     } else {
-                        return StatusResponse::no(
-                            arguments.tag.into(),
-                            ResponseCode::Cannot.into(),
-                            "Cannot move mailboxes between accounts.",
-                        );
+                        return StatusResponse::no("Cannot move mailboxes between accounts.")
+                            .with_tag(arguments.tag)
+                            .with_code(ResponseCode::Cannot);
                     }
                 }
             }
             if let Some(mailbox_id) = mailbox_id {
                 mailbox_id
             } else {
-                return StatusResponse::no(
-                    arguments.tag.into(),
-                    ResponseCode::NonExistent.into(),
-                    format!("Mailbox '{}' not found.", arguments.mailbox_name),
-                );
+                return StatusResponse::no(format!(
+                    "Mailbox '{}' not found.",
+                    arguments.mailbox_name
+                ))
+                .with_tag(arguments.tag)
+                .with_code(ResponseCode::NonExistent);
             }
         };
 
@@ -101,14 +100,14 @@ impl SessionData {
                     match self.add_created_mailboxes(&mut params, create_ids, &mut response) {
                         Ok(mailboxes) => mailboxes,
                         Err(message) => {
-                            return StatusResponse::no(arguments.tag.into(), None, message);
+                            return StatusResponse::no(message).with_tag(arguments.tag);
                         }
                     }
                 } else {
                     self.mailboxes.lock()
                 };
                 if let Err(err) = response.updated(&mailbox_id) {
-                    return err.into_status_response(arguments.tag.into());
+                    return err.into_status_response().with_tag(arguments.tag);
                 }
 
                 // Rename mailbox cache
@@ -116,7 +115,7 @@ impl SessionData {
                     if account.account_id == params.account_id {
                         // Update state
                         if let Some(new_state) = response.take_new_state() {
-                            account.state_id = new_state;
+                            account.mailbox_state = new_state;
                         }
 
                         // Update parents
@@ -166,9 +165,9 @@ impl SessionData {
                     }
                 }
 
-                StatusResponse::completed(Command::Rename, arguments.tag)
+                StatusResponse::completed(Command::Rename).with_tag(arguments.tag)
             }
-            Err(err) => err.into_status_response(arguments.tag.into()),
+            Err(err) => err.into_status_response().with_tag(arguments.tag),
         }
     }
 }

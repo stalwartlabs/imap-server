@@ -356,6 +356,10 @@ impl Token {
         matches!(self, Token::ParenthesisOpen)
     }
 
+    pub fn is_parenthesis_close(&self) -> bool {
+        matches!(self, Token::ParenthesisClose)
+    }
+
     pub fn is_bracket_open(&self) -> bool {
         matches!(self, Token::BracketOpen)
     }

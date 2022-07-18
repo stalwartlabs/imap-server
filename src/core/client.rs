@@ -25,6 +25,8 @@ pub struct Session {
     pub state: State,
     pub peer_addr: SocketAddr,
     pub is_tls: bool,
+    pub is_condstore: bool,
+    pub is_qresync: bool,
     pub writer: mpsc::Sender<writer::Event>,
     pub idle_tx: Option<watch::Sender<bool>>,
 }
@@ -48,6 +50,7 @@ pub enum State {
         data: Arc<SessionData>,
         mailbox: Arc<MailboxData>,
         rw: bool,
+        condstore: bool,
     },
 }
 
@@ -62,6 +65,8 @@ impl Session {
             is_tls,
             writer: writer::spawn_writer(),
             idle_tx: None,
+            is_condstore: false,
+            is_qresync: false,
         }
     }
 
@@ -222,22 +227,14 @@ impl Request {
                 if !is_tls {
                     Ok(self)
                 } else {
-                    Err(StatusResponse::no(
-                        self.tag.into(),
-                        None,
-                        "Already in TLS mode.",
-                    ))
+                    Err(StatusResponse::no("Already in TLS mode.").with_tag(self.tag))
                 }
             }
             Command::Authenticate => {
                 if let State::NotAuthenticated { .. } = state {
                     Ok(self)
                 } else {
-                    Err(StatusResponse::no(
-                        self.tag.into(),
-                        None,
-                        "Already authenticated.",
-                    ))
+                    Err(StatusResponse::no("Already authenticated.").with_tag(self.tag))
                 }
             }
             Command::Login => {
@@ -245,18 +242,13 @@ impl Request {
                     if is_tls {
                         Ok(self)
                     } else {
-                        Err(StatusResponse::no(
-                            self.tag.into(),
-                            None,
-                            "LOGIN is disabled on the clear-text port.",
-                        ))
+                        Err(
+                            StatusResponse::no("LOGIN is disabled on the clear-text port.")
+                                .with_tag(self.tag),
+                        )
                     }
                 } else {
-                    Err(StatusResponse::no(
-                        self.tag.into(),
-                        None,
-                        "Already authenticated.",
-                    ))
+                    Err(StatusResponse::no("Already authenticated.").with_tag(self.tag))
                 }
             }
             Command::Enable
@@ -276,11 +268,7 @@ impl Request {
                 if let State::Authenticated { .. } | State::Selected { .. } = state {
                     Ok(self)
                 } else {
-                    Err(StatusResponse::no(
-                        self.tag.into(),
-                        None,
-                        "Not authenticated.",
-                    ))
+                    Err(StatusResponse::no("Not authenticated.").with_tag(self.tag))
                 }
             }
             Command::Close
@@ -303,23 +291,16 @@ impl Request {
                     {
                         Ok(self)
                     } else {
-                        Err(StatusResponse::no(
-                            self.tag.into(),
-                            None,
-                            "Not permitted in EXAMINE state.",
-                        ))
+                        Err(StatusResponse::no("Not permitted in EXAMINE state.")
+                            .with_tag(self.tag))
                     }
                 }
-                State::Authenticated { .. } => Err(StatusResponse::bad(
-                    self.tag.into(),
-                    None,
-                    "No mailbox is selected.",
-                )),
-                State::NotAuthenticated { .. } => Err(StatusResponse::no(
-                    self.tag.into(),
-                    None,
-                    "Not authenticated.",
-                )),
+                State::Authenticated { .. } => {
+                    Err(StatusResponse::bad("No mailbox is selected.").with_tag(self.tag))
+                }
+                State::NotAuthenticated { .. } => {
+                    Err(StatusResponse::no("Not authenticated.").with_tag(self.tag))
+                }
             },
         }
     }
@@ -341,10 +322,29 @@ impl State {
         }
     }
 
-    pub fn mailbox_data(&self) -> (Arc<SessionData>, Arc<MailboxData>, bool) {
+    pub fn mailbox_data(&self) -> (Arc<SessionData>, Arc<MailboxData>) {
         match self {
-            State::Selected { data, mailbox, rw } => (data.clone(), mailbox.clone(), *rw),
+            State::Selected { data, mailbox, .. } => (data.clone(), mailbox.clone()),
             _ => unreachable!(),
+        }
+    }
+
+    pub fn select_data(&self) -> (Arc<SessionData>, Arc<MailboxData>, bool, bool) {
+        match self {
+            State::Selected {
+                data,
+                mailbox,
+                rw,
+                condstore,
+            } => (data.clone(), mailbox.clone(), *rw, *condstore),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn is_read_write(&self) -> bool {
+        match self {
+            State::Selected { rw, .. } => *rw,
+            _ => false,
         }
     }
 

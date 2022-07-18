@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::SystemTime};
 
 use jmap_client::{
-    core::query::{self},
+    core::query::{self, Filter},
     email,
 };
 use tokio::sync::watch;
@@ -11,11 +11,11 @@ use crate::{
         client::{Session, SessionData},
         message::{IdMappings, MailboxData},
         receiver::Request,
-        Flag, IntoStatusResponse, StatusResponse,
+        Command, Flag, IntoStatusResponse, StatusResponse,
     },
     protocol::{
         search::{self, Arguments, Response, ResultOption},
-        ImapResponse, Sequence,
+        Sequence,
     },
 };
 
@@ -41,8 +41,8 @@ impl Session {
         } else {
             request.parse_sort()
         } {
-            Ok(arguments) => {
-                let (data, mailbox, _) = self.state.mailbox_data();
+            Ok(mut arguments) => {
+                let (data, mailbox) = self.state.mailbox_data();
 
                 // Create channel for results
                 let (results_tx, prev_saved_search) =
@@ -56,6 +56,7 @@ impl Session {
                     };
 
                 tokio::spawn(async move {
+                    let tag = std::mem::take(&mut arguments.tag);
                     let bytes = match data
                         .search(
                             arguments,
@@ -66,7 +67,16 @@ impl Session {
                         )
                         .await
                     {
-                        Ok((response, tag)) => response.serialize(tag),
+                        Ok(response) => {
+                            let response = response.serialize(&tag);
+                            StatusResponse::completed(if !is_sort {
+                                Command::Search(is_uid)
+                            } else {
+                                Command::Sort(is_uid)
+                            })
+                            .with_tag(tag)
+                            .serialize(response)
+                        }
                         Err(response) => {
                             if let Some(prev_saved_search) = prev_saved_search {
                                 *data.saved_search.lock() = prev_saved_search
@@ -74,7 +84,7 @@ impl Session {
                                         items: s,
                                     });
                             }
-                            response.into_bytes()
+                            response.with_tag(tag).into_bytes()
                         }
                     };
                     data.write_bytes(bytes).await;
@@ -94,9 +104,9 @@ impl SessionData {
         results_tx: Option<watch::Sender<Arc<IdMappings>>>,
         prev_saved_search: Option<Option<Arc<IdMappings>>>,
         is_uid: bool,
-    ) -> Result<(search::Response, String), StatusResponse> {
+    ) -> Result<search::Response, StatusResponse> {
         // Convert IMAP to JMAP query
-        let filter = self
+        let (filter, highest_modseq) = self
             .imap_filter_to_jmap(arguments.filter, mailbox.clone(), prev_saved_search, is_uid)
             .await?;
         let sort = arguments.sort.map(|sort| {
@@ -119,34 +129,44 @@ impl SessionData {
         });
 
         // Build query
-        let mut position = 0;
         let mut jmap_ids = Vec::new();
         let mut total;
-        loop {
-            let mut request = self.client.build();
-            let query_request = request
-                .query_email()
-                .filter(filter.clone())
-                .calculate_total(true)
-                .position(position);
-            if let Some(sort) = &sort {
-                query_request.sort(sort.clone());
+        match filter {
+            Filter::FilterCondition(email::query::Filter::Id { value })
+                if highest_modseq.is_some() && sort.is_none() =>
+            {
+                total = value.len();
+                jmap_ids = value;
             }
-            let mut response = match request.send_query_email().await {
-                Ok(response) => response,
-                Err(err) => return Err(err.into_status_response(arguments.tag.into())),
-            };
-            total = response.total().unwrap_or(0);
-            let response = response.take_ids();
-            let response_len = response.len();
-            if response_len > 0 {
-                jmap_ids.extend(response);
-                if jmap_ids.len() < total {
-                    position += response_len as i32;
-                    continue;
+            filter => {
+                let mut position = 0;
+                loop {
+                    let mut request = self.client.build();
+                    let query_request = request
+                        .query_email()
+                        .filter(filter.clone())
+                        .calculate_total(true)
+                        .position(position);
+                    if let Some(sort) = &sort {
+                        query_request.sort(sort.clone());
+                    }
+                    let mut response = match request.send_query_email().await {
+                        Ok(response) => response,
+                        Err(err) => return Err(err.into_status_response()),
+                    };
+                    total = response.total().unwrap_or(0);
+                    let response = response.take_ids();
+                    let response_len = response.len();
+                    if response_len > 0 {
+                        jmap_ids.extend(response);
+                        if jmap_ids.len() < total {
+                            position += response_len as i32;
+                            continue;
+                        }
+                    }
+                    break;
                 }
             }
-            break;
         }
 
         // Convert to IMAP ids
@@ -156,7 +176,7 @@ impl SessionData {
             .await
         {
             Ok(ids) => ids,
-            Err(_) => return Err(StatusResponse::database_failure(arguments.tag.into())),
+            Err(_) => return Err(StatusResponse::database_failure()),
         };
 
         // Calculate min and max
@@ -224,36 +244,34 @@ impl SessionData {
         }
 
         // Build response
-        Ok((
-            Response {
-                is_uid,
-                min,
-                max,
-                count: if arguments.result_options.contains(&ResultOption::Count) {
-                    Some(total as u32)
-                } else {
-                    None
-                },
-                ids: if arguments.result_options.is_empty()
-                    || arguments.result_options.contains(&ResultOption::All)
-                {
-                    let mut ids = if is_uid {
-                        ids.uids.clone()
-                    } else {
-                        ids.seqnums.as_ref().unwrap().clone()
-                    };
-                    if sort.is_none() {
-                        ids.sort_unstable();
-                    }
-                    ids
-                } else {
-                    vec![]
-                },
-                is_sort: sort.is_some(),
-                is_esearch: arguments.is_esearch,
+        Ok(Response {
+            is_uid,
+            min,
+            max,
+            count: if arguments.result_options.contains(&ResultOption::Count) {
+                Some(total as u32)
+            } else {
+                None
             },
-            arguments.tag,
-        ))
+            ids: if arguments.result_options.is_empty()
+                || arguments.result_options.contains(&ResultOption::All)
+            {
+                let mut ids = if is_uid {
+                    ids.uids.clone()
+                } else {
+                    ids.seqnums.as_ref().unwrap().clone()
+                };
+                if sort.is_none() {
+                    ids.sort_unstable();
+                }
+                ids
+            } else {
+                vec![]
+            },
+            is_sort: sort.is_some(),
+            is_esearch: arguments.is_esearch,
+            highest_modseq,
+        })
     }
 
     pub async fn imap_filter_to_jmap(
@@ -262,7 +280,7 @@ impl SessionData {
         mailbox: Arc<MailboxData>,
         prev_saved_search: Option<Option<Arc<IdMappings>>>,
         is_uid: bool,
-    ) -> crate::core::Result<query::Filter<email::query::Filter>> {
+    ) -> crate::core::Result<(query::Filter<email::query::Filter>, Option<u32>)> {
         let (imap_filters, mut operator) = match filter {
             search::Filter::Operator(operator, filters) => (filters, operator),
             _ => (vec![filter], query::Operator::And),
@@ -275,6 +293,8 @@ impl SessionData {
         if let Some(mailbox_id) = &mailbox.mailbox_id {
             jmap_filters.push(email::query::Filter::in_mailbox(mailbox_id.clone()).into());
         }
+        let mut seen_modseq = false;
+        let mut highest_modseq = None;
 
         loop {
             while let Some(filter) = imap_filters.next() {
@@ -285,11 +305,7 @@ impl SessionData {
                                 if let Some(prev_saved_search) = prev_saved_search {
                                     prev_saved_search.clone()
                                 } else {
-                                    return Err(StatusResponse::no(
-                                        None,
-                                        None,
-                                        "No saved search found.",
-                                    ));
+                                    return Err(StatusResponse::no("No saved search found."));
                                 }
                             }
                             _ => self
@@ -470,7 +486,57 @@ impl SessionData {
                         operator = new_operator;
                         imap_filters = new_imap_filters.into_iter();
                     }
-                    search::Filter::ModSeq(_) => todo!(),
+                    search::Filter::ModSeq((modseq, _)) => {
+                        if seen_modseq {
+                            return Err(StatusResponse::no(
+                                "Only one MODSEQ parameter per query is allowed.",
+                            ));
+                        }
+                        // Convert MODSEQ to JMAP State
+                        let state = match self
+                            .core
+                            .modseq_to_state(&mailbox.account_id, modseq as u32)
+                            .await
+                        {
+                            Ok(Some(state)) => state,
+                            Ok(None) => {
+                                return Err(StatusResponse::bad(format!(
+                                    "MODSEQ '{}' does not exist.",
+                                    modseq
+                                )));
+                            }
+                            Err(_) => {
+                                return Err(StatusResponse::database_failure());
+                            }
+                        };
+
+                        // Obtain changes since the modseq.
+                        let mut request = self.client.build();
+                        request.changes_email(state).account_id(&mailbox.account_id);
+                        let mut response = request
+                            .send_changes_email()
+                            .await
+                            .map_err(|err| err.into_status_response())?;
+
+                        // Obtain highest modseq
+                        highest_modseq = self
+                            .core
+                            .state_to_modseq(&mailbox.account_id, response.take_new_state())
+                            .await
+                            .map_err(|_| StatusResponse::database_failure())?
+                            .into();
+
+                        seen_modseq = true;
+                        jmap_filters.push(
+                            email::query::Filter::id(
+                                response
+                                    .take_updated()
+                                    .into_iter()
+                                    .chain(response.take_created()),
+                            )
+                            .into(),
+                        );
+                    }
                 }
             }
 
@@ -485,9 +551,12 @@ impl SessionData {
         }
 
         Ok(if jmap_filters.len() == 1 {
-            jmap_filters.pop().unwrap()
+            (jmap_filters.pop().unwrap(), highest_modseq)
         } else {
-            query::Filter::operator(operator, jmap_filters)
+            (
+                query::Filter::operator(operator, jmap_filters),
+                highest_modseq,
+            )
         })
     }
 

@@ -75,6 +75,8 @@ impl Status {
             Ok(Self::Deleted)
         } else if value.eq_ignore_ascii_case(b"size") {
             Ok(Self::Size)
+        } else if value.eq_ignore_ascii_case(b"highestmodseq") {
+            Ok(Self::HighestModSeq)
         } else {
             Err(format!(
                 "Invalid status option '{}'.",

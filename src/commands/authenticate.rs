@@ -6,7 +6,6 @@ use tracing::debug;
 use crate::{
     core::{
         client::{Session, SessionData, State},
-        mailbox::fetch_mailboxes,
         receiver::{self, Request},
         Command, ResponseCode, StatusResponse,
     },
@@ -50,12 +49,9 @@ impl Session {
                                     }
                                     _ => {
                                         self.write_bytes(
-                                            StatusResponse::no(
-                                                args.tag.into(),
-                                                None,
-                                                "Invalid AUTH=PLAIN challenge.",
-                                            )
-                                            .into_bytes(),
+                                            StatusResponse::no("Invalid AUTH=PLAIN challenge.")
+                                                .with_tag(args.tag)
+                                                .into_bytes(),
                                         )
                                         .await
                                     }
@@ -63,12 +59,10 @@ impl Session {
                             }
                             Err(_) => {
                                 self.write_bytes(
-                                    StatusResponse::no(
-                                        args.tag.into(),
-                                        ResponseCode::Parse.into(),
-                                        "Failed to decode challenge.",
-                                    )
-                                    .into_bytes(),
+                                    StatusResponse::no("Failed to decode challenge.")
+                                        .with_tag(args.tag)
+                                        .with_code(ResponseCode::Parse)
+                                        .into_bytes(),
                                 )
                                 .await
                             }
@@ -85,12 +79,10 @@ impl Session {
                 }
                 _ => {
                     self.write_bytes(
-                        StatusResponse::no(
-                            args.tag.into(),
-                            ResponseCode::Cannot.into(),
-                            "Authentication mechanism not supported.",
-                        )
-                        .into_bytes(),
+                        StatusResponse::no("Authentication mechanism not supported.")
+                            .with_tag(args.tag)
+                            .with_code(ResponseCode::Cannot)
+                            .into_bytes(),
                     )
                     .await
                 }
@@ -103,7 +95,9 @@ impl Session {
         match Client::connect(&self.core.jmap_url, credentials).await {
             Ok(client) => {
                 // Fetch mailboxes
-                let mailboxes = fetch_mailboxes(&client, &self.core.folder_shared)
+                let mailboxes = self
+                    .core
+                    .fetch_mailboxes(&client, &self.core.folder_shared)
                     .await
                     .ok_or(())?;
 
@@ -114,8 +108,12 @@ impl Session {
                     .await
                     .is_err()
                 {
-                    self.write_bytes(StatusResponse::database_failure(tag.into()).into_bytes())
-                        .await?;
+                    self.write_bytes(
+                        StatusResponse::database_failure()
+                            .with_tag(tag)
+                            .into_bytes(),
+                    )
+                    .await?;
                     return Err(());
                 }
 
@@ -130,7 +128,9 @@ impl Session {
                     }),
                 };
                 self.write_bytes(
-                    StatusResponse::ok(tag.into(), None, "Authentication successful").into_bytes(),
+                    StatusResponse::ok("Authentication successful")
+                        .with_tag(tag)
+                        .into_bytes(),
                 )
                 .await?;
                 Ok(())
@@ -138,12 +138,10 @@ impl Session {
             Err(err) => {
                 debug!("Failed to connect to {}: {}", self.core.jmap_url, err,);
                 self.write_bytes(
-                    StatusResponse::no(
-                        tag.into(),
-                        ResponseCode::AuthenticationFailed.into(),
-                        "Authentication failed",
-                    )
-                    .into_bytes(),
+                    StatusResponse::no("Authentication failed")
+                        .with_tag(tag)
+                        .with_code(ResponseCode::AuthenticationFailed)
+                        .into_bytes(),
                 )
                 .await?;
 
@@ -155,8 +153,7 @@ impl Session {
                     Ok(())
                 } else {
                     self.write_bytes(
-                        StatusResponse::bye(None, None, "Too many authentication failures")
-                            .into_bytes(),
+                        StatusResponse::bye("Too many authentication failures").into_bytes(),
                     )
                     .await?;
                     debug!(

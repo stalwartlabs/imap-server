@@ -30,7 +30,7 @@ impl SessionData {
         // Refresh mailboxes
         if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
-            return err.into_status_response(arguments.tag.into());
+            return err.into_status_response().with_tag(arguments.tag);
         }
 
         // Validate mailbox
@@ -52,10 +52,10 @@ impl SessionData {
                             break 'outer;
                         } else if mailbox_name.starts_with(&prefix) {
                             return StatusResponse::no(
-                                arguments.tag.into(),
-                                ResponseCode::HasChildren.into(),
                                 "Mailbox has children that need to be deleted first.",
-                            );
+                            )
+                            .with_tag(arguments.tag)
+                            .with_code(ResponseCode::HasChildren);
                         }
                     }
                 }
@@ -63,13 +63,13 @@ impl SessionData {
             if let Some(mailbox_id) = mailbox_id {
                 mailbox_id
             } else {
-                return StatusResponse::no(arguments.tag.into(), None, "Mailbox does not exist.");
+                return StatusResponse::no("Mailbox does not exist.").with_tag(arguments.tag);
             }
         };
 
         // Delete mailbox
         if let Err(err) = self.client.mailbox_destroy(&mailbox_id, true).await {
-            return err.into_status_response(arguments.tag.into());
+            return err.into_status_response().with_tag(arguments.tag);
         }
 
         // Delete UID cache
@@ -89,6 +89,6 @@ impl SessionData {
             }
         }
 
-        StatusResponse::ok(arguments.tag.into(), None, "Mailbox deleted.")
+        StatusResponse::ok("Mailbox deleted.").with_tag(arguments.tag)
     }
 }

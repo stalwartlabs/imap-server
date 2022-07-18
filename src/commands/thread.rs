@@ -18,13 +18,16 @@ use crate::{
 
 impl Session {
     pub async fn handle_thread(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
+        let command = request.command;
         match request.parse_thread() {
             Ok(arguments) => {
-                let (data, mailbox, _) = self.state.mailbox_data();
+                let (data, mailbox) = self.state.mailbox_data();
 
                 tokio::spawn(async move {
                     let bytes = match data.thread(arguments, mailbox, is_uid).await {
-                        Ok((response, tag)) => response.serialize(tag),
+                        Ok((response, tag)) => StatusResponse::completed(command)
+                            .with_tag(tag)
+                            .serialize(response.serialize()),
                         Err(response) => response.into_bytes(),
                     };
                     data.write_bytes(bytes).await;
@@ -44,7 +47,7 @@ impl SessionData {
         is_uid: bool,
     ) -> Result<(Response, String), StatusResponse> {
         // Convert IMAP to JMAP query
-        let filter = self
+        let (filter, _) = self
             .imap_filter_to_jmap(arguments.filter, mailbox.clone(), None, is_uid)
             .await?;
 
@@ -77,7 +80,10 @@ impl SessionData {
             for response in request
                 .send()
                 .await
-                .map_err(|err| err.into_status_response(arguments.tag.to_string().into()))?
+                .map_err(|err| {
+                    err.into_status_response()
+                        .with_tag(arguments.tag.to_string())
+                })?
                 .unwrap_method_responses()
             {
                 match response.unwrap_method_response() {
@@ -101,7 +107,8 @@ impl SessionData {
                     }
                     MethodResponse::Error(err) => {
                         return Err(jmap_client::Error::from(err)
-                            .into_status_response(arguments.tag.into()));
+                            .into_status_response()
+                            .with_tag(arguments.tag));
                     }
                     response => {
                         debug!("Unexpected response: {:?}", response);
@@ -124,7 +131,7 @@ impl SessionData {
             .await
         {
             Ok(ids) => ids,
-            Err(_) => return Err(StatusResponse::database_failure(arguments.tag.into())),
+            Err(_) => return Err(StatusResponse::database_failure().with_tag(arguments.tag)),
         };
 
         // Build response

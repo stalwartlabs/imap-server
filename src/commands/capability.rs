@@ -1,5 +1,5 @@
 use crate::{
-    core::{client::Session, receiver::Request},
+    core::{client::Session, receiver::Request, Command, StatusResponse},
     protocol::{
         authenticate::Mechanism,
         capability::{Capability, Response},
@@ -18,7 +18,11 @@ impl Session {
             capabilities.push(Capability::StartTLS);
             capabilities.push(Capability::LoginDisabled);
         }
-        self.write_bytes(Response { capabilities }.serialize(request.tag))
-            .await
+        self.write_bytes(
+            StatusResponse::completed(Command::Capability)
+                .with_tag(request.tag)
+                .serialize(Response { capabilities }.serialize()),
+        )
+        .await
     }
 }

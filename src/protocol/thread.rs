@@ -1,5 +1,3 @@
-use crate::core::{Command, StatusResponse};
-
 use super::{search::Filter, ImapResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +20,7 @@ pub struct Response {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         buf.extend_from_slice(b"* THREAD ");
         for thread in &self.threads {
@@ -36,7 +34,6 @@ impl ImapResponse for Response {
             buf.push(b')');
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::completed(Command::Thread(self.is_uid), tag).serialize(&mut buf);
         buf
     }
 }
@@ -53,13 +50,10 @@ mod tests {
                     is_uid: true,
                     threads: vec![vec![2, 10, 11], vec![49], vec![1, 3]],
                 }
-                .serialize("ABC".to_string())
+                .serialize()
             )
             .unwrap(),
-            concat!(
-                "* THREAD (2 10 11)(49)(1 3)\r\n",
-                "ABC OK UID THREAD completed\r\n"
-            )
+            concat!("* THREAD (2 10 11)(49)(1 3)\r\n",)
         );
     }
 }

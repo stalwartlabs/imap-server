@@ -25,7 +25,7 @@ pub struct Core {
     pub folder_all: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     // Client Commands - Any State
     Capability,
@@ -144,6 +144,9 @@ pub enum ResponseCode {
     UidValidity,
     Unavailable,
     UnknownCte,
+
+    // CONDSTORE
+    Modified { ids: Vec<u32> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,34 +167,30 @@ pub enum ResponseType {
 }
 
 impl StatusResponse {
-    pub fn bad(
-        tag: Option<String>,
-        code: Option<ResponseCode>,
-        message: impl Into<Cow<'static, str>>,
-    ) -> Self {
+    pub fn bad(message: impl Into<Cow<'static, str>>) -> Self {
         StatusResponse {
-            tag,
-            code,
+            tag: None,
+            code: None,
             message: message.into(),
             rtype: ResponseType::Bad,
         }
     }
 
-    pub fn parse_error(tag: Option<String>, message: impl Into<Cow<'static, str>>) -> Self {
+    pub fn parse_error(message: impl Into<Cow<'static, str>>) -> Self {
         StatusResponse {
-            tag,
+            tag: None,
             code: ResponseCode::Parse.into(),
             message: message.into(),
             rtype: ResponseType::Bad,
         }
     }
 
-    pub fn database_failure(tag: Option<String>) -> Self {
-        StatusResponse::no(tag, ResponseCode::ContactAdmin.into(), "Database failure.")
+    pub fn database_failure() -> Self {
+        StatusResponse::no("Database failure.").with_code(ResponseCode::ContactAdmin)
     }
 
-    pub fn completed(command: Command, tag: String) -> Self {
-        StatusResponse::ok(tag.into(), None, format!("{} completed", command))
+    pub fn completed(command: Command) -> Self {
+        StatusResponse::ok(format!("{} completed", command))
     }
 
     pub fn with_code(mut self, code: ResponseCode) -> Self {
@@ -204,40 +203,28 @@ impl StatusResponse {
         self
     }
 
-    pub fn no(
-        tag: Option<String>,
-        code: Option<ResponseCode>,
-        message: impl Into<Cow<'static, str>>,
-    ) -> Self {
+    pub fn no(message: impl Into<Cow<'static, str>>) -> Self {
         StatusResponse {
-            tag,
-            code,
+            tag: None,
+            code: None,
             message: message.into(),
             rtype: ResponseType::No,
         }
     }
 
-    pub fn ok(
-        tag: Option<String>,
-        code: Option<ResponseCode>,
-        message: impl Into<Cow<'static, str>>,
-    ) -> Self {
+    pub fn ok(message: impl Into<Cow<'static, str>>) -> Self {
         StatusResponse {
-            tag,
-            code,
+            tag: None,
+            code: None,
             message: message.into(),
             rtype: ResponseType::Ok,
         }
     }
 
-    pub fn bye(
-        tag: Option<String>,
-        code: Option<ResponseCode>,
-        message: impl Into<Cow<'static, str>>,
-    ) -> Self {
+    pub fn bye(message: impl Into<Cow<'static, str>>) -> Self {
         StatusResponse {
-            tag,
-            code,
+            tag: None,
+            code: None,
             message: message.into(),
             rtype: ResponseType::Bye,
         }
@@ -245,11 +232,11 @@ impl StatusResponse {
 }
 
 pub trait IntoStatusResponse {
-    fn into_status_response(self, tag: Option<String>) -> StatusResponse;
+    fn into_status_response(self) -> StatusResponse;
 }
 
 impl IntoStatusResponse for jmap_client::Error {
-    fn into_status_response(self, tag: Option<String>) -> StatusResponse {
+    fn into_status_response(self) -> StatusResponse {
         let (code, message) = match self {
             jmap_client::Error::Transport(_) => (
                 ResponseCode::ContactAdmin,
@@ -456,7 +443,7 @@ impl IntoStatusResponse for jmap_client::Error {
             ),
         };
 
-        StatusResponse::no(tag, code.into(), message)
+        StatusResponse::no(message).with_code(code)
     }
 }
 

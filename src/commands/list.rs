@@ -82,7 +82,7 @@ impl SessionData {
         // Refresh mailboxes
         if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
-            self.write_bytes(err.into_status_response(tag.into()).into_bytes())
+            self.write_bytes(err.into_status_response().with_tag(tag).into_bytes())
                 .await;
             return;
         }
@@ -120,12 +120,9 @@ impl SessionData {
         }
         if recursive_match && !filter_subscribed {
             self.write_bytes(
-                StatusResponse::bad(
-                    tag.into(),
-                    None,
-                    "RECURSIVEMATCH cannot be the only selection option.",
-                )
-                .into_bytes(),
+                StatusResponse::bad("RECURSIVEMATCH cannot be the only selection option.")
+                    .with_tag(tag)
+                    .into_bytes(),
             )
             .await;
             return;
@@ -249,13 +246,21 @@ impl SessionData {
 
         // Write response
         self.write_bytes(
-            list::Response {
-                is_rev2: version.is_rev2(),
-                is_lsub,
-                list_items,
-                status_items,
-            }
-            .serialize(tag),
+            StatusResponse::completed(if !is_lsub {
+                Command::List
+            } else {
+                Command::Lsub
+            })
+            .with_tag(tag)
+            .serialize(
+                list::Response {
+                    is_rev2: version.is_rev2(),
+                    is_lsub,
+                    list_items,
+                    status_items,
+                }
+                .serialize(),
+            ),
         )
         .await;
     }

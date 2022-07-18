@@ -1,5 +1,3 @@
-use crate::core::{Command, StatusResponse};
-
 use super::{authenticate::Mechanism, ImapResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,7 +11,8 @@ pub enum Capability {
     IMAP4rev1,
     StartTLS,
     LoginDisabled,
-    Condstore,
+    CondStore,
+    QResync,
     Auth(Mechanism),
 }
 
@@ -32,8 +31,11 @@ impl Capability {
             Capability::LoginDisabled => {
                 buf.extend_from_slice(b"LOGINDISABLED");
             }
-            Capability::Condstore => {
+            Capability::CondStore => {
                 buf.extend_from_slice(b"CONDSTORE");
+            }
+            Capability::QResync => {
+                buf.extend_from_slice(b"QRESYNC");
             }
             Capability::Auth(mechanism) => {
                 buf.extend_from_slice(b"AUTH=");
@@ -44,7 +46,7 @@ impl Capability {
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
         buf.extend_from_slice(b"* CAPABILITY");
         for capability in self.capabilities.iter() {
@@ -52,7 +54,6 @@ impl ImapResponse for Response {
             capability.serialize(&mut buf);
         }
         buf.extend_from_slice(b"\r\n");
-        StatusResponse::completed(Command::Capability, tag).serialize(&mut buf);
         buf
     }
 }
@@ -74,12 +75,8 @@ mod tests {
                     Capability::LoginDisabled
                 ],
             }
-            .serialize("a003".to_string()),
-            concat!(
-                "* CAPABILITY IMAP4rev2 STARTTLS LOGINDISABLED\r\n",
-                "a003 OK CAPABILITY completed\r\n"
-            )
-            .as_bytes()
+            .serialize(),
+            concat!("* CAPABILITY IMAP4rev2 STARTTLS LOGINDISABLED\r\n",).as_bytes()
         );
     }
 }

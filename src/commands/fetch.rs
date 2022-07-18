@@ -7,14 +7,17 @@ use tracing::debug;
 use crate::{
     core::{
         client::{Session, SessionData},
-        message::MailboxData,
+        message::{IdMappings, MailboxData},
         receiver::Request,
         Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     parser::PushUnique,
-    protocol::fetch::{
-        self, Arguments, Attribute, BodyContents, BodyPart, BodyPartExtension, BodyPartFields,
-        DataItem, Envelope, FetchItem, Section,
+    protocol::{
+        expunge::Vanished,
+        fetch::{
+            self, Arguments, Attribute, BodyContents, BodyPart, BodyPartExtension, BodyPartFields,
+            DataItem, Envelope, FetchItem, Section,
+        },
     },
 };
 
@@ -22,11 +25,15 @@ impl Session {
     pub async fn handle_fetch(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
         match request.parse_fetch() {
             Ok(arguments) => {
-                let (data, mailbox, _) = self.state.mailbox_data();
-
+                let (data, mailbox) = self.state.mailbox_data();
+                let is_qresync = self.is_qresync;
                 tokio::spawn(async move {
-                    data.write_bytes(data.fetch(arguments, mailbox, is_uid).await.into_bytes())
-                        .await;
+                    data.write_bytes(
+                        data.fetch(arguments, mailbox, is_uid, is_qresync)
+                            .await
+                            .into_bytes(),
+                    )
+                    .await;
                 });
                 Ok(())
             }
@@ -38,12 +45,13 @@ impl Session {
 impl SessionData {
     pub async fn fetch(
         &self,
-        arguments: Arguments,
+        mut arguments: Arguments,
         mailbox: Arc<MailboxData>,
         is_uid: bool,
+        is_qresync: bool,
     ) -> StatusResponse {
         // Convert IMAP ids to JMAP ids.
-        let ids = match self
+        let mut ids = match self
             .imap_sequence_to_jmap(mailbox.clone(), arguments.sequence_set, is_uid)
             .await
         {
@@ -51,7 +59,8 @@ impl SessionData {
                 if !ids.jmap_ids.is_empty() {
                     ids
                 } else {
-                    return StatusResponse::completed(Command::Fetch(is_uid), arguments.tag);
+                    return StatusResponse::completed(Command::Fetch(is_uid))
+                        .with_tag(arguments.tag);
                 }
             }
             Err(response) => {
@@ -59,10 +68,127 @@ impl SessionData {
             }
         };
 
+        // Validate VANISHED parameter
+        if arguments.include_vanished {
+            if !is_qresync {
+                return StatusResponse::bad("Enable QRESYNC first to use the VANISHED parameter.")
+                    .with_tag(arguments.tag);
+            } else if !is_uid {
+                return StatusResponse::bad("VANISHED parameter is only available for UID FETCH.")
+                    .with_tag(arguments.tag);
+            }
+        }
+
+        // Convert state to modseq
+        if let Some(changed_since) = arguments.changed_since {
+            // Convert MODSEQ to JMAP State
+            let state = match self
+                .core
+                .modseq_to_state(&mailbox.account_id, changed_since as u32)
+                .await
+            {
+                Ok(Some(state)) => state,
+                Ok(None) => {
+                    return StatusResponse::bad(format!(
+                        "MODSEQ '{}' does not exist.",
+                        changed_since
+                    ))
+                    .with_tag(arguments.tag);
+                }
+                Err(_) => return StatusResponse::database_failure().with_tag(arguments.tag),
+            };
+
+            // Obtain changes since the modseq.
+            let mut request = self.client.build();
+            request.changes_email(state).account_id(&mailbox.account_id);
+            match request.send_changes_email().await {
+                Ok(mut changes) => {
+                    // Send vanished UIDs
+                    if arguments.include_vanished && !changes.destroyed().is_empty() {
+                        let destroyed_ids = changes
+                            .take_destroyed()
+                            .into_iter()
+                            .filter_map(|jmap_id| {
+                                if ids.jmap_ids.contains(&jmap_id) {
+                                    Some(jmap_id)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>();
+                        if !destroyed_ids.is_empty() {
+                            let mut vanished = self
+                                .core
+                                .jmap_deletions_to_imap(mailbox.clone(), destroyed_ids)
+                                .await
+                                .unwrap_or_default();
+                            if !vanished.is_empty() {
+                                vanished.sort_unstable();
+                                let mut buf = Vec::with_capacity(vanished.len() * 2);
+                                Vanished {
+                                    earlier: true,
+                                    ids: vanished,
+                                }
+                                .serialize(&mut buf);
+                            }
+                        }
+                    }
+
+                    // Filter out ids without changes
+                    if changes.created().is_empty() && changes.updated().is_empty() {
+                        return StatusResponse::completed(Command::Fetch(is_uid))
+                            .with_tag(arguments.tag);
+                    }
+                    let mut changed_ids =
+                        Vec::with_capacity(changes.created().len() + changes.updated().len());
+                    let mut changed_uids =
+                        Vec::with_capacity(changes.created().len() + changes.updated().len());
+                    let mut changed_seqnums = if !is_uid {
+                        Vec::with_capacity(changes.created().len() + changes.updated().len()).into()
+                    } else {
+                        None
+                    };
+                    for jmap_id in changes
+                        .take_created()
+                        .into_iter()
+                        .chain(changes.take_updated())
+                    {
+                        if let Some(pos) = ids.jmap_ids.iter().position(|id| id == &jmap_id) {
+                            changed_ids.push(jmap_id);
+                            changed_uids.push(ids.uids[pos]);
+                            if let (Some(seqnums), Some(changed_seqnums)) =
+                                (&ids.seqnums, &mut changed_seqnums)
+                            {
+                                changed_seqnums.push(seqnums[pos]);
+                            }
+                        }
+                    }
+                    if changed_ids.is_empty() {
+                        return StatusResponse::completed(Command::Fetch(is_uid))
+                            .with_tag(arguments.tag);
+                    }
+                    if changed_ids.len() != ids.jmap_ids.len() {
+                        ids = Arc::new(IdMappings {
+                            jmap_ids: changed_ids,
+                            uids: changed_uids,
+                            seqnums: changed_seqnums,
+                        });
+                    }
+                }
+                Err(err) => {
+                    return err.into_status_response().with_tag(arguments.tag);
+                }
+            }
+
+            arguments.attributes.push_unique(Attribute::ModSeq);
+        }
+
         // Build properties list
         let mut properties = Vec::with_capacity(arguments.attributes.len());
         let mut set_seen_flags = false;
         let mut needs_blobs = false;
+        let mut needs_modseq = false;
+
         for attribute in &arguments.attributes {
             match attribute {
                 Attribute::Envelope => {
@@ -116,7 +242,10 @@ impl SessionData {
                     needs_blobs = true;
                     properties.push_unique(Property::BlobId);
                 }
-                Attribute::Uid | Attribute::ModSeq => (),
+                Attribute::Uid => (),
+                Attribute::ModSeq => {
+                    needs_modseq = true;
+                }
             }
         }
         if set_seen_flags {
@@ -142,8 +271,18 @@ impl SessionData {
             let mut response = match request.send_get_email().await {
                 Ok(response) => response,
                 Err(response) => {
-                    return response.into_status_response(arguments.tag.into());
+                    return response.into_status_response().with_tag(arguments.tag);
                 }
+            };
+
+            // Obtain modseq
+            let modseq = if needs_modseq {
+                self.core
+                    .state_to_modseq(&mailbox.account_id, response.take_state())
+                    .await
+                    .unwrap_or(u32::MAX)
+            } else {
+                u32::MAX
             };
 
             // Process each message
@@ -362,23 +501,20 @@ impl SessionData {
                             }
                             Err(_) => {
                                 self.write_bytes(
-                                    StatusResponse::no(
-                                        None,
-                                        ResponseCode::UnknownCte.into(),
-                                        format!(
-                                            "Failed to decode part {} of message {}.",
-                                            sections
-                                                .iter()
-                                                .map(|s| s.to_string())
-                                                .collect::<Vec<_>>()
-                                                .join("."),
-                                            if is_uid {
-                                                ids.uids[id_pos]
-                                            } else {
-                                                ids.seqnums.as_ref().unwrap()[id_pos]
-                                            }
-                                        ),
-                                    )
+                                    StatusResponse::no(format!(
+                                        "Failed to decode part {} of message {}.",
+                                        sections
+                                            .iter()
+                                            .map(|s| s.to_string())
+                                            .collect::<Vec<_>>()
+                                            .join("."),
+                                        if is_uid {
+                                            ids.uids[id_pos]
+                                        } else {
+                                            ids.seqnums.as_ref().unwrap()[id_pos]
+                                        }
+                                    ))
+                                    .with_code(ResponseCode::UnknownCte)
                                     .into_bytes(),
                                 )
                                 .await;
@@ -394,7 +530,11 @@ impl SessionData {
                                 });
                             }
                         }
-                        Attribute::ModSeq => todo!(),
+                        Attribute::ModSeq => {
+                            if modseq != u32::MAX {
+                                items.push(DataItem::ModSeq { modseq });
+                            }
+                        }
                     }
                 }
 
@@ -421,7 +561,8 @@ impl SessionData {
                 let mut buf = Vec::with_capacity(128);
                 fetch_item.serialize(&mut buf);
                 if !self.write_bytes(buf).await {
-                    return StatusResponse::completed(Command::Fetch(is_uid), arguments.tag);
+                    return StatusResponse::completed(Command::Fetch(is_uid))
+                        .with_tag(arguments.tag);
                 }
 
                 // Add to set flags
@@ -455,18 +596,18 @@ impl SessionData {
                     for response in responses.unwrap_method_responses() {
                         if let Err(err) = response.unwrap_set_email() {
                             debug!("Failed to set Seen flags: {}", err);
-                            return err.into_status_response(arguments.tag.into());
+                            return err.into_status_response().with_tag(arguments.tag);
                         }
                     }
                 }
                 Err(err) => {
                     debug!("Failed to set Seen flags: {}", err);
-                    return err.into_status_response(arguments.tag.into());
+                    return err.into_status_response().with_tag(arguments.tag);
                 }
             }
         }
 
-        StatusResponse::completed(Command::Fetch(is_uid), arguments.tag)
+        StatusResponse::completed(Command::Fetch(is_uid)).with_tag(arguments.tag)
     }
 }
 
@@ -1214,10 +1355,8 @@ mod tests {
                                         Ok(None) => (),
                                         Err(_) => {
                                             buf.push(b'\n');
-                                            StatusResponse::no(
-                                                None,
-                                                ResponseCode::UnknownCte.into(),
-                                                format!(
+                                            buf.extend_from_slice(
+                                                &StatusResponse::no(format!(
                                                     "Failed to decode part {} of message {}.",
                                                     sections
                                                         .iter()
@@ -1225,9 +1364,10 @@ mod tests {
                                                         .collect::<Vec<_>>()
                                                         .join("."),
                                                     0
-                                                ),
-                                            )
-                                            .serialize(&mut buf);
+                                                ))
+                                                .with_code(ResponseCode::UnknownCte)
+                                                .serialize(Vec::new()),
+                                            );
                                         }
                                     }
 

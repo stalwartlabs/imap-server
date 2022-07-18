@@ -40,7 +40,7 @@ impl SessionData {
         // Refresh mailboxes
         if let Err(err) = self.synchronize_mailboxes(false).await {
             debug!("Failed to refresh mailboxes: {}", err);
-            return err.into_status_response(tag.into());
+            return err.into_status_response().with_tag(tag);
         }
 
         // Validate mailbox
@@ -49,25 +49,21 @@ impl SessionData {
                 if let Some(mailbox_id) = mailbox.mailbox_id {
                     (mailbox.account_id, mailbox_id)
                 } else {
-                    return StatusResponse::no(
-                        tag.into(),
-                        ResponseCode::Cannot.into(),
-                        "Subscribing to this mailbox is not supported.",
-                    );
+                    return StatusResponse::no("Subscribing to this mailbox is not supported.")
+                        .with_tag(tag)
+                        .with_code(ResponseCode::Cannot);
                 }
             }
             None => {
-                return StatusResponse::no(
-                    tag.into(),
-                    ResponseCode::NonExistent.into(),
-                    "Mailbox does not exist.",
-                );
+                return StatusResponse::no("Mailbox does not exist.")
+                    .with_tag(tag)
+                    .with_code(ResponseCode::NonExistent);
             }
         };
 
         // [Un]subscribe mailbox
         if let Err(err) = self.client.mailbox_subscribe(&mailbox_id, subscribe).await {
-            return err.into_status_response(tag.into());
+            return err.into_status_response().with_tag(tag);
         }
 
         // Update mailbox cache
@@ -80,14 +76,11 @@ impl SessionData {
             }
         }
 
-        StatusResponse::ok(
-            tag.into(),
-            None,
-            if subscribe {
-                "Mailbox subscribed."
-            } else {
-                "Mailbox unsubscribed."
-            },
-        )
+        StatusResponse::ok(if subscribe {
+            "Mailbox subscribed."
+        } else {
+            "Mailbox unsubscribed."
+        })
+        .with_tag(tag)
     }
 }

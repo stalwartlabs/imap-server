@@ -41,12 +41,10 @@ impl Session {
                 debug!("Error starting event source: {}", err);
                 return self
                     .write_bytes(
-                        StatusResponse::no(
-                            request.tag.into(),
-                            ResponseCode::ContactAdmin.into(),
-                            "It was not possible to start IDLE.",
-                        )
-                        .into_bytes(),
+                        StatusResponse::no("It was not possible to start IDLE.")
+                            .with_tag(request.tag)
+                            .with_code(ResponseCode::ContactAdmin)
+                            .into_bytes(),
                     )
                     .await;
             }
@@ -83,7 +81,7 @@ impl SessionData {
                 changes = changes.next() => {
                     match changes {
                         Some(Ok(changes)) => {
-                            self.handle_changes(&mailbox.clone(), changes, is_rev2).await;
+                            self.write_changes(mailbox.as_ref(), changes.has_type(TypeState::Mailbox), changes.has_type(TypeState::Email), is_rev2).await;
                         },
                         Some(Err(err)) => {
                             debug!("EventSource error: {}", err);
@@ -95,7 +93,7 @@ impl SessionData {
                     }
                 },
                 _ = idle_rx.changed() => {
-                    self.write_bytes(StatusResponse::completed(Command::Idle, tag).into_bytes())
+                    self.write_bytes(StatusResponse::completed(Command::Idle).with_tag(tag).into_bytes())
                         .await;
                     return;
                 }
@@ -105,20 +103,25 @@ impl SessionData {
         // Connection was unexpectedly closed.
         // TODO: Try reconnecting.
         idle_rx.changed().await.ok();
-        self.write_bytes(StatusResponse::completed(Command::Idle, tag).into_bytes())
-            .await;
+        self.write_bytes(
+            StatusResponse::completed(Command::Idle)
+                .with_tag(tag)
+                .into_bytes(),
+        )
+        .await;
     }
 
-    async fn handle_changes(
+    pub async fn write_changes(
         &self,
-        mailbox: &Option<Arc<MailboxData>>,
-        changes: Changes,
+        mailbox: Option<&Arc<MailboxData>>,
+        check_mailboxes: bool,
+        check_emails: bool,
         is_rev2: bool,
     ) {
         let mut buf = Vec::with_capacity(64);
 
         // Fetch all changed mailboxes
-        if changes.has_type(TypeState::Mailbox) {
+        if check_mailboxes {
             match self.synchronize_mailboxes(true).await {
                 Ok(Some(changes)) => {
                     // List deleted mailboxes
@@ -168,7 +171,7 @@ impl SessionData {
 
         // Fetch selected mailbox changes
         match mailbox {
-            Some(mailbox) if changes.has_type(TypeState::Email) => {
+            Some(mailbox) if check_emails => {
                 if let Ok(mailbox_status) = self.synchronize_messages(mailbox.clone(), true).await {
                     if mailbox_status.added_messages || !mailbox_status.deleted_messages.is_empty()
                     {

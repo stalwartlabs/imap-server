@@ -1,14 +1,24 @@
-use crate::core::{Command, ResponseCode, StatusResponse};
+use crate::core::{ResponseCode, StatusResponse};
 
-use super::{list::ListItem, ImapResponse};
+use super::{list::ListItem, ImapResponse, Sequence};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
     pub tag: String,
     pub mailbox_name: String,
     pub condstore: bool,
+    pub qresync: Option<QResync>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QResync {
+    pub uid_validity: u32,
+    pub modseq: u64,
+    pub known_uids: Option<Sequence>,
+    pub seq_match: Option<(Sequence, Sequence)>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Response {
     pub mailbox: ListItem,
     pub total_messages: usize,
@@ -16,19 +26,18 @@ pub struct Response {
     pub unseen_seq: u32,
     pub uid_validity: u32,
     pub uid_next: u32,
-    pub is_read_only: bool,
-    pub is_examine: bool,
     pub is_rev2: bool,
     pub closed_previous: bool,
-    pub highest_modseq: u64,
+    pub highest_modseq: Option<u32>,
 }
 
 impl ImapResponse for Response {
-    fn serialize(&self, tag: String) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
         if self.closed_previous {
-            StatusResponse::ok(None, ResponseCode::Closed.into(), "Closed previous mailbox")
-                .serialize(&mut buf);
+            buf = StatusResponse::ok("Closed previous mailbox")
+                .with_code(ResponseCode::Closed)
+                .serialize(buf);
         }
         buf.extend_from_slice(b"* ");
         buf.extend_from_slice(self.total_messages.to_string().as_bytes());
@@ -54,24 +63,12 @@ impl ImapResponse for Response {
         buf.extend_from_slice(self.uid_validity.to_string().as_bytes());
         buf.extend_from_slice(b"]\r\n* OK [UIDNEXT ");
         buf.extend_from_slice(self.uid_next.to_string().as_bytes());
-        buf.extend_from_slice(b"]\r\n* OK [HIGHESTMODSEQ ");
-        buf.extend_from_slice(self.highest_modseq.to_string().as_bytes());
         buf.extend_from_slice(b"]\r\n");
-
-        StatusResponse::completed(
-            if !self.is_examine {
-                Command::Select
-            } else {
-                Command::Examine
-            },
-            tag,
-        )
-        .with_code(if !self.is_read_only {
-            ResponseCode::ReadWrite
-        } else {
-            ResponseCode::ReadOnly
-        })
-        .serialize(&mut buf);
+        if let Some(highest_modseq) = self.highest_modseq {
+            buf.extend_from_slice(b"* OK [HIGHESTMODSEQ ");
+            buf.extend_from_slice(highest_modseq.to_string().as_bytes());
+            buf.extend_from_slice(b"]\r\n");
+        }
         buf
     }
 }
@@ -82,7 +79,7 @@ mod tests {
 
     #[test]
     fn serialize_select() {
-        for (mut response, tag, expected_v2, expected_v1) in [
+        for (mut response, _tag, expected_v2, expected_v1) in [
             (
                 super::Response {
                     mailbox: ListItem::new("INBOX"),
@@ -91,11 +88,9 @@ mod tests {
                     unseen_seq: 3,
                     uid_validity: 3857529045,
                     uid_next: 4392,
-                    is_read_only: false,
-                    is_examine: false,
                     closed_previous: false,
                     is_rev2: true,
-                    highest_modseq: 100,
+                    highest_modseq: 100.into(),
                 },
                 "A142",
                 concat!(
@@ -106,7 +101,6 @@ mod tests {
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
                     "* OK [HIGHESTMODSEQ 100]\r\n",
-                    "A142 OK [READ-WRITE] SELECT completed\r\n"
                 ),
                 concat!(
                     "* 172 EXISTS\r\n",
@@ -117,7 +111,6 @@ mod tests {
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
                     "* OK [HIGHESTMODSEQ 100]\r\n",
-                    "A142 OK [READ-WRITE] SELECT completed\r\n"
                 ),
             ),
             (
@@ -128,11 +121,9 @@ mod tests {
                     unseen_seq: 3,
                     uid_validity: 3857529045,
                     uid_next: 4392,
-                    is_read_only: true,
-                    is_examine: false,
                     closed_previous: true,
                     is_rev2: true,
-                    highest_modseq: 123,
+                    highest_modseq: None,
                 },
                 "A142",
                 concat!(
@@ -144,8 +135,6 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
-                    "* OK [HIGHESTMODSEQ 123]\r\n",
-                    "A142 OK [READ-ONLY] SELECT completed\r\n"
                 ),
                 concat!(
                     "* OK [CLOSED] Closed previous mailbox\r\n",
@@ -156,14 +145,12 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
-                    "* OK [HIGHESTMODSEQ 123]\r\n",
-                    "A142 OK [READ-ONLY] SELECT completed\r\n"
                 ),
             ),
         ] {
-            let response_v2 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            let response_v2 = String::from_utf8(response.clone().serialize()).unwrap();
             response.is_rev2 = false;
-            let response_v1 = String::from_utf8(response.serialize(tag.to_string())).unwrap();
+            let response_v1 = String::from_utf8(response.serialize()).unwrap();
 
             assert_eq!(response_v2, expected_v2);
             assert_eq!(response_v1, expected_v1);

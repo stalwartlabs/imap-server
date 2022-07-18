@@ -8,7 +8,7 @@ use crate::{
     protocol::store::{self, Operation},
 };
 
-use super::{parse_long_integer, parse_sequence_set};
+use super::{parse_number, parse_sequence_set};
 
 impl Request {
     pub fn parse_store(self) -> crate::core::Result<store::Arguments> {
@@ -30,7 +30,7 @@ impl Request {
             while let Some(token) = tokens.next() {
                 match token {
                     Token::Argument(param) if param.eq_ignore_ascii_case(b"UNCHANGEDSINCE") => {
-                        unchanged_since = parse_long_integer(
+                        unchanged_since = parse_number::<u64>(
                             &tokens
                                 .next()
                                 .ok_or((self.tag.as_str(), "Missing UNCHANGEDSINCE parameter."))?

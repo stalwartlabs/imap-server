@@ -15,18 +15,21 @@ impl Session {
                         Capability::IMAP4rev1 => {
                             self.version = ProtocolVersion::Rev1;
                         }
+                        Capability::CondStore => {
+                            self.is_condstore = true;
+                        }
+                        Capability::QResync => {
+                            self.is_qresync = true;
+                        }
                         _ => {
                             let mut buf = Vec::with_capacity(10);
                             capability.serialize(&mut buf);
                             self.write_bytes(
-                                StatusResponse::ok(
-                                    arguments.tag.into(),
-                                    None,
-                                    format!(
-                                        "{} cannot be enabled.",
-                                        String::from_utf8(buf).unwrap()
-                                    ),
-                                )
+                                StatusResponse::ok(format!(
+                                    "{} cannot be enabled.",
+                                    String::from_utf8(buf).unwrap()
+                                ))
+                                .with_tag(arguments.tag)
                                 .into_bytes(),
                             )
                             .await?;
@@ -36,7 +39,8 @@ impl Session {
                 }
 
                 self.write_bytes(
-                    StatusResponse::ok(arguments.tag.into(), None, "ENABLE successful.")
+                    StatusResponse::ok("ENABLE successful.")
+                        .with_tag(arguments.tag)
                         .into_bytes(),
                 )
                 .await

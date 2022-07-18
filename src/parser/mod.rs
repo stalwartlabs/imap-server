@@ -17,7 +17,7 @@ pub mod store;
 pub mod subscribe;
 pub mod thread;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 
 use chrono::{DateTime, NaiveDate};
 
@@ -170,18 +170,12 @@ pub fn parse_date(value: &[u8]) -> Result<i64> {
         .map(|dt| dt.and_hms(0, 0, 0).timestamp())
 }
 
-pub fn parse_integer(value: &[u8]) -> Result<u32> {
-    std::str::from_utf8(value)
-        .map_err(|_| Cow::from("Expected an integer, found an invalid UTF-8 string."))?
-        .parse::<u32>()
-        .map_err(|_| Cow::from("Failed to parse integer."))
-}
-
-pub fn parse_long_integer(value: &[u8]) -> Result<u64> {
-    std::str::from_utf8(value)
-        .map_err(|_| Cow::from("Expected an integer, found an invalid UTF-8 string."))?
-        .parse::<u64>()
-        .map_err(|_| Cow::from("Failed to parse integer."))
+pub fn parse_number<T: FromStr>(value: &[u8]) -> Result<T> {
+    let string = std::str::from_utf8(value)
+        .map_err(|_| Cow::from("Expected a number, found an invalid UTF-8 string."))?;
+    string
+        .parse::<T>()
+        .map_err(|_| Cow::from(format!("Expected a number, found {:?}.", string)))
 }
 
 pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
@@ -201,7 +195,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                 if !is_range {
                     if let Some(from_pos) = token_start {
                         range_start =
-                            parse_integer(value.get(from_pos..pos).ok_or_else(|| {
+                            parse_number::<u32>(value.get(from_pos..pos).ok_or_else(|| {
                                 Cow::from("Expected sequence set, parse error.")
                             })?)?
                             .into();
@@ -222,7 +216,12 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
             }
             b'*' => {
                 if !has_wildcard {
-                    if token_start.is_none() {
+                    if value.len() == 1 {
+                        return Ok(Sequence::Range {
+                            start: None,
+                            end: None,
+                        });
+                    } else if token_start.is_none() {
                         has_wildcard = true;
                     } else {
                         return Err(Cow::from("Invalid sequence set, invalid use of '*'."));
@@ -265,7 +264,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                         if !add_token {
                             pos += 1;
                         }
-                        parse_integer(
+                        parse_number::<u32>(
                             value
                                 .get(
                                     token_start.ok_or_else(|| {
@@ -287,7 +286,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                     pos += 1;
                 }
                 sequence_set.push(Sequence::Number {
-                    value: parse_integer(
+                    value: parse_number(
                         value
                             .get(
                                 token_start.ok_or_else(|| {
@@ -331,6 +330,13 @@ mod tests {
     fn parse_sequence_set() {
         for (sequence, expected_result) in [
             ("$", Sequence::SavedSearch),
+            (
+                "*",
+                Sequence::Range {
+                    start: None,
+                    end: None,
+                },
+            ),
             (
                 "1,3000:3021",
                 Sequence::List {

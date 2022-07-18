@@ -9,7 +9,11 @@ impl Session {
         self.state = State::Authenticated {
             data: self.state.session_data(),
         };
-        self.write_bytes(StatusResponse::completed(Command::Unselect, request.tag).into_bytes())
-            .await
+        self.write_bytes(
+            StatusResponse::completed(Command::Unselect)
+                .with_tag(request.tag)
+                .into_bytes(),
+        )
+        .await
     }
 }

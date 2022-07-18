@@ -21,7 +21,7 @@ impl Session {
     ) -> Result<(), ()> {
         match request.parse_copy_move() {
             Ok(arguments) => {
-                let (data, src_mailbox, _) = self.state.mailbox_data();
+                let (data, src_mailbox) = self.state.mailbox_data();
 
                 // Make sure the mailbox exists.
                 let dest_mailbox =
@@ -32,10 +32,10 @@ impl Session {
                             return self
                                 .write_bytes(
                                     StatusResponse::no(
-                                        arguments.tag.into(),
-                                        ResponseCode::NoPerm.into(),
                                         "Appending messages to this mailbox is not allowed.",
                                     )
+                                    .with_tag(arguments.tag)
+                                    .with_code(ResponseCode::NoPerm)
                                     .into_bytes(),
                                 )
                                 .await;
@@ -43,12 +43,10 @@ impl Session {
                     } else {
                         return self
                             .write_bytes(
-                                StatusResponse::no(
-                                    arguments.tag.into(),
-                                    ResponseCode::TryCreate.into(),
-                                    "Destination mailbox does not exist.",
-                                )
-                                .into_bytes(),
+                                StatusResponse::no("Destination mailbox does not exist.")
+                                    .with_tag(arguments.tag)
+                                    .with_code(ResponseCode::TryCreate)
+                                    .into_bytes(),
                             )
                             .await;
                     };
@@ -59,12 +57,10 @@ impl Session {
                 {
                     return self
                         .write_bytes(
-                            StatusResponse::no(
-                                arguments.tag.into(),
-                                ResponseCode::Cannot.into(),
-                                "Source and destination mailboxes are the same.",
-                            )
-                            .into_bytes(),
+                            StatusResponse::no("Source and destination mailboxes are the same.")
+                                .with_tag(arguments.tag)
+                                .with_code(ResponseCode::Cannot)
+                                .into_bytes(),
                         )
                         .await;
                 }
@@ -93,6 +89,11 @@ impl SessionData {
         is_move: bool,
         is_uid: bool,
     ) -> Result<(), StatusResponse> {
+        let response = StatusResponse::completed(if is_move {
+            Command::Move(is_uid)
+        } else {
+            Command::Copy(is_uid)
+        });
         // Convert IMAP ids to JMAP ids.
         let ids = match self
             .imap_sequence_to_jmap(src_mailbox.clone(), arguments.sequence_set, is_uid)
@@ -100,14 +101,7 @@ impl SessionData {
         {
             Ok(ids) => {
                 if ids.uids.is_empty() {
-                    return Err(StatusResponse::completed(
-                        if is_move {
-                            Command::Move(is_uid)
-                        } else {
-                            Command::Copy(is_uid)
-                        },
-                        arguments.tag,
-                    ));
+                    return Err(response.with_tag(arguments.tag));
                 }
                 ids
             }
@@ -142,12 +136,18 @@ impl SessionData {
             for response in request
                 .send()
                 .await
-                .map_err(|err| err.into_status_response(arguments.tag.to_string().into()))?
+                .map_err(|err| {
+                    err.into_status_response()
+                        .with_tag(arguments.tag.to_string())
+                })?
                 .unwrap_method_responses()
             {
                 if let Some(updated_ids) = response
                     .unwrap_set_email()
-                    .map_err(|err| err.into_status_response(arguments.tag.to_string().into()))?
+                    .map_err(|err| {
+                        err.into_status_response()
+                            .with_tag(arguments.tag.to_string())
+                    })?
                     .take_updated_ids()
                 {
                     copied_ids.extend(updated_ids);
@@ -173,7 +173,10 @@ impl SessionData {
             for response in request
                 .send()
                 .await
-                .map_err(|err| err.into_status_response(arguments.tag.to_string().into()))?
+                .map_err(|err| {
+                    err.into_status_response()
+                        .with_tag(arguments.tag.to_string())
+                })?
                 .unwrap_method_responses()
             {
                 match response.unwrap_method_response() {
@@ -184,7 +187,8 @@ impl SessionData {
                     }
                     MethodResponse::Error(err) => {
                         return Err(jmap_client::Error::from(err)
-                            .into_status_response(arguments.tag.into()));
+                            .into_status_response()
+                            .with_tag(arguments.tag));
                     }
                     _ => (),
                 }
@@ -192,33 +196,32 @@ impl SessionData {
             copied_ids
         };
 
-        let ids = self
+        let mut ids = self
             .core
             .jmap_to_imap(dest_mailbox.clone(), copied_ids, true, true)
             .await
-            .map_err(|_| StatusResponse::database_failure(arguments.tag.to_string().into()))?;
-        let (uid_validity, _) = self
-            .core
-            .uids(dest_mailbox)
-            .await
-            .map_err(|_| StatusResponse::database_failure(arguments.tag.to_string().into()))?;
+            .map_err(|_| StatusResponse::database_failure().with_tag(arguments.tag.to_string()))?;
+        let (uid_validity, _) =
+            self.core.uids(dest_mailbox).await.map_err(|_| {
+                StatusResponse::database_failure().with_tag(arguments.tag.to_string())
+            })?;
+        ids.uids.sort_unstable();
         let uid_copy = ResponseCode::CopyUid {
             uid_validity,
             uids: ids.uids,
         };
 
-        if is_move {
-            let mut buf = StatusResponse::ok(None, uid_copy.into(), "").into_bytes();
-            StatusResponse::completed(Command::Move(is_uid), arguments.tag).serialize(&mut buf);
-            self.write_bytes(buf).await;
+        self.write_bytes(if is_move {
+            response
+                .with_tag(arguments.tag)
+                .serialize(StatusResponse::ok("").with_code(uid_copy).into_bytes())
         } else {
-            self.write_bytes(
-                StatusResponse::completed(Command::Copy(is_uid), arguments.tag)
-                    .with_code(uid_copy)
-                    .into_bytes(),
-            )
-            .await;
-        }
+            response
+                .with_tag(arguments.tag)
+                .with_code(uid_copy)
+                .into_bytes()
+        })
+        .await;
 
         Ok(())
     }

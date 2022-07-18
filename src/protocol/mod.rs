@@ -116,7 +116,7 @@ impl Sequence {
 }
 
 pub trait ImapResponse {
-    fn serialize(&self, tag: String) -> Vec<u8>;
+    fn serialize(self) -> Vec<u8>;
 }
 
 pub fn quoted_string(buf: &mut Vec<u8>, text: &str) {
@@ -241,6 +241,11 @@ impl ResponseCode {
             ResponseCode::UidValidity => b"UIDVALIDITY",
             ResponseCode::Unavailable => b"UNAVAILABLE",
             ResponseCode::UnknownCte => b"UNKNOWN-CTE",
+            ResponseCode::Modified { ids } => {
+                buf.extend_from_slice(b"MODIFIED ");
+                serialize_sequence(buf, ids);
+                return;
+            }
         });
     }
 }
@@ -258,28 +263,27 @@ impl ResponseType {
 }
 
 impl StatusResponse {
-    pub fn serialize(&self, buf: &mut Vec<u8>) {
+    pub fn serialize(self, mut buf: Vec<u8>) -> Vec<u8> {
         if let Some(tag) = &self.tag {
             buf.extend_from_slice(tag.as_bytes());
         } else {
             buf.push(b'*');
         }
         buf.push(b' ');
-        self.rtype.serialize(buf);
+        self.rtype.serialize(&mut buf);
         buf.push(b' ');
         if let Some(code) = &self.code {
             buf.push(b'[');
-            code.serialize(buf);
+            code.serialize(&mut buf);
             buf.extend_from_slice(b"] ");
         }
         buf.extend_from_slice(self.message.as_bytes());
         buf.extend_from_slice(b"\r\n");
+        buf
     }
 
     pub fn into_bytes(self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(16);
-        self.serialize(&mut buf);
-        buf
+        self.serialize(Vec::with_capacity(16))
     }
 }
 

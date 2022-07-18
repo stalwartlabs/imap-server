@@ -33,7 +33,9 @@ impl Capability {
         } else if value.eq_ignore_ascii_case(b"LOGINDISABLED") {
             Ok(Self::LoginDisabled)
         } else if value.eq_ignore_ascii_case(b"CONDSTORE") {
-            Ok(Self::Condstore)
+            Ok(Self::CondStore)
+        } else if value.eq_ignore_ascii_case(b"QRESYNC") {
+            Ok(Self::QResync)
         } else {
             Err(format!(
                 "Unsupported capability '{}'.",
@@ -59,7 +61,7 @@ mod tests {
             "t2 ENABLE IMAP4rev2 CONDSTORE\r\n",
             enable::Arguments {
                 tag: "t2".to_string(),
-                capabilities: vec![Capability::IMAP4rev2, Capability::Condstore],
+                capabilities: vec![Capability::IMAP4rev2, Capability::CondStore],
             },
         )] {
             assert_eq!(

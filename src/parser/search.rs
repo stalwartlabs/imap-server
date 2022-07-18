@@ -12,7 +12,7 @@ use crate::protocol::search::{self, Filter};
 use crate::protocol::search::{ModSeqEntry, ResultOption};
 use crate::protocol::ProtocolVersion;
 
-use super::{parse_date, parse_integer, parse_long_integer, parse_sequence_set};
+use super::{parse_date, parse_number, parse_sequence_set};
 
 impl Request {
     #[allow(clippy::while_let_on_iterator)]
@@ -139,7 +139,7 @@ pub fn parse_filters(
                             .unwrap_bytes(),
                     )?));
                 } else if value.eq_ignore_ascii_case(b"LARGER") {
-                    filters.push(Filter::Larger(parse_integer(
+                    filters.push(Filter::Larger(parse_number::<u32>(
                         &tokens
                             .next()
                             .ok_or_else(|| Cow::from("Expected integer"))?
@@ -183,7 +183,7 @@ pub fn parse_filters(
                             .unwrap_bytes(),
                     )?));
                 } else if value.eq_ignore_ascii_case(b"SMALLER") {
-                    filters.push(Filter::Smaller(parse_integer(
+                    filters.push(Filter::Smaller(parse_number::<u32>(
                         &tokens
                             .next()
                             .ok_or_else(|| Cow::from("Expected integer"))?
@@ -223,14 +223,14 @@ pub fn parse_filters(
                 } else if value.eq_ignore_ascii_case(b"UNSEEN") {
                     filters.push(Filter::Unseen);
                 } else if value.eq_ignore_ascii_case(b"OLDER") {
-                    filters.push(Filter::Older(parse_integer(
+                    filters.push(Filter::Older(parse_number::<u32>(
                         &tokens
                             .next()
                             .ok_or_else(|| Cow::from("Expected integer"))?
                             .unwrap_bytes(),
                     )?));
                 } else if value.eq_ignore_ascii_case(b"YOUNGER") {
-                    filters.push(Filter::Younger(parse_integer(
+                    filters.push(Filter::Younger(parse_number::<u32>(
                         &tokens
                             .next()
                             .ok_or_else(|| Cow::from("Expected integer"))?
@@ -278,7 +278,7 @@ pub fn parse_filters(
                             }
                         };
                         filters.push(Filter::ModSeq((
-                            parse_long_integer(
+                            parse_number::<u64>(
                                 &tokens
                                     .next()
                                     .ok_or_else(|| {
@@ -290,7 +290,7 @@ pub fn parse_filters(
                         )));
                     } else {
                         filters.push(Filter::ModSeq((
-                            parse_long_integer(&param)?,
+                            parse_number::<u64>(&param)?,
                             ModSeqEntry::None,
                         )));
                     }

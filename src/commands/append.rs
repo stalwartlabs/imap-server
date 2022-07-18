@@ -17,10 +17,10 @@ impl Session {
                             return self
                                 .write_bytes(
                                     StatusResponse::no(
-                                        arguments.tag.into(),
-                                        ResponseCode::NoPerm.into(),
                                         "Appending messages to this mailbox is not allowed.",
                                     )
+                                    .with_tag(arguments.tag)
+                                    .with_code(ResponseCode::NoPerm)
                                     .into_bytes(),
                                 )
                                 .await;
@@ -28,12 +28,10 @@ impl Session {
                     } else {
                         return self
                             .write_bytes(
-                                StatusResponse::no(
-                                    arguments.tag.into(),
-                                    ResponseCode::TryCreate.into(),
-                                    "Mailbox does not exist.",
-                                )
-                                .into_bytes(),
+                                StatusResponse::no("Mailbox does not exist.")
+                                    .with_tag(arguments.tag)
+                                    .with_code(ResponseCode::TryCreate)
+                                    .into_bytes(),
                             )
                             .await;
                     };
@@ -53,7 +51,7 @@ impl Session {
                         Ok(mut email) => {
                             let jmap_id = email.take_id();
                             let mut response =
-                                StatusResponse::completed(Command::Append, arguments.tag);
+                                StatusResponse::completed(Command::Append).with_tag(arguments.tag);
                             if !jmap_id.is_empty() {
                                 if let Ok(ids) = data
                                     .core
@@ -73,7 +71,8 @@ impl Session {
                         Err(response) => {
                             data.write_bytes(
                                 response
-                                    .into_status_response(arguments.tag.into())
+                                    .into_status_response()
+                                    .with_tag(arguments.tag)
                                     .into_bytes(),
                             )
                             .await;
