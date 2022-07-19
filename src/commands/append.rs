@@ -20,7 +20,7 @@ impl Session {
                                         "Appending messages to this mailbox is not allowed.",
                                     )
                                     .with_tag(arguments.tag)
-                                    .with_code(ResponseCode::NoPerm)
+                                    .with_code(ResponseCode::Cannot)
                                     .into_bytes(),
                                 )
                                 .await;

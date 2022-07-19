@@ -877,8 +877,7 @@ mod tests {
                     "MIME-Version: 1.0\r\n",
                     "Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n",
                     "\r\n",
-                    "Hello Joe, do you think we can meet at 3:30 tomorrow?\r\n",
-                    "\r\n",
+                    "Hello Joe, do you think we can meet at 3:30 tomorrow?\r\n\r\n",
                 ],
                 vec![Request {
                     tag: "A003".to_string(),
@@ -899,6 +898,45 @@ mod tests {
                                 "Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n",
                                 "\r\n",
                                 "Hello Joe, do you think we can meet at 3:30 tomorrow?\r\n"
+                            )
+                            .as_bytes()
+                            .to_vec(),
+                        ),
+                    ],
+                }],
+            ),
+            (
+                vec![
+                    "A003 APPEND saved-messages (\\Seen) {326}\r\n",
+                    "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n",
+                    "From: Fred Foobar <foobar@Blurdybloop.example>\r\n",
+                    "Subject: afternoon meeting\r\n",
+                    "To: mooch@owatagu.siam.edu.example\r\n",
+                    "Message-Id: <B27397-0100000@Blurdybloop.example>\r\n",
+                    "MIME-Version: 1.0\r\n",
+                    "Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n",
+                    "\r\n",
+                    "Hello Joe, do you think we can meet at 3:30 tomorrow?\r\n\r\n",
+                ],
+                vec![Request {
+                    tag: "A003".to_string(),
+                    command: Command::Append,
+                    tokens: vec![
+                        Token::Argument(b"saved-messages".to_vec()),
+                        Token::ParenthesisOpen,
+                        Token::Argument(b"\\Seen".to_vec()),
+                        Token::ParenthesisClose,
+                        Token::Argument(
+                            concat!(
+                                "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n",
+                                "From: Fred Foobar <foobar@Blurdybloop.example>\r\n",
+                                "Subject: afternoon meeting\r\n",
+                                "To: mooch@owatagu.siam.edu.example\r\n",
+                                "Message-Id: <B27397-0100000@Blurdybloop.example>\r\n",
+                                "MIME-Version: 1.0\r\n",
+                                "Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n",
+                                "\r\n",
+                                "Hello Joe, do you think we can meet at 3:30 tomorrow?\r\n",
                             )
                             .as_bytes()
                             .to_vec(),

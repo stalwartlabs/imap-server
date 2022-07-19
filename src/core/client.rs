@@ -166,7 +166,7 @@ impl Session {
                     self.handle_copy_move(request, true, is_uid).await?;
                 }
                 Command::Sort(is_uid) => {
-                    self.handle_search(request, false, is_uid).await?;
+                    self.handle_search(request, true, is_uid).await?;
                 }
                 Command::Thread(is_uid) => {
                     self.handle_thread(request, is_uid).await?;

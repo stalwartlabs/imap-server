@@ -187,7 +187,7 @@ impl SessionData {
                 ids.seqnums.as_ref().unwrap()
             })
             .iter()
-            .max()
+            .min()
             .copied()
         } else {
             None
@@ -199,7 +199,7 @@ impl SessionData {
                 ids.seqnums.as_ref().unwrap()
             })
             .iter()
-            .min()
+            .max()
             .copied()
         } else {
             None
@@ -290,9 +290,6 @@ impl SessionData {
             Vec::with_capacity(imap_filters.len() + 1);
         let mut imap_filters = imap_filters.into_iter();
 
-        if let Some(mailbox_id) = &mailbox.mailbox_id {
-            jmap_filters.push(email::query::Filter::in_mailbox(mailbox_id.clone()).into());
-        }
         let mut seen_modseq = false;
         let mut highest_modseq = None;
 
@@ -550,14 +547,30 @@ impl SessionData {
             }
         }
 
-        Ok(if jmap_filters.len() == 1 {
-            (jmap_filters.pop().unwrap(), highest_modseq)
+        let filter = if let Some(mailbox_id) = &mailbox.mailbox_id {
+            if operator == query::Operator::And {
+                if !jmap_filters.is_empty() {
+                    jmap_filters.push(email::query::Filter::in_mailbox(mailbox_id.clone()).into());
+                    query::Filter::operator(query::Operator::And, jmap_filters)
+                } else {
+                    email::query::Filter::in_mailbox(mailbox_id.clone()).into()
+                }
+            } else {
+                query::Filter::operator(
+                    query::Operator::And,
+                    vec![
+                        email::query::Filter::in_mailbox(mailbox_id.clone()).into(),
+                        query::Filter::operator(operator, jmap_filters),
+                    ],
+                )
+            }
+        } else if jmap_filters.len() == 1 {
+            jmap_filters.pop().unwrap()
         } else {
-            (
-                query::Filter::operator(operator, jmap_filters),
-                highest_modseq,
-            )
-        })
+            query::Filter::operator(operator, jmap_filters)
+        };
+
+        Ok((filter, highest_modseq))
     }
 
     pub async fn get_saved_search(&self) -> Option<Arc<IdMappings>> {

@@ -1,3 +1,9 @@
+pub mod append;
+pub mod basic;
+pub mod fetch;
+pub mod mailbox;
+pub mod search;
+
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 use jmap_client::client::Client;
@@ -31,332 +37,38 @@ pub async fn test_server() {
     .unwrap();
 
     // Create test users
-    jmap.domain_create("example.com").await.unwrap();
+    /*jmap.domain_create("example.com").await.unwrap();
     jmap.individual_create("jdoe@example.com", "secret", "John Doe")
         .await
-        .unwrap();
+        .unwrap();*/
 
     // Connect to IMAP server
     let mut imap_check = ImapConnection::connect(b"_y ").await;
     let mut imap = ImapConnection::connect(b"_x ").await;
     for imap in [&mut imap, &mut imap_check] {
-        imap.read_assert(Type::Untagged, ResponseType::Ok).await;
+        imap.assert_read(Type::Untagged, ResponseType::Ok).await;
     }
 
-    // Test CAPABILITY
-    /*imap.send("CAPABILITY").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
+    // Unauthenticated tests
+    let comments = "remove";
+    //basic::test(&mut imap, &mut imap_check).await;
 
-    // Test NOOP
-    imap.send("NOOP").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-
-    // Login should be disabled
-    imap.send("LOGIN jdoe@example.com secret").await;
-    imap.read_assert(Type::Tagged, ResponseType::No).await;
-
-    // Try logging in with wrong password
-    imap.send("AUTHENTICATE PLAIN {24}").await;
-    imap.read_assert(Type::Continuation, ResponseType::Ok).await;
-    imap.send_untagged("AGJvYXR5AG1jYm9hdGZhY2U=").await;
-    imap.read_assert(Type::Tagged, ResponseType::No).await;*/
-
-    // Login with correct password
+    // Login
     for imap in [&mut imap, &mut imap_check] {
         imap.send("AUTHENTICATE PLAIN {32+}\r\nAGpkb2VAZXhhbXBsZS5jb20Ac2VjcmV0")
             .await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok).await;
+        imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     }
 
-    // List folders
-    imap.send("LIST \"\" \"*\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders(
-            [
-                ("All Messages", ["NoInferiors"]),
-                ("INBOX", [""]),
-                ("Deleted Items", [""]),
-            ],
-            true,
-        );
-
-    // Create folders
-    imap.send("CREATE \"Tofu\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("CREATE \"Fruit\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("CREATE \"Fruit/Apple\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("CREATE \"Fruit/Apple/Green\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\"").await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok)
-            .await
-            .assert_folders(
-                [
-                    ("All Messages", ["NoInferiors"]),
-                    ("INBOX", [""]),
-                    ("Deleted Items", [""]),
-                    ("Fruit", [""]),
-                    ("Fruit/Apple", [""]),
-                    ("Fruit/Apple/Green", [""]),
-                    ("Tofu", [""]),
-                ],
-                true,
-            );
-    }
-
-    // Folders under All Messages should not be allowed
-    imap.send("CREATE \"All Messages/Untitled\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::No).await;
-
-    // Enable IMAP4rev2
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("ENABLE IMAP4rev2").await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    }
-
-    // Create missing parent folders
-    imap.send("CREATE \"/Vegetable/Broccoli\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("CREATE \" Cars/Electric /4 doors/ Red/\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (CHILDREN)").await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok)
-            .await
-            .assert_folders(
-                [
-                    ("All Messages", ["NoInferiors", "All"]),
-                    ("INBOX", ["HasNoChildren", ""]),
-                    ("Deleted Items", ["HasNoChildren", "Trash"]),
-                    ("Cars/Electric/4 doors/Red", ["HasNoChildren", ""]),
-                    ("Cars/Electric/4 doors", ["HasChildren", ""]),
-                    ("Cars/Electric", ["HasChildren", ""]),
-                    ("Cars", ["HasChildren", ""]),
-                    ("Fruit", ["HasChildren", ""]),
-                    ("Fruit/Apple", ["HasChildren", ""]),
-                    ("Fruit/Apple/Green", ["HasNoChildren", ""]),
-                    ("Vegetable", ["HasChildren", ""]),
-                    ("Vegetable/Broccoli", ["HasNoChildren", ""]),
-                    ("Tofu", ["HasNoChildren", ""]),
-                ],
-                true,
-            );
-    }
-
-    // Rename folders
-    imap.send("RENAME \"Fruit/Apple/Green\" \"Fruit/Apple/Red\"")
-        .await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("RENAME \"Cars\" \"Vehicles\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("RENAME \"Vegetable/Broccoli\" \"Veggies/Green/Broccoli\"")
-        .await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("RENAME \"Tofu\" \"INBOX\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::No).await;
-    imap.send("RENAME \"Tofu\" \"INBOX/Tofu\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("RENAME \"Deleted Items\" \"Recycle Bin\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (CHILDREN)").await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok)
-            .await
-            .assert_folders(
-                [
-                    ("All Messages", ["NoInferiors", "All"]),
-                    ("INBOX", ["HasChildren", ""]),
-                    ("INBOX/Tofu", ["HasNoChildren", ""]),
-                    ("Recycle Bin", ["HasNoChildren", "Trash"]),
-                    ("Vehicles/Electric/4 doors/Red", ["HasNoChildren", ""]),
-                    ("Vehicles/Electric/4 doors", ["HasChildren", ""]),
-                    ("Vehicles/Electric", ["HasChildren", ""]),
-                    ("Vehicles", ["HasChildren", ""]),
-                    ("Fruit", ["HasChildren", ""]),
-                    ("Fruit/Apple", ["HasChildren", ""]),
-                    ("Fruit/Apple/Red", ["HasNoChildren", ""]),
-                    ("Vegetable", ["HasNoChildren", ""]),
-                    ("Veggies", ["HasChildren", ""]),
-                    ("Veggies/Green", ["HasChildren", ""]),
-                    ("Veggies/Green/Broccoli", ["HasNoChildren", ""]),
-                ],
-                true,
-            );
-    }
-
-    // Delete folders
-    imap.send("DELETE \"INBOX/Tofu\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("DELETE \"Vegetable\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("DELETE \"All Messages\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::No).await;
-    imap.send("DELETE \"Vehicles\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::No).await;
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (CHILDREN)").await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok)
-            .await
-            .assert_folders(
-                [
-                    ("All Messages", ["NoInferiors", "All"]),
-                    ("INBOX", ["HasNoChildren", ""]),
-                    ("Recycle Bin", ["HasNoChildren", "Trash"]),
-                    ("Vehicles/Electric/4 doors/Red", ["HasNoChildren", ""]),
-                    ("Vehicles/Electric/4 doors", ["HasChildren", ""]),
-                    ("Vehicles/Electric", ["HasChildren", ""]),
-                    ("Vehicles", ["HasChildren", ""]),
-                    ("Fruit", ["HasChildren", ""]),
-                    ("Fruit/Apple", ["HasChildren", ""]),
-                    ("Fruit/Apple/Red", ["HasNoChildren", ""]),
-                    ("Veggies", ["HasChildren", ""]),
-                    ("Veggies/Green", ["HasChildren", ""]),
-                    ("Veggies/Green/Broccoli", ["HasNoChildren", ""]),
-                ],
-                true,
-            );
-    }
-
-    // Subscribe
-    imap.send("SUBSCRIBE \"INBOX\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    imap.send("SUBSCRIBE \"Vehicles/Electric/4 doors/Red\"")
-        .await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (SUBSCRIBED)").await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok)
-            .await
-            .assert_folders(
-                [
-                    ("All Messages", ["NoInferiors", "All"]),
-                    ("INBOX", ["Subscribed", ""]),
-                    ("Recycle Bin", ["", "Trash"]),
-                    ("Vehicles/Electric/4 doors/Red", ["Subscribed", ""]),
-                    ("Vehicles/Electric/4 doors", ["", ""]),
-                    ("Vehicles/Electric", ["", ""]),
-                    ("Vehicles", ["", ""]),
-                    ("Fruit", ["", ""]),
-                    ("Fruit/Apple", ["", ""]),
-                    ("Fruit/Apple/Red", ["", ""]),
-                    ("Veggies", ["", ""]),
-                    ("Veggies/Green", ["", ""]),
-                    ("Veggies/Green/Broccoli", ["", ""]),
-                ],
-                true,
-            );
-    }
-
-    // Filter by subscribed including children
-    imap.send("LIST (SUBSCRIBED) \"\" \"*\" RETURN (CHILDREN)")
-        .await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders(
-            [
-                ("INBOX", ["Subscribed", "HasNoChildren"]),
-                (
-                    "Vehicles/Electric/4 doors/Red",
-                    ["Subscribed", "HasNoChildren"],
-                ),
-            ],
-            true,
-        );
-
-    // Recursive match including children
-    imap.send("LIST (SUBSCRIBED RECURSIVEMATCH) \"\" \"*\" RETURN (CHILDREN)")
-        .await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders(
-            [
-                ("INBOX", ["Subscribed", "HasNoChildren"]),
-                (
-                    "Vehicles/Electric/4 doors/Red",
-                    ["Subscribed", "HasNoChildren"],
-                ),
-                (
-                    "Vehicles/Electric/4 doors",
-                    ["\"CHILDINFO\" (\"SUBSCRIBED\")", "HasChildren"],
-                ),
-                (
-                    "Vehicles/Electric",
-                    ["\"CHILDINFO\" (\"SUBSCRIBED\")", "HasChildren"],
-                ),
-                (
-                    "Vehicles",
-                    ["\"CHILDINFO\" (\"SUBSCRIBED\")", "HasChildren"],
-                ),
-            ],
-            true,
-        );
-
-    // Imap4rev1 LSUB
-    imap.send("LSUB \"\" \"*\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders(
-            [("INBOX", [""]), ("Vehicles/Electric/4 doors/Red", [""])],
-            true,
-        );
-
-    // Unsubscribe
-    imap.send("UNSUBSCRIBE \"Vehicles/Electric/4 doors/Red\"")
-        .await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok).await;
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST (SUBSCRIBED RECURSIVEMATCH) \"\" \"*\" RETURN (CHILDREN)")
-            .await;
-        imap.read_assert(Type::Tagged, ResponseType::Ok)
-            .await
-            .assert_folders([("INBOX", ["Subscribed", "HasNoChildren"])], true);
-    }
-
-    // LIST Filters
-    imap.send("LIST \"\" \"%\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders(
-            [
-                ("All Messages", [""]),
-                ("INBOX", [""]),
-                ("Recycle Bin", [""]),
-                ("Vehicles", [""]),
-                ("Fruit", [""]),
-                ("Veggies", [""]),
-            ],
-            true,
-        );
-
-    imap.send("LIST \"\" \"*/Red\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders(
-            [
-                ("Vehicles/Electric/4 doors/Red", [""]),
-                ("Fruit/Apple/Red", [""]),
-            ],
-            true,
-        );
-
-    imap.send("LIST \"\" \"Fruit/*\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders([("Fruit/Apple/Red", [""]), ("Fruit/Apple", [""])], true);
-
-    imap.send("LIST \"\" \"Fruit/%\"").await;
-    imap.read_assert(Type::Tagged, ResponseType::Ok)
-        .await
-        .assert_folders([("Fruit/Apple", [""])], true);
+    //mailbox::test(&mut imap, &mut imap_check).await;
+    //append::test(&mut imap, &mut imap_check).await;
+    //search::test(&mut imap, &mut imap_check).await;
+    append::test(&mut imap, &mut imap_check).await;
 
     // Logout
     for imap in [&mut imap, &mut imap_check] {
         imap.send("LOGOUT").await;
-        imap.read_assert(Type::Untagged, ResponseType::Bye).await;
+        imap.assert_read(Type::Untagged, ResponseType::Bye).await;
     }
 
     // Delete temporary directory
@@ -365,14 +77,14 @@ pub async fn test_server() {
     }
 }
 
-struct ImapConnection {
+pub struct ImapConnection {
     tag: &'static [u8],
     reader: Lines<BufReader<ReadHalf<TcpStream>>>,
     writer: WriteHalf<TcpStream>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Type {
+pub enum Type {
     Tagged,
     Untagged,
     Continuation,
@@ -389,7 +101,7 @@ impl ImapConnection {
         }
     }
 
-    pub async fn read_assert(&mut self, t: Type, rt: ResponseType) -> Vec<String> {
+    pub async fn assert_read(&mut self, t: Type, rt: ResponseType) -> Vec<String> {
         let lines = self.read(t).await;
         let mut buf = Vec::with_capacity(10);
         buf.extend_from_slice(match t {
@@ -452,20 +164,25 @@ impl ImapConnection {
     }
 }
 
-pub trait AssertResult {
+pub trait AssertResult: Sized {
     fn assert_folders<'x>(
-        &self,
+        self,
         expected: impl IntoIterator<Item = (&'x str, impl IntoIterator<Item = &'x str>)>,
         match_all: bool,
-    );
+    ) -> Self;
+
+    fn assert_response_code(self, code: &str) -> Self;
+    fn assert_contains(self, text: &str) -> Self;
+    fn assert_equals(self, text: &str) -> Self;
+    fn get_response_code(&self) -> &str;
 }
 
 impl AssertResult for Vec<String> {
     fn assert_folders<'x>(
-        &self,
+        self,
         expected: impl IntoIterator<Item = (&'x str, impl IntoIterator<Item = &'x str>)>,
         match_all: bool,
-    ) {
+    ) -> Self {
         let mut match_count = 0;
         'outer: for (mailbox_name, flags) in expected.into_iter() {
             for result in self.iter() {
@@ -488,6 +205,45 @@ impl AssertResult for Vec<String> {
                 self.len() - 1
             );
         }
+        self
+    }
+
+    fn assert_response_code(self, code: &str) -> Self {
+        if !self.last().unwrap().contains(&format!("[{}]", code)) {
+            panic!(
+                "Response code {:?} not found, got {:?}",
+                code,
+                self.last().unwrap()
+            );
+        }
+        self
+    }
+
+    fn assert_contains(self, text: &str) -> Self {
+        for line in &self {
+            if line.contains(text) {
+                return self;
+            }
+        }
+        panic!("Expected response to contain {:?}, got {:?}", text, self);
+    }
+
+    fn assert_equals(self, text: &str) -> Self {
+        for line in &self {
+            if line == text {
+                return self;
+            }
+        }
+        panic!("Expected response to be {:?}, got {:?}", text, self);
+    }
+
+    fn get_response_code(&self) -> &str {
+        if let Some((_, code)) = self.last().unwrap().split_once('[') {
+            if let Some((code, _)) = code.split_once(']') {
+                return code;
+            }
+        }
+        panic!("No response code found in {:?}", self.last().unwrap());
     }
 }
 

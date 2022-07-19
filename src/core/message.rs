@@ -152,28 +152,7 @@ impl Core {
         let db = self.db.clone();
         self.spawn_worker(move || {
             // Obtain/generate UIDVALIDITY
-            let uid_validity_key = serialize_uid_validity_key(&mailbox);
-            let uid_validity = if let Some(uid_bytes) =
-                db.get(&uid_validity_key).map_err(|err| {
-                    error!("Failed to read key: {}", err);
-                })? {
-                u32::from_be_bytes((&uid_bytes[..]).try_into().map_err(|err| {
-                    error!("Failed to decode UID validity: {}", err);
-                })?)
-            } else {
-                // Number of hours since January 1st, 2000
-                let uid_validity = (SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0)
-                    .saturating_sub(946684800)
-                    / 3600) as u32;
-                db.insert(uid_validity_key, &uid_validity.to_be_bytes()[..])
-                    .map_err(|err| {
-                        error!("Failed to insert key: {}", err);
-                    })?;
-                uid_validity
-            };
+            let uid_validity = db.uid_validity(&mailbox)?;
 
             // Remove from cache messages no longer present in the mailbox.
             let mut jmap_ids_map = jmap_ids
@@ -249,9 +228,7 @@ impl Core {
 
             Ok(UpdateResult {
                 uid_validity,
-                uid_next: db.uid_next(&mailbox).ok_or_else(|| {
-                    error!("Failed to generate UID.");
-                })?,
+                uid_next: db.uid_next(&mailbox)?,
                 deleted_messages,
                 added_messages,
             })
@@ -581,17 +558,8 @@ impl Core {
 
     pub async fn uids(&self, mailbox: Arc<MailboxData>) -> Result<(u32, u32), ()> {
         let db = self.db.clone();
-        self.spawn_worker(move || {
-            Ok((
-                db.uid_validity(&mailbox).ok_or_else(|| {
-                    error!("Failed to generate UID.");
-                })?,
-                db.uid_next(&mailbox).ok_or_else(|| {
-                    error!("Failed to generate UID.");
-                })?,
-            ))
-        })
-        .await
+        self.spawn_worker(move || Ok((db.uid_validity(&mailbox)?, db.uid_next(&mailbox)?)))
+            .await
     }
 
     pub async fn purge_deleted_mailboxes(&self, account: &Account) -> Result<(), ()> {
@@ -662,8 +630,8 @@ trait ImapUtils {
         jmap_id: &[u8],
         uid_next_key: &[u8],
     ) -> Result<sled::IVec, ()>;
-    fn uid_next(&self, mailbox: &MailboxData) -> Option<u32>;
-    fn uid_validity(&self, mailbox: &MailboxData) -> Option<u32>;
+    fn uid_next(&self, mailbox: &MailboxData) -> Result<u32, ()>;
+    fn uid_validity(&self, mailbox: &MailboxData) -> Result<u32, ()>;
 }
 
 impl ImapUtils for sled::Db {
@@ -695,20 +663,45 @@ impl ImapUtils for sled::Db {
         Ok(uid)
     }
 
-    fn uid_next(&self, mailbox: &MailboxData) -> Option<u32> {
-        if let Some(bytes) = self.get(serialize_uid_next_key(mailbox)).ok()? {
-            (u32::from_be_bytes((&bytes[..]).try_into().ok()?) + 1).into()
-        } else {
-            0.into()
-        }
+    fn uid_next(&self, mailbox: &MailboxData) -> Result<u32, ()> {
+        Ok(
+            if let Some(uid_bytes) = self.get(serialize_uid_next_key(mailbox)).map_err(|err| {
+                error!("Failed to read key: {}", err);
+            })? {
+                u32::from_be_bytes((&uid_bytes[..]).try_into().map_err(|err| {
+                    error!("Failed to decode UID next: {}", err);
+                })?) + 1
+            } else {
+                0
+            },
+        )
     }
 
-    fn uid_validity(&self, mailbox: &MailboxData) -> Option<u32> {
-        if let Some(bytes) = self.get(serialize_uid_validity_key(mailbox)).ok()? {
-            u32::from_be_bytes((&bytes[..]).try_into().ok()?).into()
-        } else {
-            0.into()
-        }
+    fn uid_validity(&self, mailbox: &MailboxData) -> Result<u32, ()> {
+        // Obtain/generate UIDVALIDITY
+        let uid_validity_key = serialize_uid_validity_key(mailbox);
+        Ok(
+            if let Some(uid_bytes) = self.get(&uid_validity_key).map_err(|err| {
+                error!("Failed to read key: {}", err);
+            })? {
+                u32::from_be_bytes((&uid_bytes[..]).try_into().map_err(|err| {
+                    error!("Failed to decode UID validity: {}", err);
+                })?)
+            } else {
+                // Number of hours since January 1st, 2000
+                let uid_validity = (SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0)
+                    .saturating_sub(946684800)
+                    / 3600) as u32;
+                self.insert(uid_validity_key, &uid_validity.to_be_bytes()[..])
+                    .map_err(|err| {
+                        error!("Failed to insert key: {}", err);
+                    })?;
+                uid_validity
+            },
+        )
     }
 }
 
