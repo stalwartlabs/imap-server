@@ -76,12 +76,56 @@ impl SessionData {
         tag: String,
         is_rev2: bool,
     ) {
+        // Obtain current state
+        let mut email_state = if let Some(mailbox) = &mailbox {
+            let mut request = self.client.build();
+            request
+                .get_email()
+                .account_id(&mailbox.account_id)
+                .ids(Vec::<&str>::new());
+            match request.send_get_email().await {
+                Ok(mut response) => response.take_state().into(),
+                Err(err) => {
+                    debug!("Failed to obtain state: {}", err);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         loop {
             tokio::select! {
                 changes = changes.next() => {
                     match changes {
                         Some(Ok(changes)) => {
-                            self.write_changes(mailbox.as_ref(), changes.has_type(TypeState::Mailbox), changes.has_type(TypeState::Email), is_rev2).await;
+                            let mut has_mailbox_changes = false;
+                            let mut new_email_state = None;
+                            for (account_id, changes) in changes.into_inner() {
+                                for (type_state, change_id) in changes {
+                                    match type_state {
+                                        TypeState::Mailbox => {
+                                            has_mailbox_changes = true;
+                                        }
+                                        TypeState::Email if mailbox.as_ref().map_or(false, |m| m.account_id == account_id) => {
+                                            new_email_state = Some(change_id);
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+
+                            let has_email_changes = if new_email_state.is_some() {
+                                let tmp_state = email_state;
+                                email_state = new_email_state;
+                                tmp_state
+                            } else {
+                                None
+                            };
+
+                            self.write_changes(mailbox.as_ref(), has_mailbox_changes, has_email_changes, is_rev2).await;
+
+
                         },
                         Some(Err(err)) => {
                             debug!("EventSource error: {}", err);
@@ -115,7 +159,7 @@ impl SessionData {
         &self,
         mailbox: Option<&Arc<MailboxData>>,
         check_mailboxes: bool,
-        check_emails: bool,
+        check_emails: Option<String>,
         is_rev2: bool,
     ) {
         let mut buf = Vec::with_capacity(64);
@@ -170,21 +214,68 @@ impl SessionData {
         }
 
         // Fetch selected mailbox changes
-        match mailbox {
-            Some(mailbox) if check_emails => {
-                if let Ok(mailbox_status) = self.synchronize_messages(mailbox.clone(), true).await {
-                    if mailbox_status.added_messages || !mailbox_status.deleted_messages.is_empty()
-                    {
-                        for seq_num in mailbox_status.deleted_messages {
-                            buf.extend_from_slice(format!("* {} EXPUNGE\r\n", seq_num).as_bytes());
+        if let (Some(mailbox), Some(check_emails)) = (mailbox, check_emails) {
+            let mut request = self.client.build();
+            request
+                .changes_email(check_emails)
+                .account_id(&mailbox.account_id);
+            match request.send_changes_email().await {
+                Ok(mut changes) => {
+                    // Obtain deleted seqnums
+                    let mut has_deletions = false;
+                    if !changes.destroyed().is_empty() {
+                        if let Ok(ids) = self
+                            .core
+                            .jmap_deletions_to_imap(
+                                mailbox.clone(),
+                                changes.take_destroyed(),
+                                false,
+                            )
+                            .await
+                        {
+                            for id in ids {
+                                has_deletions = true;
+                                buf.extend_from_slice(format!("* {} EXPUNGE\r\n", id).as_bytes());
+                            }
                         }
-                        buf.extend_from_slice(
-                            format!("* {} EXISTS\r\n", mailbox_status.total_messages).as_bytes(),
-                        );
+                    }
+
+                    // Synchronize emails
+                    if let Ok(mailbox_status) = self.synchronize_messages(mailbox.clone()).await {
+                        let mut has_changes = false;
+                        if !changes.updated().is_empty() || !changes.created().is_empty() {
+                            if let Ok(ids) = self
+                                .core
+                                .jmap_to_imap(
+                                    mailbox.clone(),
+                                    changes
+                                        .take_created()
+                                        .into_iter()
+                                        .chain(changes.take_updated())
+                                        .collect::<Vec<_>>(),
+                                    false,
+                                    true,
+                                )
+                                .await
+                            {
+                                if !ids.uids.is_empty() {
+                                    has_changes = true;
+                                }
+                            }
+                        };
+
+                        if has_changes || has_deletions {
+                            buf.extend_from_slice(
+                                format!("* {} EXISTS\r\n", mailbox_status.total_messages)
+                                    .as_bytes(),
+                            );
+                        }
                     }
                 }
+                Err(err) => {
+                    debug!("Failed to fetch email changes: {}", err);
+                }
             }
-            _ => {}
         }
 
         // Write changes

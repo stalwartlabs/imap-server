@@ -14,8 +14,8 @@ use crate::{
 
 impl Session {
     pub async fn handle_expunge(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
-        let (data, mailbox, is_rw, _) = self.state.select_data();
-        if !is_rw {
+        let (data, mailbox, is_select, _) = self.state.select_data();
+        if !is_select {
             return self
                 .write_bytes(
                     StatusResponse::no("EXPUNGE only allowed in SELECT mode.")

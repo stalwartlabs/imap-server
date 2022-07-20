@@ -35,7 +35,7 @@ impl Session {
                                         "Appending messages to this mailbox is not allowed.",
                                     )
                                     .with_tag(arguments.tag)
-                                    .with_code(ResponseCode::NoPerm)
+                                    .with_code(ResponseCode::Cannot)
                                     .into_bytes(),
                                 )
                                 .await;
@@ -94,6 +94,7 @@ impl SessionData {
         } else {
             Command::Copy(is_uid)
         });
+
         // Convert IMAP ids to JMAP ids.
         let ids = match self
             .imap_sequence_to_jmap(src_mailbox.clone(), arguments.sequence_set, is_uid)
@@ -158,6 +159,7 @@ impl SessionData {
             // Mailboxes are in different accounts, send a Email/copy request.
             let mut request = self.client.build();
 
+            // TODO try moving messages to Trash folder instead of deleting, when possible
             for jmap_ids in ids.jmap_ids.chunks(max_objects_in_set) {
                 let copy_request = request
                     .copy_email(&src_mailbox.account_id)
@@ -196,6 +198,7 @@ impl SessionData {
             copied_ids
         };
 
+        // Map copied JMAP Ids to IMAP UIDs in the destination folder.
         let mut ids = self
             .core
             .jmap_to_imap(dest_mailbox.clone(), copied_ids, true, true)
@@ -210,6 +213,11 @@ impl SessionData {
             uid_validity,
             uids: ids.uids,
         };
+
+        // Synchronize source folder on move
+        if is_move {
+            self.synchronize_messages(src_mailbox.clone()).await.ok();
+        }
 
         self.write_bytes(if is_move {
             response

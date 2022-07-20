@@ -17,11 +17,10 @@ pub struct MailboxData {
     pub mailbox_id: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct MailboxStatus {
     pub uid_next: u32,
     pub uid_validity: u32,
-    pub deleted_messages: Vec<u32>,
-    pub added_messages: bool,
     pub total_messages: usize,
 }
 
@@ -45,7 +44,6 @@ impl SessionData {
     pub async fn synchronize_messages(
         &self,
         mailbox: Arc<MailboxData>,
-        include_deleted: bool,
     ) -> Result<MailboxStatus, StatusResponse> {
         let mut valid_ids = Vec::new();
         let mut position = 0;
@@ -83,7 +81,7 @@ impl SessionData {
         // Update mailbox
         let update_result = self
             .core
-            .update_uids(mailbox, valid_ids, include_deleted)
+            .update_uids(mailbox, valid_ids)
             .await
             .map_err(|_| StatusResponse::database_failure())?;
 
@@ -91,8 +89,6 @@ impl SessionData {
             uid_next: update_result.uid_next,
             uid_validity: update_result.uid_validity,
             total_messages,
-            added_messages: update_result.added_messages,
-            deleted_messages: update_result.deleted_messages,
         })
     }
 
@@ -138,8 +134,6 @@ impl SessionData {
 pub struct UpdateResult {
     pub uid_validity: u32,
     pub uid_next: u32,
-    pub deleted_messages: Vec<u32>,
-    pub added_messages: bool,
 }
 
 impl Core {
@@ -147,7 +141,6 @@ impl Core {
         &self,
         mailbox: Arc<MailboxData>,
         jmap_ids: Vec<String>,
-        include_deleted: bool,
     ) -> Result<UpdateResult, ()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
@@ -163,8 +156,7 @@ impl Core {
             let prefix = serialize_key_prefix(&mailbox, JMAP_TO_UID);
             let mut batch = sled::Batch::default();
             let mut has_deletions = false;
-            let mut deleted_messages = Vec::new();
-            let mut seq_num = 0;
+            let mut seq_num: u32 = 0;
 
             for kv_result in db.scan_prefix(&prefix) {
                 let (key, value) = kv_result.map_err(|err| {
@@ -172,17 +164,16 @@ impl Core {
                 })?;
                 if key.len() > prefix.len() {
                     seq_num += 1;
-                    if !jmap_ids_map.remove(&key[prefix.len()..]) {
-                        // Delete mappings from cache
-                        for key in [&key[..], &serialize_key(&mailbox, UID_TO_JMAP, &value)[..]] {
-                            batch.remove(key);
-                        }
-
-                        // Add UID to deleted messages
+                    let jmap_id = &key[prefix.len()..];
+                    if !jmap_ids_map.remove(jmap_id) {
+                        // Add UID and seqnum to deleted messages
                         let mut buf = Vec::with_capacity(
-                            (key.len() - prefix.len()) + std::mem::size_of::<u64>(),
+                            (key.len() - prefix.len())
+                                + std::mem::size_of::<u64>()
+                                + std::mem::size_of::<u32>(),
                         );
-                        buf.extend_from_slice(&key[prefix.len()..]);
+                        buf.extend_from_slice(&value);
+                        buf.extend_from_slice(&seq_num.to_be_bytes());
                         buf.extend_from_slice(
                             &SystemTime::now()
                                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -190,16 +181,19 @@ impl Core {
                                 .unwrap_or(0)
                                 .to_be_bytes(),
                         );
-                        batch.insert(
-                            serialize_key(&mailbox, JMAP_DELETED_IDS, &value),
-                            &key[prefix.len()..],
-                        );
+                        batch.insert(serialize_key(&mailbox, JMAP_DELETED_IDS, jmap_id), buf);
+
+                        // Delete mappings from cache
+                        batch.remove(key);
+                        batch.remove(sled::IVec::from(serialize_key(
+                            &mailbox,
+                            UID_TO_JMAP,
+                            &value,
+                        )));
+
                         //TODO: Delete old deleted IDs after X days
 
                         has_deletions = true;
-                        if include_deleted {
-                            deleted_messages.push(seq_num);
-                        }
                     }
                 }
             }
@@ -211,7 +205,7 @@ impl Core {
             }
 
             // Add to the db any new ids.
-            let added_messages = if !jmap_ids_map.is_empty() {
+            if !jmap_ids_map.is_empty() {
                 #[cfg(test)]
                 let jmap_ids_map = jmap_ids_map
                     .into_iter()
@@ -221,16 +215,11 @@ impl Core {
                 for jmap_id in jmap_ids_map {
                     db.insert_jmap_id(&mailbox, jmap_id, &uid_next_key)?;
                 }
-                true
-            } else {
-                false
-            };
+            }
 
             Ok(UpdateResult {
                 uid_validity,
                 uid_next: db.uid_next(&mailbox)?,
-                deleted_messages,
-                added_messages,
             })
         })
         .await
@@ -331,7 +320,7 @@ impl Core {
                     uids,
                     seqnums: jmap_ids
                         .iter()
-                        .map(|jmap_id| seq_nums_map.remove(jmap_id).unwrap())
+                        .filter_map(|jmap_id| seq_nums_map.remove(jmap_id))
                         .collect::<Vec<_>>()
                         .into(),
                     jmap_ids,
@@ -345,6 +334,7 @@ impl Core {
         &self,
         mailbox: Arc<MailboxData>,
         jmap_ids: Vec<String>,
+        as_uid: bool,
     ) -> Result<Vec<u32>, ()> {
         if jmap_ids.is_empty() {
             return Ok(Vec::new());
@@ -370,11 +360,17 @@ impl Core {
                         error!("Failed to get key: {}", err);
                     })?
                 {
-                    u32::from_be_bytes((&uid[..std::mem::size_of::<u32>()]).try_into().map_err(
-                        |_| {
+                    u32::from_be_bytes(
+                        (if as_uid {
+                            &uid[..std::mem::size_of::<u32>()]
+                        } else {
+                            &uid[std::mem::size_of::<u32>()..(std::mem::size_of::<u32>() * 2)]
+                        })
+                        .try_into()
+                        .map_err(|_| {
                             error!("Failed to convert bytes to u32.");
-                        },
-                    )?)
+                        })?,
+                    )
                 } else {
                     continue;
                 };
@@ -448,7 +444,7 @@ impl Core {
 
                 Ok(IdMappings {
                     jmap_ids,
-                    uids: imap_ids,
+                    uids,
                     seqnums: seqnums.into(),
                 })
             }
@@ -479,18 +475,13 @@ impl Core {
                     error!("Failed to scan db: {}", err);
                 })?;
                 if key.len() > prefix.len() {
+                    seq_num += 1;
                     let uid =
                         u32::from_be_bytes((&key[prefix.len()..]).try_into().map_err(|_| {
                             error!("Failed to convert bytes to u32.");
                         })?);
-                    let add_id = if is_uid {
-                        uid
-                    } else {
-                        seq_num += 1;
-                        seq_num
-                    };
 
-                    if sequence.contains(add_id) {
+                    if sequence.contains(if is_uid { uid } else { seq_num }) {
                         jmap_ids.push(String::from_utf8(value.to_vec()).map_err(|_| {
                             error!("Failed to convert bytes to string.");
                         })?);
@@ -847,19 +838,19 @@ mod tests {
 
         // Insert test data
         let update_result = core
-            .update_uids(mailbox.clone(), jmap_ids.clone(), true)
+            .update_uids(mailbox.clone(), jmap_ids.clone())
             .await
             .unwrap();
         assert_eq!(update_result.uid_next, 10);
 
         let update_result = core
-            .update_uids(mailbox_abc.clone(), jmap_ids.clone(), true)
+            .update_uids(mailbox_abc.clone(), jmap_ids.clone())
             .await
             .unwrap();
         assert_eq!(update_result.uid_next, 10);
 
         let update_result = core
-            .update_uids(mailbox_xyz.clone(), jmap_ids.clone(), true)
+            .update_uids(mailbox_xyz.clone(), jmap_ids.clone())
             .await
             .unwrap();
         assert_eq!(update_result.uid_next, 10);
@@ -927,7 +918,7 @@ mod tests {
         let uids = vec![0, 1, 2, 7, 8, 9, 10, 11, 12, 13];
 
         let update_result = core
-            .update_uids(mailbox.clone(), jmap_ids.clone(), true)
+            .update_uids(mailbox.clone(), jmap_ids.clone())
             .await
             .unwrap();
         assert_eq!(update_result.uid_next, 14);
@@ -992,10 +983,7 @@ mod tests {
         );
 
         // Remove all ids and add some new ids later
-        let update_result = core
-            .update_uids(mailbox.clone(), vec![], true)
-            .await
-            .unwrap();
+        let update_result = core.update_uids(mailbox.clone(), vec![]).await.unwrap();
         assert_eq!(update_result.uid_next, 14);
         assert_eq!(
             core.imap_to_jmap(mailbox.clone(), vec![0, 7, 14], true)
@@ -1012,11 +1000,7 @@ mod tests {
             Vec::<String>::new()
         );
         let update_result = core
-            .update_uids(
-                mailbox.clone(),
-                vec!["x01".to_string(), "y02".to_string()],
-                true,
-            )
+            .update_uids(mailbox.clone(), vec!["x01".to_string(), "y02".to_string()])
             .await
             .unwrap();
         assert_eq!(update_result.uid_next, 16);
@@ -1054,7 +1038,7 @@ mod tests {
         ];
         let uids = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         let update_result = core
-            .update_uids(mailbox_2.clone(), jmap_ids.clone(), true)
+            .update_uids(mailbox_2.clone(), jmap_ids.clone())
             .await
             .unwrap();
         assert_eq!(update_result.uid_next, 10);

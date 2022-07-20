@@ -153,7 +153,7 @@ impl SessionData {
             || items_update.contains(&Status::UidValidity)
             || items_update.contains(&Status::Messages)
         {
-            let status = self.synchronize_messages(mailbox.clone(), false).await?;
+            let status = self.synchronize_messages(mailbox.clone()).await?;
             for account in self.mailboxes.lock().iter_mut() {
                 if account.account_id == mailbox.account_id {
                     let mailbox_data = account
@@ -355,7 +355,7 @@ impl SessionData {
                         )
                         .or_insert_with(Mailbox::default)
                         .size = mailbox_size.into();
-                    items_response.push((Status::Unseen, mailbox_size as u32));
+                    items_response.push((Status::Size, mailbox_size as u32));
                     break;
                 }
             }

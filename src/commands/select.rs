@@ -20,7 +20,7 @@ impl Session {
                 if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
                     // Syncronize messages
                     let mailbox = Arc::new(mailbox);
-                    match data.synchronize_messages(mailbox.clone(), false).await {
+                    match data.synchronize_messages(mailbox.clone()).await {
                         Ok(status) => {
                             let closed_previous = self.state.is_mailbox_selected();
 
@@ -49,7 +49,7 @@ impl Session {
                                         .await;
                                 }
                                 if qresync.uid_validity == status.uid_validity {
-                                    // Send flags for changes messages
+                                    // Send flags for changed messages
                                     data.fetch(
                                         fetch::Arguments {
                                             tag: String::new(),
@@ -61,6 +61,7 @@ impl Session {
                                             include_vanished: true,
                                         },
                                         mailbox.clone(),
+                                        is_select,
                                         true,
                                         true,
                                     )

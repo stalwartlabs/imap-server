@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use jmap_client::email::Property;
+use jmap_client::{core::response::MethodResponse, email::Property};
+use tracing::debug;
 
 use crate::{
     core::{
@@ -160,8 +161,6 @@ impl SessionData {
 
         // Update
         let mut request = self.client.build();
-        let mut set_chunks = 0;
-        let mut get_chunks = 0;
         for jmap_ids_chunk in ids.jmap_ids.chunks(max_objects_in_set) {
             let set_request = request.set_email().account_id(&mailbox.account_id);
             for jmap_id in jmap_ids_chunk {
@@ -177,7 +176,6 @@ impl SessionData {
                 for keyword in &keywords {
                     update_item.keyword(keyword, is_set);
                 }
-                set_chunks += 1;
             }
         }
 
@@ -188,54 +186,37 @@ impl SessionData {
                     .account_id(&mailbox.account_id)
                     .ids(jmap_ids_chunk.iter())
                     .properties([Property::Id, Property::Keywords]);
-                get_chunks += 1;
             }
         }
 
         match request.send().await {
             Ok(response) => {
-                let mut response = response.unwrap_method_responses();
-                if (arguments.is_silent && response.len() != set_chunks)
-                    || (!arguments.is_silent && response.len() != (set_chunks + get_chunks))
-                {
-                    return Err(
-                        StatusResponse::no("Invalid response received from JMAP server.")
-                            .with_tag(arguments.tag)
-                            .with_code(ResponseCode::ContactAdmin),
-                    );
-                }
-
-                let emails = if !arguments.is_silent && get_chunks > 0 {
-                    let mut emails =
-                        Vec::with_capacity(((get_chunks - 1) * max_objects_in_get) + 10);
-                    for _ in 0..set_chunks {
-                        match response.pop().unwrap().unwrap_get_email() {
-                            Ok(mut get_response) => {
-                                emails.extend(get_response.take_list());
-                            }
-                            Err(err) => {
-                                return Err(err.into_status_response().with_tag(arguments.tag));
-                            }
-                        }
-                    }
-                    emails
-                } else {
-                    Vec::new()
-                };
-
-                // Obtain new state and updated ids
+                let mut emails = Vec::new();
                 let mut new_state = None;
                 let mut updated_ids = Vec::new();
-                for _ in 0..set_chunks {
-                    match response.pop().unwrap().unwrap_set_email() {
-                        Ok(mut response) => {
+                for response in response.unwrap_method_responses() {
+                    match response.unwrap_method_response() {
+                        MethodResponse::GetEmail(mut response) => {
+                            emails.extend(response.take_list());
+                        }
+                        MethodResponse::SetEmail(mut response) => {
                             new_state = response.take_new_state();
                             if let Some(updated_ids_) = response.take_updated_ids() {
                                 updated_ids.extend(updated_ids_);
                             }
                         }
-                        Err(err) => {
-                            return Err(err.into_status_response().with_tag(arguments.tag));
+                        MethodResponse::Error(err) => {
+                            return Err(jmap_client::Error::from(err)
+                                .into_status_response()
+                                .with_tag(arguments.tag));
+                        }
+                        response => {
+                            debug!("Received unexpected response from JMAP {:?}", response);
+                            return Err(StatusResponse::no(
+                                "Invalid response received from JMAP server.",
+                            )
+                            .with_tag(arguments.tag)
+                            .with_code(ResponseCode::ContactAdmin));
                         }
                     }
                 }
@@ -265,7 +246,7 @@ impl SessionData {
                     response = response.with_code(response_code)
                 }
 
-                if emails.is_empty() {
+                if !emails.is_empty() {
                     // Return flags for all messages.
                     Ok(response.serialize(
                         Response {
@@ -345,18 +326,3 @@ impl SessionData {
         }
     }
 }
-
-/*
-
-        let response = if !self.unchanged_failed {
-            StatusResponse::completed(Command::Store(self.is_uid), tag)
-        } else {
-            StatusResponse::no(tag.into(), None, "Some of the messages no longer exist.")
-        };
-        if let Some(response_code) = self.code.take() {
-            response.with_code(response_code).serialize(&mut buf);
-        } else {
-            response.serialize(&mut buf);
-        }
-
-*/

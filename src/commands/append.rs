@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use tracing::debug;
+
 use crate::core::{
     client::Session, receiver::Request, Command, IntoStatusResponse, ResponseCode, StatusResponse,
 };
@@ -9,6 +11,19 @@ impl Session {
         match request.parse_append() {
             Ok(arguments) => {
                 let data = self.state.session_data();
+
+                // Refresh mailboxes
+                if let Err(err) = data.synchronize_mailboxes(false).await {
+                    debug!("Failed to refresh mailboxes: {}", err);
+                    return self
+                        .write_bytes(
+                            err.into_status_response()
+                                .with_tag(arguments.tag)
+                                .into_bytes(),
+                        )
+                        .await;
+                }
+
                 let mailbox =
                     if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
                         if mailbox.mailbox_id.is_some() {

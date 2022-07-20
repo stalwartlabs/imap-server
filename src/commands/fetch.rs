@@ -25,11 +25,11 @@ impl Session {
     pub async fn handle_fetch(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
         match request.parse_fetch() {
             Ok(arguments) => {
-                let (data, mailbox) = self.state.mailbox_data();
+                let (data, mailbox, is_writable, _) = self.state.select_data();
                 let is_qresync = self.is_qresync;
                 tokio::spawn(async move {
                     data.write_bytes(
-                        data.fetch(arguments, mailbox, is_uid, is_qresync)
+                        data.fetch(arguments, mailbox, is_writable, is_uid, is_qresync)
                             .await
                             .into_bytes(),
                     )
@@ -47,6 +47,7 @@ impl SessionData {
         &self,
         mut arguments: Arguments,
         mailbox: Arc<MailboxData>,
+        is_writable: bool,
         is_uid: bool,
         is_qresync: bool,
     ) -> StatusResponse {
@@ -119,7 +120,7 @@ impl SessionData {
                         if !destroyed_ids.is_empty() {
                             let mut vanished = self
                                 .core
-                                .jmap_deletions_to_imap(mailbox.clone(), destroyed_ids)
+                                .jmap_deletions_to_imap(mailbox.clone(), destroyed_ids, true)
                                 .await
                                 .unwrap_or_default();
                             if !vanished.is_empty() {
@@ -188,6 +189,7 @@ impl SessionData {
         let mut set_seen_flags = false;
         let mut needs_blobs = false;
         let mut needs_modseq = false;
+        properties.push(Property::Id);
 
         for attribute in &arguments.attributes {
             match attribute {
@@ -195,6 +197,7 @@ impl SessionData {
                     properties.extend([
                         Property::SentAt,
                         Property::Subject,
+                        Property::From,
                         Property::Sender,
                         Property::ReplyTo,
                         Property::Header(Header::as_grouped_addresses("To", true)),
@@ -216,7 +219,9 @@ impl SessionData {
                 Attribute::Rfc822Size => {
                     properties.push(Property::Size);
                 }
-                Attribute::Rfc822Header | Attribute::BodyStructure => {
+                Attribute::Rfc822Header
+                | Attribute::BodyStructure
+                | Attribute::BinarySize { .. } => {
                     /*
                         Note that this did not result in \Seen being set, because
                         RFC822.HEADER response data occurs as a result of a FETCH
@@ -228,17 +233,16 @@ impl SessionData {
                     properties.push_unique(Property::BlobId);
                 }
                 Attribute::BodySection { peek, .. } | Attribute::Binary { peek, .. } => {
-                    if !*peek {
+                    if is_writable && !*peek {
                         set_seen_flags = true;
                     }
                     needs_blobs = true;
                     properties.push_unique(Property::BlobId);
                 }
-                Attribute::Body
-                | Attribute::Rfc822Text
-                | Attribute::Rfc822
-                | Attribute::BinarySize { .. } => {
-                    set_seen_flags = true;
+                Attribute::Body | Attribute::Rfc822Text | Attribute::Rfc822 => {
+                    if is_writable {
+                        set_seen_flags = true;
+                    }
                     needs_blobs = true;
                     properties.push_unique(Property::BlobId);
                 }

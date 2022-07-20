@@ -1,8 +1,12 @@
 pub mod append;
 pub mod basic;
+pub mod copy_move;
 pub mod fetch;
+pub mod idle;
 pub mod mailbox;
 pub mod search;
+pub mod store;
+pub mod thread;
 
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
@@ -37,10 +41,10 @@ pub async fn test_server() {
     .unwrap();
 
     // Create test users
-    /*jmap.domain_create("example.com").await.unwrap();
+    jmap.domain_create("example.com").await.unwrap();
     jmap.individual_create("jdoe@example.com", "secret", "John Doe")
         .await
-        .unwrap();*/
+        .unwrap();
 
     // Connect to IMAP server
     let mut imap_check = ImapConnection::connect(b"_y ").await;
@@ -63,7 +67,22 @@ pub async fn test_server() {
     //mailbox::test(&mut imap, &mut imap_check).await;
     //append::test(&mut imap, &mut imap_check).await;
     //search::test(&mut imap, &mut imap_check).await;
-    append::test(&mut imap, &mut imap_check).await;
+    //fetch::test(&mut imap, &mut imap_check).await;
+    //store::test(&mut imap, &mut imap_check).await;
+    //copy_move::test(&mut imap, &mut imap_check).await;
+    //thread::test(&mut imap, &mut imap_check).await;
+    idle::test(&mut imap, &mut imap_check).await;
+
+    /*
+        TODO
+        - Tests
+            * Idle
+            * Condstore
+            * ACL + Namespace
+        - Authenticate Bearer
+        - List all capabilities
+
+    */
 
     // Logout
     for imap in [&mut imap, &mut imap_check] {
@@ -88,6 +107,7 @@ pub enum Type {
     Tagged,
     Untagged,
     Continuation,
+    Status,
 }
 
 impl ImapConnection {
@@ -106,10 +126,10 @@ impl ImapConnection {
         let mut buf = Vec::with_capacity(10);
         buf.extend_from_slice(match t {
             Type::Tagged => self.tag,
-            Type::Untagged => b"* ",
+            Type::Untagged | Type::Status => b"* ",
             Type::Continuation => b"+ ",
         });
-        if t != Type::Continuation {
+        if !matches!(t, Type::Continuation | Type::Status) {
             rt.serialize(&mut buf);
         }
         if lines
@@ -126,11 +146,11 @@ impl ImapConnection {
     pub async fn read(&mut self, t: Type) -> Vec<String> {
         let mut lines = Vec::new();
         loop {
-            match tokio::time::timeout(Duration::from_millis(500), self.reader.next_line()).await {
+            match tokio::time::timeout(Duration::from_millis(1500), self.reader.next_line()).await {
                 Ok(Ok(Some(line))) => {
                     let is_done = line.starts_with(match t {
                         Type::Tagged => std::str::from_utf8(self.tag).unwrap(),
-                        Type::Untagged => "* ",
+                        Type::Untagged | Type::Status => "* ",
                         Type::Continuation => "+ ",
                     });
                     println!("<- {:?}", line);
@@ -173,6 +193,7 @@ pub trait AssertResult: Sized {
 
     fn assert_response_code(self, code: &str) -> Self;
     fn assert_contains(self, text: &str) -> Self;
+    fn assert_count(self, text: &str, occurences: usize) -> Self;
     fn assert_equals(self, text: &str) -> Self;
     fn get_response_code(&self) -> &str;
 }
@@ -226,6 +247,18 @@ impl AssertResult for Vec<String> {
             }
         }
         panic!("Expected response to contain {:?}, got {:?}", text, self);
+    }
+
+    fn assert_count(self, text: &str, occurences: usize) -> Self {
+        assert_eq!(
+            self.iter().filter(|l| l.contains(text)).count(),
+            occurences,
+            "Expected {} occurrences of {:?}, found {}.",
+            occurences,
+            text,
+            self.iter().filter(|l| l.contains(text)).count()
+        );
+        self
     }
 
     fn assert_equals(self, text: &str) -> Self {

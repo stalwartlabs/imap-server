@@ -791,7 +791,7 @@ impl<'x> FetchItem<'x> {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         buf.extend_from_slice(b"* ");
         buf.extend_from_slice(self.id.to_string().as_bytes());
-        buf.extend_from_slice(b" (");
+        buf.extend_from_slice(b" FETCH (");
         for (pos, item) in self.items.iter().enumerate() {
             if pos > 0 {
                 buf.push(b' ');
@@ -1328,7 +1328,7 @@ mod tests {
             )
             .unwrap(),
             concat!(
-                "* 123 (FLAGS (\\Deleted \\Flagged) ",
+                "* 123 FETCH (FLAGS (\\Deleted \\Flagged) ",
                 "UID 983 ",
                 "RFC822.SIZE 443 ",
                 "RFC822.TEXT {2}\r\nhi ",

@@ -8,11 +8,11 @@ impl Session {
     pub async fn handle_noop(&mut self, request: Request, is_check: bool) -> Result<(), ()> {
         match &self.state {
             State::Authenticated { data } => {
-                data.write_changes(None, true, false, self.version.is_rev2())
+                data.write_changes(None, true, None, self.version.is_rev2())
                     .await;
             }
             State::Selected { data, mailbox, .. } => {
-                data.write_changes(mailbox.into(), true, true, self.version.is_rev2())
+                data.write_changes(mailbox.into(), true, None, self.version.is_rev2())
                     .await;
             }
             _ => (),
