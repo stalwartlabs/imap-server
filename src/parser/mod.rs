@@ -1,3 +1,4 @@
+pub mod acl;
 pub mod append;
 pub mod authenticate;
 pub mod copy_move;
@@ -62,6 +63,11 @@ impl Command {
             b"THREAD" => Some(Command::Thread(uid)),
             b"LSUB" => Some(Command::Lsub),
             b"CHECK" => Some(Command::Check),
+            b"SETACL" => Some(Command::SetAcl),
+            b"DELETEACL" => Some(Command::DeleteAcl),
+            b"GETACL" => Some(Command::GetAcl),
+            b"LISTRIGHTS" => Some(Command::ListRights),
+            b"MYRIGHTS" => Some(Command::MyRights),
             _ => None,
         }
     }

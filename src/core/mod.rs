@@ -69,6 +69,13 @@ pub enum Command {
     // RFC5256
     Sort(bool),
     Thread(bool),
+
+    // RFC4314
+    SetAcl,
+    DeleteAcl,
+    GetAcl,
+    ListRights,
+    MyRights,
 }
 
 impl Command {

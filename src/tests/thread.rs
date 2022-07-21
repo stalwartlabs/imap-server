@@ -1,44 +1,19 @@
 use crate::core::ResponseType;
 
-use super::{AssertResult, ImapConnection, Type};
-
-fn build_message(message: usize, in_reply_to: Option<usize>, thread_num: usize) -> String {
-    if let Some(in_reply_to) = in_reply_to {
-        format!(
-            "Message-ID: <{}@domain>\nReferences: <{}@domain>\nSubject: re: T{}\n\nreply\n",
-            message, in_reply_to, thread_num
-        )
-    } else {
-        format!(
-            "Message-ID: <{}@domain>\nSubject: T{}\n\nmsg\n",
-            message, thread_num
-        )
-    }
-}
+use super::{
+    append::{assert_append_message, build_messages},
+    AssertResult, ImapConnection, Type,
+};
 
 pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     // Create test messages
-    let mut messages = Vec::new();
-    for parent in 0..3 {
-        messages.push(build_message(parent, None, parent));
-        for child in 0..3 {
-            messages.push(build_message(
-                ((parent + 1) * 10) + child,
-                parent.into(),
-                parent,
-            ));
-        }
-    }
+    let messages = build_messages();
 
     // Insert messages
     imap.send("CREATE Manchego").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     for message in messages {
-        imap.send(&format!("APPEND Manchego {{{}}}", message.len()))
-            .await;
-        imap.assert_read(Type::Continuation, ResponseType::Ok).await;
-        imap.send_untagged(&message).await;
-        imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+        assert_append_message(imap, "Manchego", &message).await;
     }
 
     imap.send("SELECT Manchego").await;

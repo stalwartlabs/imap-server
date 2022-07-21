@@ -53,11 +53,51 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         imap.assert_read(Type::Continuation, ResponseType::Ok).await;
         imap.send_untagged(std::str::from_utf8(&raw_message).unwrap())
             .await;
-        let result = imap.assert_read(Type::Tagged, ResponseType::Ok).await;
-        let mut code = result.get_response_code().split(' ');
+        let result = imap
+            .assert_read(Type::Tagged, ResponseType::Ok)
+            .await
+            .into_response_code();
+        let mut code = result.split(' ');
         assert_eq!(code.next(), Some("APPENDUID"));
         assert_ne!(code.next(), Some("0"));
         assert_eq!(code.next(), Some(expected_uid.to_string().as_str()));
         expected_uid += 1;
     }
+}
+
+pub async fn assert_append_message(imap: &mut ImapConnection, folder: &str, message: &str) {
+    imap.send(&format!("APPEND \"{}\" {{{}}}", folder, message.len()))
+        .await;
+    imap.assert_read(Type::Continuation, ResponseType::Ok).await;
+    imap.send_untagged(message).await;
+    imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+}
+
+fn build_message(message: usize, in_reply_to: Option<usize>, thread_num: usize) -> String {
+    if let Some(in_reply_to) = in_reply_to {
+        format!(
+            "Message-ID: <{}@domain>\nReferences: <{}@domain>\nSubject: re: T{}\n\nreply\n",
+            message, in_reply_to, thread_num
+        )
+    } else {
+        format!(
+            "Message-ID: <{}@domain>\nSubject: T{}\n\nmsg\n",
+            message, thread_num
+        )
+    }
+}
+
+pub fn build_messages() -> Vec<String> {
+    let mut messages = Vec::new();
+    for parent in 0..3 {
+        messages.push(build_message(parent, None, parent));
+        for child in 0..3 {
+            messages.push(build_message(
+                ((parent + 1) * 10) + child,
+                parent.into(),
+                parent,
+            ));
+        }
+    }
+    messages
 }

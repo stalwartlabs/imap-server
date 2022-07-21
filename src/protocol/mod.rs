@@ -4,6 +4,7 @@ use jmap_client::core::set::from_timestamp;
 
 use crate::core::{Command, Flag, ResponseCode, ResponseType, StatusResponse};
 
+pub mod acl;
 pub mod append;
 pub mod authenticate;
 pub mod capability;
@@ -367,6 +368,11 @@ impl Display for Command {
             Command::Thread(true) => write!(f, "UID THREAD"),
             Command::Lsub => write!(f, "LSUB"),
             Command::Check => write!(f, "CHECK"),
+            Command::SetAcl => write!(f, "SETACL"),
+            Command::DeleteAcl => write!(f, "DELETEACL"),
+            Command::GetAcl => write!(f, "GETACL"),
+            Command::ListRights => write!(f, "LISTRIGHTS"),
+            Command::MyRights => write!(f, "MYRIGHTS"),
         }
     }
 }

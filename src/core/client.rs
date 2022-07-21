@@ -207,6 +207,11 @@ impl Session {
                 Command::Logout => {
                     self.handle_logout(request).await?;
                 }
+                Command::SetAcl => todo!(),
+                Command::DeleteAcl => todo!(),
+                Command::GetAcl => todo!(),
+                Command::ListRights => todo!(),
+                Command::MyRights => todo!(),
             }
         }
 
@@ -264,7 +269,12 @@ impl Request {
             | Command::Namespace
             | Command::Status
             | Command::Append
-            | Command::Idle => {
+            | Command::Idle
+            | Command::SetAcl
+            | Command::DeleteAcl
+            | Command::GetAcl
+            | Command::ListRights
+            | Command::MyRights => {
                 if let State::Authenticated { .. } | State::Selected { .. } = state {
                     Ok(self)
                 } else {

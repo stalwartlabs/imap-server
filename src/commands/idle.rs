@@ -230,6 +230,7 @@ impl SessionData {
                                 mailbox.clone(),
                                 changes.take_destroyed(),
                                 false,
+                                false,
                             )
                             .await
                         {

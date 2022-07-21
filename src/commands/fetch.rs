@@ -51,6 +51,21 @@ impl SessionData {
         is_uid: bool,
         is_qresync: bool,
     ) -> StatusResponse {
+        // Validate VANISHED parameter
+        let sequence_set = if arguments.include_vanished {
+            if !is_qresync {
+                return StatusResponse::bad("Enable QRESYNC first to use the VANISHED parameter.")
+                    .with_tag(arguments.tag);
+            } else if !is_uid {
+                return StatusResponse::bad("VANISHED parameter is only available for UID FETCH.")
+                    .with_tag(arguments.tag);
+            }
+
+            arguments.sequence_set.try_expand()
+        } else {
+            None
+        };
+
         // Convert IMAP ids to JMAP ids.
         let mut ids = match self
             .imap_sequence_to_jmap(mailbox.clone(), arguments.sequence_set, is_uid)
@@ -68,17 +83,6 @@ impl SessionData {
                 return response.with_tag(arguments.tag);
             }
         };
-
-        // Validate VANISHED parameter
-        if arguments.include_vanished {
-            if !is_qresync {
-                return StatusResponse::bad("Enable QRESYNC first to use the VANISHED parameter.")
-                    .with_tag(arguments.tag);
-            } else if !is_uid {
-                return StatusResponse::bad("VANISHED parameter is only available for UID FETCH.")
-                    .with_tag(arguments.tag);
-            }
-        }
 
         // Convert state to modseq
         if let Some(changed_since) = arguments.changed_since {
@@ -105,33 +109,87 @@ impl SessionData {
             match request.send_changes_email().await {
                 Ok(mut changes) => {
                     // Send vanished UIDs
-                    if arguments.include_vanished && !changes.destroyed().is_empty() {
-                        let destroyed_ids = changes
-                            .take_destroyed()
-                            .into_iter()
-                            .filter_map(|jmap_id| {
-                                if ids.jmap_ids.contains(&jmap_id) {
-                                    Some(jmap_id)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>();
-                        if !destroyed_ids.is_empty() {
-                            let mut vanished = self
-                                .core
-                                .jmap_deletions_to_imap(mailbox.clone(), destroyed_ids, true)
-                                .await
-                                .unwrap_or_default();
-                            if !vanished.is_empty() {
-                                vanished.sort_unstable();
-                                let mut buf = Vec::with_capacity(vanished.len() * 2);
-                                Vanished {
-                                    earlier: true,
-                                    ids: vanished,
-                                }
-                                .serialize(&mut buf);
+                    if arguments.include_vanished {
+                        let mut vanished =
+                            Vec::with_capacity(changes.destroyed().len() + changes.updated().len());
+
+                        // Add to vanished all known destroyed Ids
+                        if !changes.destroyed().is_empty() {
+                            let destroyed_ids = changes
+                                .take_destroyed()
+                                .into_iter()
+                                .filter_map(|jmap_id| {
+                                    if ids.jmap_ids.contains(&jmap_id) {
+                                        Some(jmap_id)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            if !destroyed_ids.is_empty() {
+                                vanished.extend(
+                                    self.core
+                                        .jmap_deletions_to_imap(
+                                            mailbox.clone(),
+                                            destroyed_ids,
+                                            true,
+                                            false,
+                                        )
+                                        .await
+                                        .unwrap_or_default(),
+                                );
                             }
+                        }
+
+                        // Add to vanished all message Ids that have been updated
+                        // but are no longer in this mailbox. This is the case when
+                        // messages are moved. There might be some false positives
+                        // when a message is changed while in a different folder.
+                        if !changes.updated().is_empty() {
+                            let missing_ids = changes
+                                .updated()
+                                .iter()
+                                .filter_map(|jmap_id| {
+                                    if !ids.jmap_ids.contains(jmap_id) {
+                                        Some(jmap_id.to_string())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            if !missing_ids.is_empty() {
+                                vanished.extend(
+                                    self.core
+                                        .jmap_deletions_to_imap(
+                                            mailbox.clone(),
+                                            missing_ids,
+                                            true,
+                                            true,
+                                        )
+                                        .await
+                                        .unwrap_or_default(),
+                                );
+                            }
+                        }
+
+                        // Add messages no longer in this mailbox to the vanished list.
+                        if let Some(sequence_set) = sequence_set {
+                            for uid in sequence_set {
+                                if !ids.uids.contains(&uid) && !vanished.contains(&uid) {
+                                    vanished.push(uid);
+                                }
+                            }
+                        }
+
+                        if !vanished.is_empty() {
+                            vanished.sort_unstable();
+                            let mut buf = Vec::with_capacity(vanished.len() * 3);
+                            Vanished {
+                                earlier: true,
+                                ids: vanished,
+                            }
+                            .serialize(&mut buf);
+                            self.write_bytes(buf).await;
                         }
                     }
 

@@ -1,3 +1,4 @@
+pub mod acl;
 pub mod append;
 pub mod authenticate;
 pub mod capability;

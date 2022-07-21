@@ -1,5 +1,6 @@
 pub mod append;
 pub mod basic;
+pub mod condstore;
 pub mod copy_move;
 pub mod fetch;
 pub mod idle;
@@ -71,13 +72,12 @@ pub async fn test_server() {
     //store::test(&mut imap, &mut imap_check).await;
     //copy_move::test(&mut imap, &mut imap_check).await;
     //thread::test(&mut imap, &mut imap_check).await;
-    idle::test(&mut imap, &mut imap_check).await;
+    //idle::test(&mut imap, &mut imap_check).await;
+    condstore::test(&mut imap, &mut imap_check).await;
 
     /*
         TODO
         - Tests
-            * Idle
-            * Condstore
             * ACL + Namespace
         - Authenticate Bearer
         - List all capabilities
@@ -195,7 +195,10 @@ pub trait AssertResult: Sized {
     fn assert_contains(self, text: &str) -> Self;
     fn assert_count(self, text: &str, occurences: usize) -> Self;
     fn assert_equals(self, text: &str) -> Self;
-    fn get_response_code(&self) -> &str;
+    fn into_response_code(self) -> String;
+    fn into_highest_modseq(self) -> String;
+    fn into_uid_validity(self) -> String;
+    fn into_modseq(self) -> String;
 }
 
 impl AssertResult for Vec<String> {
@@ -270,13 +273,56 @@ impl AssertResult for Vec<String> {
         panic!("Expected response to be {:?}, got {:?}", text, self);
     }
 
-    fn get_response_code(&self) -> &str {
+    fn into_response_code(self) -> String {
         if let Some((_, code)) = self.last().unwrap().split_once('[') {
             if let Some((code, _)) = code.split_once(']') {
-                return code;
+                return code.to_string();
             }
         }
         panic!("No response code found in {:?}", self.last().unwrap());
+    }
+
+    fn into_highest_modseq(self) -> String {
+        for line in &self {
+            if let Some((_, value)) = line.split_once("HIGHESTMODSEQ ") {
+                if let Some((value, _)) = value.split_once(']') {
+                    return value.to_string();
+                } else if let Some((value, _)) = value.split_once(')') {
+                    return value.to_string();
+                } else {
+                    panic!("No HIGHESTMODSEQ delimiter found in {:?}", line);
+                }
+            }
+        }
+        panic!("No HIGHESTMODSEQ entries found in {:?}", self);
+    }
+
+    fn into_modseq(self) -> String {
+        for line in &self {
+            if let Some((_, value)) = line.split_once("MODSEQ (") {
+                if let Some((value, _)) = value.split_once(')') {
+                    return value.to_string();
+                } else {
+                    panic!("No MODSEQ delimiter found in {:?}", line);
+                }
+            }
+        }
+        panic!("No MODSEQ entries found in {:?}", self);
+    }
+
+    fn into_uid_validity(self) -> String {
+        for line in &self {
+            if let Some((_, value)) = line.split_once("UIDVALIDITY ") {
+                if let Some((value, _)) = value.split_once(']') {
+                    return value.to_string();
+                } else if let Some((value, _)) = value.split_once(')') {
+                    return value.to_string();
+                } else {
+                    panic!("No UIDVALIDITY delimiter found in {:?}", line);
+                }
+            }
+        }
+        panic!("No UIDVALIDITY entries found in {:?}", self);
     }
 }
 

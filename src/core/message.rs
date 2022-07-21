@@ -335,6 +335,7 @@ impl Core {
         mailbox: Arc<MailboxData>,
         jmap_ids: Vec<String>,
         as_uid: bool,
+        only_deleted: bool,
     ) -> Result<Vec<u32>, ()> {
         if jmap_ids.is_empty() {
             return Ok(Vec::new());
@@ -346,21 +347,28 @@ impl Core {
 
             for jmap_id in &jmap_ids {
                 let jmap_id = jmap_id.as_bytes();
-                let uid = if let Some(uid) = db
-                    .get(serialize_key(&mailbox, JMAP_TO_UID, jmap_id))
-                    .map_err(|err| {
-                    error!("Failed to get key: {}", err);
-                })? {
-                    u32::from_be_bytes((&uid[..]).try_into().map_err(|_| {
-                        error!("Failed to convert bytes to u32.");
-                    })?)
-                } else if let Some(uid) = db
+
+                if !only_deleted {
+                    if let Some(uid) = db
+                        .get(serialize_key(&mailbox, JMAP_TO_UID, jmap_id))
+                        .map_err(|err| {
+                            error!("Failed to get key: {}", err);
+                        })?
+                    {
+                        uids.push(u32::from_be_bytes((&uid[..]).try_into().map_err(|_| {
+                            error!("Failed to convert bytes to u32.");
+                        })?));
+                        continue;
+                    }
+                }
+
+                if let Some(uid) = db
                     .get(serialize_key(&mailbox, JMAP_DELETED_IDS, jmap_id))
                     .map_err(|err| {
                         error!("Failed to get key: {}", err);
                     })?
                 {
-                    u32::from_be_bytes(
+                    uids.push(u32::from_be_bytes(
                         (if as_uid {
                             &uid[..std::mem::size_of::<u32>()]
                         } else {
@@ -370,12 +378,8 @@ impl Core {
                         .map_err(|_| {
                             error!("Failed to convert bytes to u32.");
                         })?,
-                    )
-                } else {
-                    continue;
-                };
-
-                uids.push(uid);
+                    ));
+                }
             }
 
             Ok(uids)
