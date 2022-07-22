@@ -218,7 +218,7 @@ impl ImapResponse for Response {
 #[cfg(test)]
 mod tests {
     use crate::protocol::{
-        status::{Status, StatusItem},
+        status::{Status, StatusItem, StatusItemType},
         ImapResponse,
     };
 
@@ -306,11 +306,14 @@ mod tests {
                 status_items: vec![
                     StatusItem {
                         mailbox_name: "INBOX".to_string(),
-                        items: vec![(Status::Messages, 17)],
+                        items: vec![(Status::Messages, StatusItemType::Number(17))],
                     },
                     StatusItem {
                         mailbox_name: "foo".to_string(),
-                        items: vec![(Status::Messages, 30), (Status::Unseen, 29)],
+                        items: vec![
+                            (Status::Messages, StatusItemType::Number(30)),
+                            (Status::Unseen, StatusItemType::Number(29)),
+                        ],
                     },
                 ],
                 is_lsub: false,

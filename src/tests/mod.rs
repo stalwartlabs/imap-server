@@ -1,3 +1,4 @@
+pub mod acl;
 pub mod append;
 pub mod basic;
 pub mod condstore;
@@ -41,9 +42,15 @@ pub async fn test_server() {
     .await
     .unwrap();
 
-    // Create test users
+    // Create test acounts
     jmap.domain_create("example.com").await.unwrap();
     jmap.individual_create("jdoe@example.com", "secret", "John Doe")
+        .await
+        .unwrap();
+    jmap.individual_create("jane.smith@example.com", "secret", "Jane Smith")
+        .await
+        .unwrap();
+    jmap.individual_create("foobar@example.com", "secret", "Bill Foobar")
         .await
         .unwrap();
 
@@ -73,7 +80,8 @@ pub async fn test_server() {
     //copy_move::test(&mut imap, &mut imap_check).await;
     //thread::test(&mut imap, &mut imap_check).await;
     //idle::test(&mut imap, &mut imap_check).await;
-    condstore::test(&mut imap, &mut imap_check).await;
+    //condstore::test(&mut imap, &mut imap_check).await;
+    acl::test(&mut imap, &mut imap_check).await;
 
     /*
         TODO
@@ -182,6 +190,11 @@ impl ImapConnection {
         self.writer.write_all(text.as_bytes()).await.unwrap();
         self.writer.write_all(b"\r\n").await.unwrap();
     }
+
+    pub async fn send_raw(&mut self, text: &str) {
+        println!("-> {:?}", text);
+        self.writer.write_all(text.as_bytes()).await.unwrap();
+    }
 }
 
 pub trait AssertResult: Sized {
@@ -198,6 +211,8 @@ pub trait AssertResult: Sized {
     fn into_response_code(self) -> String;
     fn into_highest_modseq(self) -> String;
     fn into_uid_validity(self) -> String;
+    fn into_append_uid(self) -> String;
+    fn into_copy_uid(self) -> String;
     fn into_modseq(self) -> String;
 }
 
@@ -280,6 +295,30 @@ impl AssertResult for Vec<String> {
             }
         }
         panic!("No response code found in {:?}", self.last().unwrap());
+    }
+
+    fn into_append_uid(self) -> String {
+        if let Some((_, code)) = self.last().unwrap().split_once("[APPENDUID ") {
+            if let Some((code, _)) = code.split_once(']') {
+                if let Some((_, uid)) = code.split_once(' ') {
+                    return uid.to_string();
+                }
+            }
+        }
+        panic!("No APPENDUID found in {:?}", self.last().unwrap());
+    }
+
+    fn into_copy_uid(self) -> String {
+        for line in &self {
+            if let Some((_, code)) = line.split_once("[COPYUID ") {
+                if let Some((code, _)) = code.split_once(']') {
+                    if let Some((_, uid)) = code.split_once(' ') {
+                        return uid.to_string();
+                    }
+                }
+            }
+        }
+        panic!("No COPYUID found in {:?}", self);
     }
 
     fn into_highest_modseq(self) -> String {

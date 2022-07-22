@@ -13,7 +13,7 @@ impl Session {
                 let data = self.state.session_data();
 
                 // Refresh mailboxes
-                if let Err(err) = data.synchronize_mailboxes(false).await {
+                if let Err(err) = data.synchronize_mailboxes(false, false).await {
                     debug!("Failed to refresh mailboxes: {}", err);
                     return self
                         .write_bytes(
@@ -52,47 +52,52 @@ impl Session {
                     };
 
                 tokio::spawn(async move {
-                    match data
-                        .client
-                        .email_import_account(
-                            &mailbox.account_id,
-                            arguments.message,
-                            [mailbox.mailbox_id.as_ref().unwrap()],
-                            arguments.flags.iter().map(|f| f.to_jmap()).into(),
-                            arguments.received_at,
-                        )
-                        .await
-                    {
-                        Ok(mut email) => {
-                            let jmap_id = email.take_id();
-                            let mut response =
-                                StatusResponse::completed(Command::Append).with_tag(arguments.tag);
-                            if !jmap_id.is_empty() {
-                                if let Ok(ids) = data
-                                    .core
-                                    .jmap_to_imap(mailbox.clone(), vec![jmap_id], true, true)
-                                    .await
-                                {
-                                    if let Ok((uid_validity, _)) = data.core.uids(mailbox).await {
-                                        response = response.with_code(ResponseCode::AppendUid {
-                                            uid_validity,
-                                            uids: ids.uids,
-                                        });
+                    let mut created_uids = Vec::new();
+                    let mut response =
+                        StatusResponse::completed(Command::Append).with_tag(arguments.tag);
+
+                    for message in arguments.messages {
+                        match data
+                            .client
+                            .email_import_account(
+                                &mailbox.account_id,
+                                message.message,
+                                [mailbox.mailbox_id.as_ref().unwrap()],
+                                message.flags.iter().map(|f| f.to_jmap()).into(),
+                                message.received_at,
+                            )
+                            .await
+                        {
+                            Ok(mut email) => {
+                                let jmap_id = email.take_id();
+
+                                if !jmap_id.is_empty() {
+                                    if let Ok(ids) = data
+                                        .core
+                                        .jmap_to_imap(mailbox.clone(), vec![jmap_id], true, true)
+                                        .await
+                                    {
+                                        created_uids.extend(ids.uids);
                                     }
                                 }
                             }
-                            data.write_bytes(response.into_bytes()).await;
-                        }
-                        Err(response) => {
-                            data.write_bytes(
-                                response
-                                    .into_status_response()
-                                    .with_tag(arguments.tag)
-                                    .into_bytes(),
-                            )
-                            .await;
+                            Err(err) => {
+                                response =
+                                    err.into_status_response().with_tag(response.tag.unwrap());
+                                break;
+                            }
                         }
                     }
+
+                    if !created_uids.is_empty() {
+                        if let Ok((uid_validity, _)) = data.core.uids(mailbox.clone()).await {
+                            response = response.with_code(ResponseCode::AppendUid {
+                                uid_validity,
+                                uids: created_uids,
+                            });
+                        }
+                    }
+                    data.write_bytes(response.into_bytes()).await;
                 });
                 Ok(())
             }

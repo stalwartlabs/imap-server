@@ -35,28 +35,39 @@ pub async fn handle_conn(
                 match result {
                     Ok(Ok(bytes_read)) => {
                         if bytes_read > 0 {
-                            match session.ingest(&buf[..bytes_read]).await {
-                                Ok(Some(stream_tx)) => {
-                                    debug!("TLS upgrade requested.");
-                                    handle_conn_tls(
-                                        match session.core.tls_acceptor.accept(stream_rx.unsplit(stream_tx)).await {
-                                            Ok(stream) => stream,
-                                            Err(e) => {
-                                                debug!("Failed to accept TLS connection: {}", e);
-                                                return;
-                                            }
-                                        },
-                                        session,
-                                        shutdown_rx,
-                                    )
-                                    .await;
-                                    return;
-                                }
-                                Ok(None) => (),
-                                Err(_) => {
-                                    debug!("Disconnecting client.");
-                                    return;
-                                }
+                            match &session.idle_tx {
+                                None => {
+                                    match session.ingest(&buf[..bytes_read]).await {
+                                        Ok(Some(stream_tx)) => {
+                                            debug!("TLS upgrade requested.");
+                                            handle_conn_tls(
+                                                match session.core.tls_acceptor.accept(stream_rx.unsplit(stream_tx)).await {
+                                                    Ok(stream) => stream,
+                                                    Err(e) => {
+                                                        debug!("Failed to accept TLS connection: {}", e);
+                                                        return;
+                                                    }
+                                                },
+                                                session,
+                                                shutdown_rx,
+                                            )
+                                            .await;
+                                            return;
+                                        }
+                                        Ok(None) => (),
+                                        Err(_) => {
+                                            debug!("Disconnecting client.");
+                                            return;
+                                        }
+                                    }
+                                },
+                                Some(idle_tx) => {
+                                    if bytes_read >= 4 && &buf[..4] == b"DONE" {
+                                        debug!("Stopping IDLE.");
+                                        idle_tx.send(false).ok();
+                                        session.idle_tx = None;
+                                    }
+                                },
                             }
                         } else {
                             debug!("IMAP connection closed by {}", session.peer_addr);

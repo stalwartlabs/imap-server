@@ -65,12 +65,17 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     }
 }
 
-pub async fn assert_append_message(imap: &mut ImapConnection, folder: &str, message: &str) {
+pub async fn assert_append_message(
+    imap: &mut ImapConnection,
+    folder: &str,
+    message: &str,
+    expected_response: ResponseType,
+) -> Vec<String> {
     imap.send(&format!("APPEND \"{}\" {{{}}}", folder, message.len()))
         .await;
     imap.assert_read(Type::Continuation, ResponseType::Ok).await;
     imap.send_untagged(message).await;
-    imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+    imap.assert_read(Type::Tagged, expected_response).await
 }
 
 fn build_message(message: usize, in_reply_to: Option<usize>, thread_num: usize) -> String {

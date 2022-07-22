@@ -13,7 +13,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.send("CREATE Manchego").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     for message in messages {
-        assert_append_message(imap, "Manchego", &message).await;
+        assert_append_message(imap, "Manchego", &message, ResponseType::Ok).await;
     }
 
     imap.send("SELECT Manchego").await;

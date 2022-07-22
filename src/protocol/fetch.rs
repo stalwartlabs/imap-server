@@ -56,6 +56,8 @@ pub enum Attribute {
         lazy: bool,
     },
     ModSeq,
+    EmailId,
+    ThreadId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +120,12 @@ pub enum DataItem<'x> {
     },
     ModSeq {
         modseq: u32,
+    },
+    EmailId {
+        email_id: String,
+    },
+    ThreadId {
+        thread_id: String,
     },
 }
 
@@ -781,6 +789,16 @@ impl<'x> DataItem<'x> {
             DataItem::ModSeq { modseq } => {
                 buf.extend_from_slice(b"MODSEQ (");
                 buf.extend_from_slice(modseq.to_string().as_bytes());
+                buf.push(b')');
+            }
+            DataItem::EmailId { email_id } => {
+                buf.extend_from_slice(b"EMAILID (");
+                buf.extend_from_slice(email_id.as_bytes());
+                buf.push(b')');
+            }
+            DataItem::ThreadId { thread_id } => {
+                buf.extend_from_slice(b"THREADID (");
+                buf.extend_from_slice(thread_id.as_bytes());
                 buf.push(b')');
             }
         }

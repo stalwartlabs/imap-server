@@ -28,7 +28,7 @@ impl Session {
 impl SessionData {
     pub async fn delete_folder(&self, arguments: Arguments) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes(false).await {
+        if let Err(err) = self.synchronize_mailboxes(false, false).await {
             debug!("Failed to refresh mailboxes: {}", err);
             return err.into_status_response().with_tag(arguments.tag);
         }

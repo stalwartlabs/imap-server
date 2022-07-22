@@ -77,6 +77,8 @@ impl Status {
             Ok(Self::Size)
         } else if value.eq_ignore_ascii_case(b"highestmodseq") {
             Ok(Self::HighestModSeq)
+        } else if value.eq_ignore_ascii_case(b"mailboxid") {
+            Ok(Self::MailboxId)
         } else {
             Err(format!(
                 "Invalid status option '{}'.",

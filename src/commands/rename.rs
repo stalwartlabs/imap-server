@@ -30,7 +30,7 @@ impl Session {
 impl SessionData {
     pub async fn rename_folder(&self, arguments: Arguments) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes(false).await {
+        if let Err(err) = self.synchronize_mailboxes(false, false).await {
             debug!("Failed to refresh mailboxes: {}", err);
 
             return err.into_status_response().with_tag(arguments.tag);
@@ -98,7 +98,7 @@ impl SessionData {
             Ok(mut response) => {
                 let mut mailboxes = if !create_ids.is_empty() {
                     match self.add_created_mailboxes(&mut params, create_ids, &mut response) {
-                        Ok(mailboxes) => mailboxes,
+                        Ok((mailboxes, _)) => mailboxes,
                         Err(message) => {
                             return StatusResponse::no(message).with_tag(arguments.tag);
                         }

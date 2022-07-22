@@ -93,12 +93,16 @@ pub enum Filter {
     New,
     Old,
 
-    // RFC5032 - WITHIN
+    // RFC 5032 - WITHIN
     Older(u32),
     Younger(u32),
 
-    // RFC4551 - CONDSTORE
+    // RFC 4551 - CONDSTORE
     ModSeq((u64, ModSeqEntry)),
+
+    // RFC 8474 - ObjectID
+    EmailId(String),
+    ThreadId(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

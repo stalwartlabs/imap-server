@@ -29,6 +29,7 @@ pub struct Response {
     pub is_rev2: bool,
     pub closed_previous: bool,
     pub highest_modseq: Option<u32>,
+    pub mailbox_id: String,
 }
 
 impl ImapResponse for Response {
@@ -69,6 +70,9 @@ impl ImapResponse for Response {
             buf.extend_from_slice(highest_modseq.to_string().as_bytes());
             buf.extend_from_slice(b"]\r\n");
         }
+        buf.extend_from_slice(b"* OK [MAILBOXID (");
+        buf.extend_from_slice(self.mailbox_id.as_bytes());
+        buf.extend_from_slice(b")]\r\n");
         buf
     }
 }
@@ -91,6 +95,7 @@ mod tests {
                     closed_previous: false,
                     is_rev2: true,
                     highest_modseq: 100.into(),
+                    mailbox_id: "abc".into(),
                 },
                 "A142",
                 concat!(
@@ -101,6 +106,7 @@ mod tests {
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
                     "* OK [HIGHESTMODSEQ 100]\r\n",
+                    "* OK [MAILBOXID (abc)]\r\n"
                 ),
                 concat!(
                     "* 172 EXISTS\r\n",
@@ -111,6 +117,7 @@ mod tests {
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
                     "* OK [HIGHESTMODSEQ 100]\r\n",
+                    "* OK [MAILBOXID (abc)]\r\n"
                 ),
             ),
             (
@@ -124,6 +131,7 @@ mod tests {
                     closed_previous: true,
                     is_rev2: true,
                     highest_modseq: None,
+                    mailbox_id: "abc".into(),
                 },
                 "A142",
                 concat!(
@@ -135,6 +143,7 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
+                    "* OK [MAILBOXID (abc)]\r\n"
                 ),
                 concat!(
                     "* OK [CLOSED] Closed previous mailbox\r\n",
@@ -145,6 +154,7 @@ mod tests {
                     "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
                     "* OK [UIDVALIDITY 3857529045]\r\n",
                     "* OK [UIDNEXT 4392]\r\n",
+                    "* OK [MAILBOXID (abc)]\r\n"
                 ),
             ),
         ] {

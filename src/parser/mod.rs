@@ -68,6 +68,8 @@ impl Command {
             b"GETACL" => Some(Command::GetAcl),
             b"LISTRIGHTS" => Some(Command::ListRights),
             b"MYRIGHTS" => Some(Command::MyRights),
+            b"UNAUTHENTICATE" => Some(Command::Unauthenticate),
+            b"ID" => Some(Command::Id),
             _ => None,
         }
     }

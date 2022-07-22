@@ -898,7 +898,7 @@ mod tests {
         // Remove account
         core.delete_account("abc".to_string()).await.unwrap();
         let (uid_validity, uid_next) = core.uids(mailbox_abc.clone()).await.unwrap();
-        assert_eq!(uid_validity, 0);
+        assert_ne!(uid_validity, 0);
         assert_eq!(uid_next, 0);
         assert_eq!(
             core.imap_to_jmap(
@@ -1058,7 +1058,7 @@ mod tests {
         .await
         .unwrap();
         let (uid_validity, uid_next) = core.uids(mailbox.clone()).await.unwrap();
-        assert_eq!(uid_validity, 0);
+        assert_ne!(uid_validity, 0);
         assert_eq!(uid_next, 0);
 
         assert_eq!(

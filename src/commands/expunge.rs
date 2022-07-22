@@ -101,7 +101,10 @@ impl SessionData {
                 },
             ))
             .result_reference();
-        request.set_email().destroy_ref(result_ref);
+        request
+            .set_email()
+            .account_id(&mailbox.account_id)
+            .destroy_ref(result_ref);
         let mut response = request
             .send()
             .await

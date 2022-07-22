@@ -25,4 +25,22 @@ impl Session {
         )
         .await
     }
+
+    pub async fn handle_id(&mut self, request: Request) -> Result<(), ()> {
+        self.write_bytes(
+            StatusResponse::completed(Command::Id)
+                .with_tag(request.tag)
+                .serialize(
+                    concat!(
+                        "* ID (\"name\" \"Stalwart IMAP\" \"version\" \"",
+                        env!("CARGO_PKG_VERSION"),
+                        "\" \"vendor\" \"Stalwart Labs Ltd.\" ",
+                        "\"support-url\" \"https://stalw.art/imap\")"
+                    )
+                    .as_bytes()
+                    .to_vec(),
+                ),
+        )
+        .await
+    }
 }

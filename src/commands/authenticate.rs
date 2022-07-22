@@ -165,4 +165,15 @@ impl Session {
             }
         }
     }
+
+    pub async fn handle_unauthenticate(&mut self, request: Request) -> Result<(), ()> {
+        self.state = State::NotAuthenticated { auth_failures: 0 };
+
+        self.write_bytes(
+            StatusResponse::completed(Command::Unauthenticate)
+                .with_tag(request.tag)
+                .into_bytes(),
+        )
+        .await
+    }
 }

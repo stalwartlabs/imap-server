@@ -239,6 +239,7 @@ impl SessionData {
     pub async fn synchronize_mailboxes(
         &self,
         return_changes: bool,
+        force_session_refresh: bool,
     ) -> jmap_client::Result<Option<MailboxSync>> {
         let mut changes = if return_changes {
             MailboxSync::default().into()
@@ -248,7 +249,7 @@ impl SessionData {
 
         // Shared mailboxes might have changed
         let mut added_accounts = Vec::new();
-        if !self.client.is_session_updated() {
+        if force_session_refresh || !self.client.is_session_updated() {
             self.client.refresh_session().await?;
             let session = self.client.session();
 

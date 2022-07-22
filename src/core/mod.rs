@@ -23,6 +23,7 @@ pub struct Core {
     pub jmap_url: String,
     pub folder_shared: String,
     pub folder_all: String,
+    pub max_request_size: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,16 +67,22 @@ pub enum Command {
     Lsub,
     Check,
 
-    // RFC5256
+    // RFC 5256
     Sort(bool),
     Thread(bool),
 
-    // RFC4314
+    // RFC 4314
     SetAcl,
     DeleteAcl,
     GetAcl,
     ListRights,
     MyRights,
+
+    // RFC 8437
+    Unauthenticate,
+
+    // RFC 2971
+    Id,
 }
 
 impl Command {
@@ -154,6 +161,9 @@ pub enum ResponseCode {
 
     // CONDSTORE
     Modified { ids: Vec<u32> },
+
+    // ObjectID
+    MailboxId { mailbox_id: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -284,8 +294,7 @@ impl IntoStatusResponse for jmap_client::Error {
                 ProblemType::Other(_) => match err.status().unwrap_or(0) {
                     403 => (
                         ResponseCode::NoPerm,
-                        "Failed to authenticate with JMAP server, please try to login again."
-                            .to_string(),
+                        "You do not have enough permissions to perform this action.".to_string(),
                     ),
                     429 => (
                         ResponseCode::Limit,

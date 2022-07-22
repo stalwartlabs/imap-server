@@ -80,7 +80,16 @@ impl SessionData {
             };
 
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes(false).await {
+        let force_refresh;
+        #[cfg(test)]
+        {
+            force_refresh = true;
+        }
+        #[cfg(not(test))]
+        {
+            force_refresh = false;
+        }
+        if let Err(err) = self.synchronize_mailboxes(false, force_refresh).await {
             debug!("Failed to refresh mailboxes: {}", err);
             self.write_bytes(err.into_status_response().with_tag(tag).into_bytes())
                 .await;

@@ -39,7 +39,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     let mut modseqs = vec![hms];
 
     // SEQ 1: Append a message and make sure the modseq increased
-    assert_append_message(imap, "Pecorino", &messages.pop().unwrap()).await;
+    assert_append_message(imap, "Pecorino", &messages.pop().unwrap(), ResponseType::Ok).await;
     imap.send("STATUS Pecorino (HIGHESTMODSEQ)").await;
     modseqs.push(
         imap.assert_read(Type::Tagged, ResponseType::Ok)
@@ -60,7 +60,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     assert_ne!(modseqs[modseqs.len() - 1], modseqs[modseqs.len() - 2]);
 
     // SEQ 3: Insert message
-    assert_append_message(imap, "Pecorino", &messages.pop().unwrap()).await;
+    assert_append_message(imap, "Pecorino", &messages.pop().unwrap(), ResponseType::Ok).await;
     imap.send("STATUS Pecorino (HIGHESTMODSEQ)").await;
     modseqs.push(
         imap.assert_read(Type::Tagged, ResponseType::Ok)
@@ -69,7 +69,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     );
 
     // SEQ 4: Insert message
-    assert_append_message(imap, "Pecorino", &messages.pop().unwrap()).await;
+    assert_append_message(imap, "Pecorino", &messages.pop().unwrap(), ResponseType::Ok).await;
     imap.send("STATUS Pecorino (HIGHESTMODSEQ)").await;
     modseqs.push(
         imap.assert_read(Type::Tagged, ResponseType::Ok)
@@ -78,7 +78,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     );
 
     // SEQ 5: Insert message
-    assert_append_message(imap, "Pecorino", &messages.pop().unwrap()).await;
+    assert_append_message(imap, "Pecorino", &messages.pop().unwrap(), ResponseType::Ok).await;
     imap.send("STATUS Pecorino (HIGHESTMODSEQ)").await;
     modseqs.push(
         imap.assert_read(Type::Tagged, ResponseType::Ok)
@@ -95,7 +95,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     );
 
     // SEQ 7: Insert message
-    assert_append_message(imap, "Pecorino", &messages.pop().unwrap()).await;
+    assert_append_message(imap, "Pecorino", &messages.pop().unwrap(), ResponseType::Ok).await;
     imap.send("STATUS Pecorino (HIGHESTMODSEQ)").await;
     modseqs.push(
         imap.assert_read(Type::Tagged, ResponseType::Ok)

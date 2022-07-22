@@ -13,7 +13,7 @@ use crate::{
         receiver::Request,
         Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
-    protocol::status::{Status, StatusItem},
+    protocol::status::{Status, StatusItem, StatusItemType},
 };
 
 impl Session {
@@ -24,7 +24,7 @@ impl Session {
                 let data = self.state.session_data();
                 tokio::spawn(async move {
                     // Refresh mailboxes
-                    if let Err(err) = data.synchronize_mailboxes(false).await {
+                    if let Err(err) = data.synchronize_mailboxes(false, false).await {
                         debug!("Failed to refresh mailboxes: {}", err);
                         data.write_bytes(
                             err.into_status_response()
@@ -95,52 +95,64 @@ impl SessionData {
                     match item {
                         Status::Messages => {
                             if let Some(value) = mailbox_data.total_messages {
-                                items_response.push((*item, value as u32));
+                                items_response.push((*item, StatusItemType::Number(value as u32)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::UidNext => {
                             if let Some(value) = mailbox_data.uid_next {
-                                items_response.push((*item, value as u32));
+                                items_response.push((*item, StatusItemType::Number(value as u32)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::UidValidity => {
                             if let Some(value) = mailbox_data.uid_validity {
-                                items_response.push((*item, value as u32));
+                                items_response.push((*item, StatusItemType::Number(value as u32)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::Unseen => {
                             if let Some(value) = mailbox_data.total_unseen {
-                                items_response.push((*item, value as u32));
+                                items_response.push((*item, StatusItemType::Number(value as u32)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::Deleted => {
                             if let Some(value) = mailbox_data.total_deleted {
-                                items_response.push((*item, value as u32));
+                                items_response.push((*item, StatusItemType::Number(value as u32)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::Size => {
                             if let Some(value) = mailbox_data.size {
-                                items_response.push((*item, value as u32));
+                                items_response.push((*item, StatusItemType::Number(value as u32)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::HighestModSeq => {
                             if let Some(value) = account.modseq {
-                                items_response.push((*item, value));
+                                items_response.push((*item, StatusItemType::Number(value)));
                             } else {
                                 items_update.push(*item);
                             }
+                        }
+                        Status::MailboxId => {
+                            items_response.push((
+                                *item,
+                                StatusItemType::String(
+                                    if let Some(mailbox_id) = &mailbox.mailbox_id {
+                                        format!("{}/{}", mailbox.account_id, mailbox_id)
+                                    } else {
+                                        mailbox.account_id.to_string()
+                                    },
+                                ),
+                            ));
                         }
                     }
                 }
@@ -170,13 +182,22 @@ impl SessionData {
                     mailbox_data.uid_next = status.uid_next.into();
                     mailbox_data.uid_validity = status.uid_validity.into();
                     if items_update.contains(&Status::UidNext) {
-                        items_response.push((Status::UidNext, status.uid_next as u32));
+                        items_response.push((
+                            Status::UidNext,
+                            StatusItemType::Number(status.uid_next as u32),
+                        ));
                     }
                     if items_update.contains(&Status::UidValidity) {
-                        items_response.push((Status::UidValidity, status.uid_validity as u32));
+                        items_response.push((
+                            Status::UidValidity,
+                            StatusItemType::Number(status.uid_validity as u32),
+                        ));
                     }
                     if items_update.contains(&Status::Messages) {
-                        items_response.push((Status::Messages, status.total_messages as u32));
+                        items_response.push((
+                            Status::Messages,
+                            StatusItemType::Number(status.total_messages as u32),
+                        ));
                     }
                     break;
                 }
@@ -253,8 +274,10 @@ impl SessionData {
                             .total()
                             .unwrap_or(0)
                             .into();
-                        items_response
-                            .push((Status::Unseen, mailbox_data.total_unseen.unwrap() as u32));
+                        items_response.push((
+                            Status::Unseen,
+                            StatusItemType::Number(mailbox_data.total_unseen.unwrap() as u32),
+                        ));
                     }
                     if items_update.contains(&Status::Deleted) {
                         mailbox_data.total_deleted = responses
@@ -268,8 +291,10 @@ impl SessionData {
                             .total()
                             .unwrap_or(0)
                             .into();
-                        items_response
-                            .push((Status::Unseen, mailbox_data.total_deleted.unwrap() as u32));
+                        items_response.push((
+                            Status::Unseen,
+                            StatusItemType::Number(mailbox_data.total_deleted.unwrap() as u32),
+                        ));
                     }
                     break;
                 }
@@ -355,7 +380,8 @@ impl SessionData {
                         )
                         .or_insert_with(Mailbox::default)
                         .size = mailbox_size.into();
-                    items_response.push((Status::Size, mailbox_size as u32));
+                    items_response
+                        .push((Status::Size, StatusItemType::Number(mailbox_size as u32)));
                     break;
                 }
             }
@@ -371,7 +397,7 @@ impl SessionData {
                     break;
                 }
             }
-            items_response.push((Status::HighestModSeq, modseq));
+            items_response.push((Status::HighestModSeq, StatusItemType::Number(modseq)));
         }
 
         // Generate response

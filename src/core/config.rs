@@ -44,6 +44,9 @@ pub fn load_config(settings: &EnvSettings) -> Core {
         } else {
             "All Mail".to_string()
         },
+        max_request_size: settings
+            .parse("max-request-size")
+            .unwrap_or(50 * 1024 * 1024),
     }
 }
 

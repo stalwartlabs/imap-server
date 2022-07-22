@@ -89,12 +89,6 @@ impl SessionData {
         is_move: bool,
         is_uid: bool,
     ) -> Result<(), StatusResponse> {
-        let response = StatusResponse::completed(if is_move {
-            Command::Move(is_uid)
-        } else {
-            Command::Copy(is_uid)
-        });
-
         // Convert IMAP ids to JMAP ids.
         let ids = match self
             .imap_sequence_to_jmap(src_mailbox.clone(), arguments.sequence_set, is_uid)
@@ -102,7 +96,9 @@ impl SessionData {
         {
             Ok(ids) => {
                 if ids.uids.is_empty() {
-                    return Err(response.with_tag(arguments.tag));
+                    return Err(
+                        StatusResponse::no("No messages were found.").with_tag(arguments.tag)
+                    );
                 }
                 ids
             }
@@ -110,6 +106,12 @@ impl SessionData {
                 return Err(response.with_tag(arguments.tag));
             }
         };
+
+        let response = StatusResponse::completed(if is_move {
+            Command::Move(is_uid)
+        } else {
+            Command::Copy(is_uid)
+        });
 
         let max_objects_in_set = self
             .client

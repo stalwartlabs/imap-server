@@ -167,8 +167,6 @@ impl Rights {
             ACL::RemoveItems => (Rights::DeleteMessages, Rights::Expunge.into()),
             ACL::CreateChild => (Rights::CreateMailbox, None),
             ACL::Administer => (Rights::Administer, None),
-            ACL::SetSeen => (Rights::Seen, None),
-            ACL::SetKeywords => (Rights::Write, None),
             ACL::Submit => (Rights::Post, None),
         }
     }
@@ -177,7 +175,7 @@ impl Rights {
         match self {
             Rights::Lookup => ACL::Read,
             Rights::Read => ACL::ReadItems,
-            Rights::Seen => ACL::SetSeen,
+            Rights::Seen => ACL::ModifyItems,
             Rights::Write => ACL::ModifyItems,
             Rights::Insert => ACL::AddItems,
             Rights::Post => ACL::Submit,

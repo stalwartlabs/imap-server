@@ -9,7 +9,7 @@ use crate::{
         client::{Session, SessionData},
         mailbox::{Account, Mailbox},
         receiver::Request,
-        IntoStatusResponse, StatusResponse,
+        IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::create::Arguments,
 };
@@ -36,7 +36,7 @@ impl Session {
 impl SessionData {
     pub async fn create_folder(&self, arguments: Arguments) -> StatusResponse {
         // Refresh mailboxes
-        if let Err(err) = self.synchronize_mailboxes(false).await {
+        if let Err(err) = self.synchronize_mailboxes(false, false).await {
             debug!("Failed to refresh mailboxes: {}", err);
             return err.into_status_response().with_tag(arguments.tag);
         }
@@ -66,12 +66,10 @@ impl SessionData {
 
         match request.send_set_mailbox().await {
             Ok(mut response) => {
-                if let Err(message) =
-                    self.add_created_mailboxes(&mut params, create_ids, &mut response)
-                {
-                    StatusResponse::no(message)
-                } else {
-                    StatusResponse::ok("Mailbox created.")
+                match self.add_created_mailboxes(&mut params, create_ids, &mut response) {
+                    Ok((_, mailbox_id)) => StatusResponse::ok("Mailbox created.")
+                        .with_code(ResponseCode::MailboxId { mailbox_id }),
+                    Err(message) => StatusResponse::no(message),
                 }
             }
             Err(err) => err.into_status_response(),
@@ -84,7 +82,7 @@ impl SessionData {
         params: &mut CreateParams<'_>,
         create_ids: Vec<String>,
         response: &mut SetResponse<jmap_client::mailbox::Mailbox>,
-    ) -> Result<parking_lot::MutexGuard<'_, Vec<Account>>, Cow<'static, str>> {
+    ) -> Result<(parking_lot::MutexGuard<'_, Vec<Account>>, String), Cow<'static, str>> {
         // Obtain created mailbox ids
         let mut mailbox_ids = Vec::new();
         for create_id in create_ids {
@@ -132,6 +130,8 @@ impl SessionData {
         } else {
             "".to_string()
         };
+
+        let new_mailbox_id = format!("{}-{}", account.account_id, mailbox_ids.last().unwrap());
         let has_updated = response.has_updated();
         for (pos, (mailbox_id, path_item)) in
             mailbox_ids.into_iter().zip(params.path.iter()).enumerate()
@@ -160,7 +160,7 @@ impl SessionData {
                 },
             );
         }
-        Ok(mailboxes)
+        Ok((mailboxes, new_mailbox_id))
     }
 
     pub fn validate_mailbox_create<'x>(

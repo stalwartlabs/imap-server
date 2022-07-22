@@ -57,8 +57,7 @@ pub enum State {
 impl Session {
     pub fn new(core: Arc<Core>, peer_addr: SocketAddr, is_tls: bool) -> Self {
         Session {
-            core,
-            receiver: Receiver::new(),
+            receiver: Receiver::with_max_request_size(core.max_request_size),
             version: ProtocolVersion::Rev1,
             state: State::NotAuthenticated { auth_failures: 0 },
             peer_addr,
@@ -67,6 +66,7 @@ impl Session {
             idle_tx: None,
             is_condstore: false,
             is_qresync: false,
+            core,
         }
     }
 
@@ -207,11 +207,27 @@ impl Session {
                 Command::Logout => {
                     self.handle_logout(request).await?;
                 }
-                Command::SetAcl => todo!(),
-                Command::DeleteAcl => todo!(),
-                Command::GetAcl => todo!(),
-                Command::ListRights => todo!(),
-                Command::MyRights => todo!(),
+                Command::SetAcl => {
+                    self.handle_set_acl(request).await?;
+                }
+                Command::DeleteAcl => {
+                    self.handle_delete_acl(request).await?;
+                }
+                Command::GetAcl => {
+                    self.handle_get_acl(request).await?;
+                }
+                Command::ListRights => {
+                    self.handle_list_rights(request).await?;
+                }
+                Command::MyRights => {
+                    self.handle_my_rights(request).await?;
+                }
+                Command::Unauthenticate => {
+                    self.handle_unauthenticate(request).await?;
+                }
+                Command::Id => {
+                    self.handle_id(request).await?;
+                }
             }
         }
 
@@ -227,7 +243,7 @@ impl Session {
 impl Request {
     pub fn is_allowed(self, state: &State, is_tls: bool) -> Result<Self, StatusResponse> {
         match &self.command {
-            Command::Capability | Command::Noop | Command::Logout => Ok(self),
+            Command::Capability | Command::Noop | Command::Logout | Command::Id => Ok(self),
             Command::StartTls => {
                 if !is_tls {
                     Ok(self)
@@ -274,7 +290,8 @@ impl Request {
             | Command::DeleteAcl
             | Command::GetAcl
             | Command::ListRights
-            | Command::MyRights => {
+            | Command::MyRights
+            | Command::Unauthenticate => {
                 if let State::Authenticated { .. } | State::Selected { .. } = state {
                     Ok(self)
                 } else {

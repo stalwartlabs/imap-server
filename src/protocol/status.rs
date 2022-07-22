@@ -18,12 +18,19 @@ pub enum Status {
     Deleted,
     Size,
     HighestModSeq,
+    MailboxId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusItem {
     pub mailbox_name: String,
-    pub items: Vec<(Status, u32)>,
+    pub items: Vec<(Status, StatusItemType)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StatusItemType {
+    Number(u32),
+    String(String),
 }
 
 impl StatusItem {
@@ -35,10 +42,11 @@ impl StatusItem {
             quoted_string(buf, &utf7_encode(&self.mailbox_name));
         }
         buf.extend_from_slice(b" (");
-        for (pos, (status_item, amount)) in self.items.iter().enumerate() {
+        for (pos, (status_item, value)) in self.items.iter().enumerate() {
             if pos > 0 {
                 buf.push(b' ');
             }
+
             buf.extend_from_slice(match status_item {
                 Status::Messages => b"MESSAGES ",
                 Status::UidNext => b"UIDNEXT ",
@@ -47,8 +55,19 @@ impl StatusItem {
                 Status::Deleted => b"DELETED ",
                 Status::Size => b"SIZE ",
                 Status::HighestModSeq => b"HIGHESTMODSEQ ",
+                Status::MailboxId => b"MAILBOXID ",
             });
-            buf.extend_from_slice(amount.to_string().as_bytes());
+
+            match value {
+                StatusItemType::Number(num) => {
+                    buf.extend_from_slice(num.to_string().as_bytes());
+                }
+                StatusItemType::String(str) => {
+                    buf.push(b'(');
+                    buf.extend_from_slice(str.as_bytes());
+                    buf.push(b')');
+                }
+            }
         }
         buf.extend_from_slice(b")\r\n");
     }
@@ -56,20 +75,29 @@ impl StatusItem {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::status::{Status, StatusItem};
+    use crate::protocol::status::{Status, StatusItem, StatusItemType};
 
     #[test]
     fn serialize_status() {
         let mut buf = Vec::new();
         StatusItem {
             mailbox_name: "blurdybloop".to_string(),
-            items: vec![(Status::Messages, 231), (Status::UidNext, 44292)],
+            items: vec![
+                (Status::Messages, StatusItemType::Number(231)),
+                (Status::UidNext, StatusItemType::Number(44292)),
+                (
+                    Status::MailboxId,
+                    StatusItemType::String("abc-123".to_string()),
+                ),
+            ],
         }
         .serialize(&mut buf, true);
 
         assert_eq!(
-            &buf,
-            concat!("* STATUS \"blurdybloop\" (MESSAGES 231 UIDNEXT 44292)\r\n",).as_bytes()
+            String::from_utf8(buf).unwrap(),
+            concat!(
+                "* STATUS \"blurdybloop\" (MESSAGES 231 UIDNEXT 44292 MAILBOXID (abc-123))\r\n",
+            )
         );
     }
 }

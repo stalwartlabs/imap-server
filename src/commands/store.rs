@@ -8,7 +8,7 @@ use crate::{
         client::{Session, SessionData},
         message::{IdMappings, MailboxData},
         receiver::Request,
-        Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, Flag, IntoStatusResponse, ResponseCode, ResponseType, StatusResponse,
     },
     protocol::{
         fetch::{DataItem, FetchItem},
@@ -266,6 +266,17 @@ impl SessionData {
                             modseq = new_modseq;
                         }
                     }
+                }
+
+                // Verify that all IDs were updated
+                if ids.jmap_ids.len() != updated_ids.len() && response.rtype == ResponseType::Ok {
+                    response.rtype = ResponseType::No;
+                    response.message = if updated_ids.is_empty() {
+                        "Operation failed."
+                    } else {
+                        "Opertation failed for some of the messages."
+                    }
+                    .into();
                 }
 
                 if !emails.is_empty() {

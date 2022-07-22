@@ -247,6 +247,10 @@ impl ResponseCode {
                 serialize_sequence(buf, ids);
                 return;
             }
+            ResponseCode::MailboxId { mailbox_id } => {
+                buf.extend_from_slice(format!("MAILBOXID ({})", mailbox_id).as_bytes());
+                return;
+            }
         });
     }
 }
@@ -373,6 +377,8 @@ impl Display for Command {
             Command::GetAcl => write!(f, "GETACL"),
             Command::ListRights => write!(f, "LISTRIGHTS"),
             Command::MyRights => write!(f, "MYRIGHTS"),
+            Command::Unauthenticate => write!(f, "UNAUTHENTICATE"),
+            Command::Id => write!(f, "ID"),
         }
     }
 }

@@ -534,6 +534,12 @@ impl SessionData {
                             .into(),
                         );
                     }
+                    search::Filter::EmailId(id) => {
+                        jmap_filters.push(email::query::Filter::id(vec![id]).into());
+                    }
+                    search::Filter::ThreadId(id) => {
+                        jmap_filters.push(email::query::Filter::in_thread(id).into());
+                    }
                 }
             }
 

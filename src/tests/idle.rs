@@ -110,4 +110,8 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
         .assert_read(Type::Status, ResponseType::Ok)
         .await
         .assert_contains("* 0 EXISTS");
+
+    // Stop IDLE mode
+    imap_check.send_raw("DONE").await;
+    imap_check.assert_read(Type::Tagged, ResponseType::Ok).await;
 }

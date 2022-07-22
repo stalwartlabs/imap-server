@@ -69,6 +69,24 @@ impl Session {
                                 }
                             }
 
+                            // Build response
+                            let response = Response {
+                                mailbox: ListItem::new(arguments.mailbox_name),
+                                total_messages: status.total_messages,
+                                recent_messages: 0,
+                                unseen_seq: 0,
+                                uid_validity: status.uid_validity,
+                                uid_next: status.uid_next,
+                                closed_previous,
+                                is_rev2: self.version.is_rev2(),
+                                highest_modseq,
+                                mailbox_id: if let Some(mailbox_id) = &mailbox.mailbox_id {
+                                    format!("{}-{}", mailbox.account_id, mailbox_id)
+                                } else {
+                                    mailbox.account_id.clone()
+                                },
+                            };
+
                             // Update state
                             *data.saved_search.lock() = SavedSearch::None;
                             self.state = State::Selected {
@@ -86,20 +104,7 @@ impl Session {
                                     } else {
                                         ResponseCode::ReadOnly
                                     })
-                                    .serialize(
-                                        Response {
-                                            mailbox: ListItem::new(arguments.mailbox_name),
-                                            total_messages: status.total_messages,
-                                            recent_messages: 0,
-                                            unseen_seq: 0,
-                                            uid_validity: status.uid_validity,
-                                            uid_next: status.uid_next,
-                                            closed_previous,
-                                            is_rev2: self.version.is_rev2(),
-                                            highest_modseq,
-                                        }
-                                        .serialize(),
-                                    ),
+                                    .serialize(response.serialize()),
                             )
                             .await
                         }

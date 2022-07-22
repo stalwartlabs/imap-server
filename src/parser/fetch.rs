@@ -308,6 +308,10 @@ impl Request {
                         });
                     } else if value.eq_ignore_ascii_case(b"MODSEQ") {
                         attributes.push_unique(Attribute::ModSeq);
+                    } else if value.eq_ignore_ascii_case(b"EMAILID") {
+                        attributes.push_unique(Attribute::EmailId);
+                    } else if value.eq_ignore_ascii_case(b"THREADID") {
+                        attributes.push_unique(Attribute::ThreadId);
                     } else {
                         return Err((
                             self.tag,

@@ -282,7 +282,7 @@ impl Session {
                         .set_mailbox()
                         .account_id(&mailbox.account_id)
                         .update(mailbox_id)
-                        .acls([(arguments.identifier.as_ref().unwrap(), vec![])]);
+                        .acl(arguments.identifier.as_ref().unwrap(), Vec::new());
 
                     match request.send_set_mailbox().await {
                         Ok(mut response) => match response.updated(mailbox_id) {
@@ -334,12 +334,12 @@ impl Session {
                                 permissions: vec![
                                     vec![Rights::Read],
                                     vec![Rights::Lookup],
-                                    vec![Rights::Seen],
-                                    vec![Rights::Write],
+                                    vec![Rights::Write, Rights::Seen],
                                     vec![Rights::Insert],
-                                    vec![Rights::Post],
-                                    vec![Rights::CreateMailbox],
                                     vec![Rights::Expunge, Rights::DeleteMessages],
+                                    vec![Rights::CreateMailbox],
+                                    vec![Rights::DeleteMailbox],
+                                    vec![Rights::Post],
                                     vec![Rights::Administer],
                                 ],
                             }

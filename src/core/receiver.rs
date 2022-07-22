@@ -57,11 +57,23 @@ pub struct Receiver {
     buf: Vec<u8>,
     pub request: Request,
     pub state: State,
+    pub max_request_size: usize,
+    pub current_request_size: usize,
 }
 
 impl Receiver {
     pub fn new() -> Self {
-        Default::default()
+        Receiver {
+            max_request_size: 25 * 1024 * 1024, // 25MB
+            ..Default::default()
+        }
+    }
+
+    pub fn with_max_request_size(max_request_size: usize) -> Self {
+        Receiver {
+            max_request_size,
+            ..Default::default()
+        }
     }
 
     pub fn error_reset(&mut self, message: impl Into<Cow<'static, str>>) -> Error {
@@ -76,16 +88,37 @@ impl Receiver {
         );
         self.buf = Vec::with_capacity(10);
         self.state = State::Tag;
+        self.current_request_size = 0;
         err
     }
 
-    fn push_argument(&mut self, in_quote: bool) {
+    fn push_argument(&mut self, in_quote: bool) -> Result<(), Error> {
         if !self.buf.is_empty() {
+            self.current_request_size += self.buf.len();
+            if self.current_request_size > self.max_request_size {
+                return Err(self.error_reset(format!(
+                    "Request exceeds maximum limit of {} bytes.",
+                    self.max_request_size
+                )));
+            }
             self.request.tokens.push(Token::Argument(self.buf.clone()));
             self.buf.clear();
         } else if in_quote {
             self.request.tokens.push(Token::Nil);
         }
+        Ok(())
+    }
+
+    fn push_token(&mut self, token: Token) -> Result<(), Error> {
+        self.current_request_size += 1;
+        if self.current_request_size > self.max_request_size {
+            return Err(self.error_reset(format!(
+                "Request exceeds maximum limit of {} bytes.",
+                self.max_request_size
+            )));
+        }
+        self.request.tokens.push(token);
+        Ok(())
     }
 
     pub fn parse(&mut self, bytes: &mut std::slice::Iter<'_, u8>) -> Result<Request, Error> {
@@ -148,6 +181,7 @@ impl Receiver {
                                     self.state = State::Argument { last_ch: b' ' };
                                 } else {
                                     self.state = State::Start;
+                                    self.current_request_size = 0;
                                     return Ok(std::mem::take(&mut self.request));
                                 }
                             } else {
@@ -164,48 +198,49 @@ impl Receiver {
                 }
                 State::Argument { last_ch } => match ch {
                     b'\"' if last_ch.is_ascii_whitespace() => {
-                        self.push_argument(false);
+                        self.push_argument(false)?;
                         self.state = State::ArgumentQuoted { escaped: false };
                     }
                     b'{' if last_ch.is_ascii_whitespace() => {
-                        self.push_argument(false);
+                        self.push_argument(false)?;
                         self.state = State::Literal { non_sync: false };
                     }
                     b'(' => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::ParenthesisOpen);
+                        self.push_argument(false)?;
+                        self.push_token(Token::ParenthesisOpen)?;
                     }
                     b')' => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::ParenthesisClose);
+                        self.push_argument(false)?;
+                        self.push_token(Token::ParenthesisClose)?;
                     }
                     b'[' if self.request.command.is_fetch() => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::BracketOpen);
+                        self.push_argument(false)?;
+                        self.push_token(Token::BracketOpen)?;
                     }
                     b']' if self.request.command.is_fetch() => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::BracketClose);
+                        self.push_argument(false)?;
+                        self.push_token(Token::BracketClose)?;
                     }
                     b'<' if self.request.command.is_fetch() => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::Lt);
+                        self.push_argument(false)?;
+                        self.push_token(Token::Lt)?;
                     }
                     b'>' if self.request.command.is_fetch() => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::Gt);
+                        self.push_argument(false)?;
+                        self.push_token(Token::Gt)?;
                     }
                     b'.' if self.request.command.is_fetch() => {
-                        self.push_argument(false);
-                        self.request.tokens.push(Token::Dot);
+                        self.push_argument(false)?;
+                        self.push_token(Token::Dot)?;
                     }
                     b'\n' => {
-                        self.push_argument(false);
+                        self.push_argument(false)?;
                         self.state = State::Start;
+                        self.current_request_size = 0;
                         return Ok(std::mem::take(&mut self.request));
                     }
                     _ if ch.is_ascii_whitespace() => {
-                        self.push_argument(false);
+                        self.push_argument(false)?;
                         self.state = State::Argument { last_ch: ch };
                     }
                     _ => {
@@ -216,7 +251,7 @@ impl Receiver {
                 State::ArgumentQuoted { escaped } => match ch {
                     b'\"' => {
                         if !escaped {
-                            self.push_argument(true);
+                            self.push_argument(true)?;
                             self.state = State::Argument { last_ch: b' ' };
                         } else if self.buf.len() < 1024 {
                             self.buf.push(ch);
@@ -256,6 +291,13 @@ impl Receiver {
                                     .map_err(|_| {
                                     self.error_reset("Literal size is not a valid number.")
                                 })?;
+                                if self.current_request_size + size as usize > self.max_request_size
+                                {
+                                    return Err(self.error_reset(format!(
+                                        "Literal exceeds the maximum request size of {} bytes.",
+                                        self.max_request_size
+                                    )));
+                                }
                                 self.state = State::LiteralSeek { size, non_sync };
                                 self.buf = Vec::with_capacity(size as usize);
                             } else {
@@ -292,7 +334,7 @@ impl Receiver {
                             self.state = State::LiteralData { remaining: size };
                         } else {
                             self.state = State::Argument { last_ch: b' ' };
-                            self.request.tokens.push(Token::Nil);
+                            self.push_token(Token::Nil)?;
                         }
                         if !non_sync {
                             return Err(Error::NeedsLiteral { size });
@@ -310,7 +352,7 @@ impl Receiver {
                             remaining: remaining - 1,
                         };
                     } else {
-                        self.push_argument(false);
+                        self.push_argument(false)?;
                         self.state = State::Argument { last_ch: b' ' };
                     }
                 }
@@ -416,6 +458,8 @@ impl Default for Receiver {
             buf: Vec::with_capacity(10),
             request: Default::default(),
             state: State::Tag,
+            max_request_size: 25 * 1024 * 1024,
+            current_request_size: 0,
         }
     }
 }

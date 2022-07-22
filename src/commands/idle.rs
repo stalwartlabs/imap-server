@@ -166,7 +166,7 @@ impl SessionData {
 
         // Fetch all changed mailboxes
         if check_mailboxes {
-            match self.synchronize_mailboxes(true).await {
+            match self.synchronize_mailboxes(true, false).await {
                 Ok(Some(changes)) => {
                     // List deleted mailboxes
                     for mailbox_name in changes.deleted {

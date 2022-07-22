@@ -304,9 +304,12 @@ impl SessionData {
                     needs_blobs = true;
                     properties.push_unique(Property::BlobId);
                 }
-                Attribute::Uid => (),
+                Attribute::Uid | Attribute::EmailId => (),
                 Attribute::ModSeq => {
                     needs_modseq = true;
+                }
+                Attribute::ThreadId => {
+                    properties.push_unique(Property::ThreadId);
                 }
             }
         }
@@ -595,6 +598,20 @@ impl SessionData {
                         Attribute::ModSeq => {
                             if modseq != u32::MAX {
                                 items.push(DataItem::ModSeq { modseq });
+                            }
+                        }
+                        Attribute::EmailId => {
+                            if let Some(email_id) = email.id() {
+                                items.push(DataItem::EmailId {
+                                    email_id: format!("{}-{}", mailbox.account_id, email_id),
+                                });
+                            }
+                        }
+                        Attribute::ThreadId => {
+                            if let Some(thread_id) = email.thread_id() {
+                                items.push(DataItem::ThreadId {
+                                    thread_id: format!("{}-{}", mailbox.account_id, thread_id),
+                                });
                             }
                         }
                     }
