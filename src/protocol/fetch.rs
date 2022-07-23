@@ -919,7 +919,7 @@ mod tests {
                     },
                 },
                 concat!(
-                    "ENVELOPE (\"Wed, 17 Jul 1996 02:23:25 +0000\" ",
+                    "ENVELOPE (\"17-Jul-1996 02:23:25 +0000\" ",
                     "\"IMAP4rev2 WG mtg summary and minutes\" ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
@@ -961,7 +961,7 @@ mod tests {
                     },
                 },
                 concat!(
-                    "ENVELOPE (\"Wed, 17 Jul 1996 02:23:25 +0000\" ",
+                    "ENVELOPE (\"17-Jul-1996 02:23:25 +0000\" ",
                     "\"Group test\" ",
                     "((\"Bill Foobar\" NIL \"foobar\" \"example.com\")) NIL NIL ",
                     "((NIL NIL \"Friends and Family\" NIL) ",
@@ -1058,7 +1058,7 @@ mod tests {
                 },
                 concat!(
                     "BODY (\"MESSAGE\" \"RFC822\" NIL \"<abc@123>\" \"An attached email\" ",
-                    "\"quoted-printable\" 9323 (\"Wed, 17 Jul 1996 02:23:25 +0000\" ",
+                    "\"quoted-printable\" 9323 (\"17-Jul-1996 02:23:25 +0000\" ",
                     "\"Hello world!\" ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
@@ -1308,7 +1308,7 @@ mod tests {
             ),
             (
                 super::DataItem::InternalDate { date: 482374938 },
-                "INTERNALDATE \"Mon, 15 Apr 1985 01:02:18 +0000\"",
+                "INTERNALDATE \"15-Apr-1985 01:02:18 +0000\"",
             ),
         ] {
             let mut buf = Vec::with_capacity(100);

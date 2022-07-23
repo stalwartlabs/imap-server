@@ -258,8 +258,10 @@ impl SessionData {
             {
                 let mut ids = if is_uid {
                     ids.uids.clone()
+                } else if let Some(seqnums) = ids.seqnums.as_ref() {
+                    seqnums.clone()
                 } else {
-                    ids.seqnums.as_ref().unwrap().clone()
+                    Vec::new()
                 };
                 if sort.is_none() {
                     ids.sort_unstable();

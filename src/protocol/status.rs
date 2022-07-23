@@ -17,6 +17,7 @@ pub enum Status {
     Unseen,
     Deleted,
     Size,
+    Recent,
     HighestModSeq,
     MailboxId,
 }
@@ -56,6 +57,7 @@ impl StatusItem {
                 Status::Size => b"SIZE ",
                 Status::HighestModSeq => b"HIGHESTMODSEQ ",
                 Status::MailboxId => b"MAILBOXID ",
+                Status::Recent => b"RECENT ",
             });
 
             match value {

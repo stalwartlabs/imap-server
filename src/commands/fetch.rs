@@ -457,7 +457,18 @@ impl SessionData {
                                         }
                                         irt.into()
                                     }),
-                                    message_id: email.message_id().map(|ids| ids.join(" ").into()),
+                                    message_id: email.message_id().map(|list| {
+                                        let mut irt = String::with_capacity(list.len() * 10);
+                                        for (pos, l) in list.iter().enumerate() {
+                                            if pos > 0 {
+                                                irt.push(' ');
+                                            }
+                                            irt.push('<');
+                                            irt.push_str(l.as_ref());
+                                            irt.push('>');
+                                        }
+                                        irt.into()
+                                    }),
                                 },
                             });
                         }
@@ -1163,7 +1174,7 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 }
                 irt.into()
             }),
-            message_id: self.get_message_id().map(|id| id.into()),
+            message_id: self.get_message_id().map(|id| format!("<{}>", id).into()),
         }
     }
 }

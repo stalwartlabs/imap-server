@@ -1,6 +1,6 @@
 use crate::core::ResponseType;
 
-use super::{ImapConnection, Type};
+use super::{AssertResult, ImapConnection, Type};
 
 pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     // Test CAPABILITY
@@ -10,6 +10,12 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     // Test NOOP
     imap.send("NOOP").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+
+    // Test ID
+    imap.send("ID").await;
+    imap.assert_read(Type::Tagged, ResponseType::Ok)
+        .await
+        .assert_contains("* ID (\"name\" \"Stalwart IMAP\" \"version\" ");
 
     // Login should be disabled
     imap.send("LOGIN jdoe@example.com secret").await;

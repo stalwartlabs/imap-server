@@ -177,6 +177,8 @@ impl SelectionOption {
             Ok(Self::Remote)
         } else if value.eq_ignore_ascii_case(b"recursivematch") {
             Ok(Self::RecursiveMatch)
+        } else if value.eq_ignore_ascii_case(b"special-use") {
+            Ok(Self::SpecialUse)
         } else {
             Err(format!(
                 "Invalid selection option {:?}.",
@@ -195,6 +197,8 @@ impl ReturnOption {
             Ok(Self::Children)
         } else if value.eq_ignore_ascii_case(b"status") {
             Ok(Self::Status(Vec::with_capacity(2)))
+        } else if value.eq_ignore_ascii_case(b"special-use") {
+            Ok(Self::SpecialUse)
         } else {
             Err(format!("Invalid return option {:?}", String::from_utf8_lossy(value)).into())
         }

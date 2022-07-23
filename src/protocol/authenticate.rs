@@ -38,4 +38,10 @@ impl Mechanism {
             Mechanism::XOauth2 => b"XOAUTH2",
         });
     }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(10);
+        self.serialize(&mut buf);
+        buf
+    }
 }

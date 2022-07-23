@@ -12,7 +12,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
 
     // Fetch all properties available from JMAP
     imap.send(concat!(
-        "FETCH 10 (FLAGS INTERNALDATE PREVIEW ",
+        "FETCH 10 (FLAGS INTERNALDATE PREVIEW EMAILID THREADID ",
         "RFC822.SIZE UID ENVELOPE BODYSTRUCTURE)"
     ))
     .await;
@@ -20,8 +20,10 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .await
         .assert_contains("FLAGS (Flag_009)")
         .assert_contains("RFC822.SIZE 1457")
-        .assert_contains("UID 10")
+        .assert_contains("UID 9")
         .assert_contains("INTERNALDATE")
+        .assert_contains("THREADID (")
+        .assert_contains("EMAILID (")
         .assert_contains("but then I thought, why not do both?")
         .assert_contains(concat!(
             "ENVELOPE (\"Sat, 20 Nov 2021 22:22:01 +0000\" ",

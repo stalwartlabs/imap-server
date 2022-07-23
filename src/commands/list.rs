@@ -98,7 +98,9 @@ impl SessionData {
 
         // Process arguments
         let mut filter_subscribed = false;
+        let mut filter_special_use = false;
         let mut recursive_match = false;
+        let mut include_special_use = version.is_rev2();
         let mut include_subscribed = false;
         let mut include_children = false;
         let mut include_status = None;
@@ -109,6 +111,10 @@ impl SessionData {
                     include_subscribed = true;
                 }
                 SelectionOption::Remote => (),
+                SelectionOption::SpecialUse => {
+                    filter_special_use = true;
+                    include_special_use = true;
+                }
                 SelectionOption::RecursiveMatch => {
                     recursive_match = true;
                 }
@@ -124,6 +130,9 @@ impl SessionData {
                 }
                 ReturnOption::Status(status) => {
                     include_status = status.into();
+                }
+                ReturnOption::SpecialUse => {
+                    include_special_use = true;
                 }
             }
         }
@@ -213,13 +222,20 @@ impl SessionData {
                         if include_subscribed && mailbox.is_subscribed {
                             attributes.push(Attribute::Subscribed);
                         }
-                        match mailbox.role {
-                            Role::Archive => attributes.push(Attribute::Archive),
-                            Role::Drafts => attributes.push(Attribute::Drafts),
-                            Role::Junk => attributes.push(Attribute::Junk),
-                            Role::Sent => attributes.push(Attribute::Sent),
-                            Role::Trash => attributes.push(Attribute::Trash),
-                            _ => (),
+                        if include_special_use {
+                            match mailbox.role {
+                                Role::Archive => attributes.push(Attribute::Archive),
+                                Role::Drafts => attributes.push(Attribute::Drafts),
+                                Role::Junk => attributes.push(Attribute::Junk),
+                                Role::Sent => attributes.push(Attribute::Sent),
+                                Role::Trash => attributes.push(Attribute::Trash),
+                                Role::Important => attributes.push(Attribute::Important),
+                                _ => {
+                                    if filter_special_use {
+                                        continue;
+                                    }
+                                }
+                            }
                         }
                         list_items.push(ListItem {
                             mailbox_name: mailbox_name.clone(),

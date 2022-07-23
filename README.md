@@ -1,6 +1,5 @@
 
 ## Conformed RFCs
----
 
 ### IMAP
 
@@ -12,7 +11,6 @@
 
 ### Extensions
 
-- [RFC 2088 - Non-synchronizing literals](https://datatracker.ietf.org/doc/html/rfc2088)
 - [RFC 2177 - IDLE command](https://datatracker.ietf.org/doc/html/rfc2177)
 - [RFC 2342 - Namespace](https://datatracker.ietf.org/doc/html/rfc2342)
 - [RFC 2971 - ID extension](https://datatracker.ietf.org/doc/html/rfc2971)
@@ -38,7 +36,8 @@
 - [RFC 6851 - MOVE Extension](https://datatracker.ietf.org/doc/html/rfc6851)
 - [RFC 6855 - Support for UTF-8](https://datatracker.ietf.org/doc/html/rfc6855.html)
 - [RFC 7162 - Quick Flag Changes Resynchronization (CONDSTORE) and Quick Mailbox Resynchronization (QRESYNC)](https://datatracker.ietf.org/doc/html/rfc7162)
-- [RFC 7888 - Non-synchronizing Literals (updates RFC 2088)](https://datatracker.ietf.org/doc/html/rfc7888)
+- [RFC 7628 - SASL Mechanisms for OAuth](https://datatracker.ietf.org/doc/html/rfc7628)
+- [RFC 7888 - Non-synchronizing Literals](https://datatracker.ietf.org/doc/html/rfc7888)
 - [RFC 8437 - UNAUTHENTICATE Extension for Connection Reuse](https://datatracker.ietf.org/doc/html/rfc8437)
 - [RFC 8438 - Extension for STATUS=SIZE](https://datatracker.ietf.org/doc/html/rfc8438)
 - [RFC 8457 - "$Important" Keyword and "\Important" Special-Use Attribute](https://datatracker.ietf.org/doc/html/rfc8457)

@@ -114,4 +114,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     // Stop IDLE mode
     imap_check.send_raw("DONE").await;
     imap_check.assert_read(Type::Tagged, ResponseType::Ok).await;
+
+    imap_check.send("NOOP").await;
+    imap_check.assert_read(Type::Tagged, ResponseType::Ok).await;
 }

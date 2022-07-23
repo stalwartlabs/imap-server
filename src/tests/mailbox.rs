@@ -48,18 +48,20 @@ pub async fn test(mut imap: &mut ImapConnection, mut imap_check: &mut ImapConnec
     imap.assert_read(Type::Tagged, ResponseType::No).await;
 
     // Enable IMAP4rev2
-    for imap in [&mut imap, &mut imap_check] {
-        imap.send("ENABLE IMAP4rev2").await;
-        imap.assert_read(Type::Tagged, ResponseType::Ok).await;
-    }
+    imap.send("ENABLE IMAP4rev2").await;
+    imap.assert_read(Type::Tagged, ResponseType::Ok).await;
 
     // Create missing parent folders
     imap.send("CREATE \"/Vegetable/Broccoli\"").await;
-    imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+    imap.assert_read(Type::Tagged, ResponseType::Ok)
+        .await
+        .assert_contains("[MAILBOXID (");
+
     imap.send("CREATE \" Cars/Electric /4 doors/ Red/\"").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (CHILDREN)").await;
+        imap.send("LIST \"\" \"*\" RETURN (CHILDREN SPECIAL-USE)")
+            .await;
         imap.assert_read(Type::Tagged, ResponseType::Ok)
             .await
             .assert_folders(
@@ -98,7 +100,8 @@ pub async fn test(mut imap: &mut ImapConnection, mut imap_check: &mut ImapConnec
     imap.send("RENAME \"Deleted Items\" \"Recycle Bin\"").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (CHILDREN)").await;
+        imap.send("LIST \"\" \"*\" RETURN (CHILDREN SPECIAL-USE)")
+            .await;
         imap.assert_read(Type::Tagged, ResponseType::Ok)
             .await
             .assert_folders(
@@ -133,7 +136,8 @@ pub async fn test(mut imap: &mut ImapConnection, mut imap_check: &mut ImapConnec
     imap.send("DELETE \"Vehicles\"").await;
     imap.assert_read(Type::Tagged, ResponseType::No).await;
     for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (CHILDREN)").await;
+        imap.send("LIST \"\" \"*\" RETURN (CHILDREN SPECIAL-USE)")
+            .await;
         imap.assert_read(Type::Tagged, ResponseType::Ok)
             .await
             .assert_folders(
@@ -163,7 +167,8 @@ pub async fn test(mut imap: &mut ImapConnection, mut imap_check: &mut ImapConnec
         .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     for imap in [&mut imap, &mut imap_check] {
-        imap.send("LIST \"\" \"*\" RETURN (SUBSCRIBED)").await;
+        imap.send("LIST \"\" \"*\" RETURN (SUBSCRIBED SPECIAL-USE)")
+            .await;
         imap.assert_read(Type::Tagged, ResponseType::Ok)
             .await
             .assert_folders(
@@ -287,4 +292,8 @@ pub async fn test(mut imap: &mut ImapConnection, mut imap_check: &mut ImapConnec
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_folders([("Fruit/Apple", [""])], true);
+
+    // Restore Trash folder's original name
+    imap.send("RENAME \"Recycle Bin\" \"Deleted Items\"").await;
+    imap.assert_read(Type::Tagged, ResponseType::Ok).await;
 }

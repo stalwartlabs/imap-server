@@ -11,37 +11,80 @@ pub enum Capability {
     IMAP4rev1,
     StartTLS,
     LoginDisabled,
+    Idle,
+    Namespace,
+    Id,
+    Children,
+    MultiAppend,
+    Binary,
+    Unselect,
+    ACL,
+    UIDPlus,
+    ESearch,
+    SASLIR, //SASL-IR
+    Within,
+    Enable,
+    SearchRes,
+    Sort,
+    Thread,       //THREAD=REFERENCES
+    ListExtended, //LIST-EXTENDED
+    ESort,
+    SortDisplay,      //SORT=DISPLAY
+    SpecialUse,       //SPECIAL-USE
+    CreateSpecialUse, //CREATE-SPECIAL-USEE
+    Move,
     CondStore,
     QResync,
+    LiteralPlus, //LITERAL+
+    UnAuthenticate,
+    StatusSize, //STATUS=SIZE
+    ObjectId,
+    Preview,
     Auth(Mechanism),
 }
 
 impl Capability {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
-        match self {
-            Capability::IMAP4rev2 => {
-                buf.extend_from_slice(b"IMAP4rev2");
-            }
-            Capability::IMAP4rev1 => {
-                buf.extend_from_slice(b"IMAP4rev1");
-            }
-            Capability::StartTLS => {
-                buf.extend_from_slice(b"STARTTLS");
-            }
-            Capability::LoginDisabled => {
-                buf.extend_from_slice(b"LOGINDISABLED");
-            }
-            Capability::CondStore => {
-                buf.extend_from_slice(b"CONDSTORE");
-            }
-            Capability::QResync => {
-                buf.extend_from_slice(b"QRESYNC");
-            }
+        buf.extend_from_slice(match self {
             Capability::Auth(mechanism) => {
                 buf.extend_from_slice(b"AUTH=");
                 mechanism.serialize(buf);
+                return;
             }
-        }
+            Capability::IMAP4rev2 => b"IMAP4rev2",
+            Capability::IMAP4rev1 => b"IMAP4rev1",
+            Capability::StartTLS => b"STARTTLS",
+            Capability::LoginDisabled => b"LOGINDISABLED",
+            Capability::CondStore => b"CONDSTORE",
+            Capability::QResync => b"QRESYNC",
+            Capability::LiteralPlus => b"LITERAL+",
+            Capability::UnAuthenticate => b"UNAUTHENTICATE",
+            Capability::StatusSize => b"STATUS=SIZE",
+            Capability::ObjectId => b"OBJECTID",
+            Capability::Preview => b"PREVIEW",
+            Capability::Idle => b"IDLE",
+            Capability::Namespace => b"NAMESPACE",
+            Capability::Id => b"ID",
+            Capability::Children => b"CHILDREN",
+            Capability::MultiAppend => b"MULTIAPPEND",
+            Capability::Binary => b"BINARY",
+            Capability::Unselect => b"UNSELECT",
+            Capability::ACL => b"ACL",
+            Capability::UIDPlus => b"UIDPLUS",
+            Capability::ESearch => b"ESEARCH",
+            Capability::SASLIR => b"SASL-IR",
+            Capability::Within => b"WITHIN",
+            Capability::Enable => b"ENABLE",
+            Capability::SearchRes => b"SEARCHRES",
+            Capability::Sort => b"SORT",
+            Capability::Thread => b"THREAD=REFERENCES",
+            Capability::ListExtended => b"LIST-EXTENDED",
+            Capability::ESort => b"ESORT",
+            Capability::SortDisplay => b"SORT=DISPLAY",
+            Capability::SpecialUse => b"SPECIAL-USE",
+            Capability::CreateSpecialUse => b"CREATE-SPECIAL-USE",
+            Capability::Move => b"MOVE",
+        });
     }
 }
 

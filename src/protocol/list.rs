@@ -40,6 +40,7 @@ pub enum SelectionOption {
     Subscribed,
     Remote,
     RecursiveMatch,
+    SpecialUse,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub enum ReturnOption {
     Subscribed,
     Children,
     Status(Vec<Status>),
+    SpecialUse,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +69,7 @@ pub enum Attribute {
     Junk,
     Sent,
     Trash,
+    Important,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +116,7 @@ impl Attribute {
             Attribute::Junk => b"\\Junk",
             Attribute::Sent => b"\\Sent",
             Attribute::Trash => b"\\Trash",
+            Attribute::Important => b"\\Important",
         });
     }
 }

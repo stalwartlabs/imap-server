@@ -148,7 +148,12 @@ pub fn literal_string(buf: &mut Vec<u8>, text: &str) {
 
 pub fn quoted_timestamp(buf: &mut Vec<u8>, timestamp: i64) {
     buf.push(b'"');
-    buf.extend_from_slice(from_timestamp(timestamp).to_rfc2822().as_bytes());
+    buf.extend_from_slice(
+        from_timestamp(timestamp)
+            .format("%d-%b-%Y %H:%M:%S %z")
+            .to_string()
+            .as_bytes(),
+    );
     buf.push(b'"');
 }
 

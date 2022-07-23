@@ -54,12 +54,15 @@ impl SessionData {
         let mut request = self.client.build();
         let mut create_ids: Vec<String> = Vec::with_capacity(params.path.len());
         let set_request = request.set_mailbox().account_id(&params.account_id);
-        for path_item in &params.path {
+        for (pos, path_item) in params.path.iter().enumerate() {
             let create_item = set_request.create().name(*path_item);
             if let Some(create_id) = create_ids.last() {
                 create_item.parent_id_ref(create_id);
             } else {
                 create_item.parent_id(params.parent_mailbox_id.as_ref());
+            }
+            if arguments.mailbox_role != Role::None && pos == params.path.len() - 1 {
+                create_item.role(arguments.mailbox_role);
             }
             create_ids.push(create_item.create_id().unwrap());
         }

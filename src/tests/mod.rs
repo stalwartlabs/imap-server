@@ -53,6 +53,7 @@ pub async fn test_server() {
     jmap.individual_create("foobar@example.com", "secret", "Bill Foobar")
         .await
         .unwrap();
+    return;
 
     // Connect to IMAP server
     let mut imap_check = ImapConnection::connect(b"_y ").await;
@@ -62,8 +63,7 @@ pub async fn test_server() {
     }
 
     // Unauthenticated tests
-    let comments = "remove";
-    //basic::test(&mut imap, &mut imap_check).await;
+    basic::test(&mut imap, &mut imap_check).await;
 
     // Login
     for imap in [&mut imap, &mut imap_check] {
@@ -72,28 +72,22 @@ pub async fn test_server() {
         imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     }
 
-    //mailbox::test(&mut imap, &mut imap_check).await;
-    //append::test(&mut imap, &mut imap_check).await;
-    //search::test(&mut imap, &mut imap_check).await;
-    //fetch::test(&mut imap, &mut imap_check).await;
-    //store::test(&mut imap, &mut imap_check).await;
-    //copy_move::test(&mut imap, &mut imap_check).await;
-    //thread::test(&mut imap, &mut imap_check).await;
-    //idle::test(&mut imap, &mut imap_check).await;
-    //condstore::test(&mut imap, &mut imap_check).await;
+    mailbox::test(&mut imap, &mut imap_check).await;
+    append::test(&mut imap, &mut imap_check).await;
+    search::test(&mut imap, &mut imap_check).await;
+    fetch::test(&mut imap, &mut imap_check).await;
+    store::test(&mut imap, &mut imap_check).await;
+    copy_move::test(&mut imap, &mut imap_check).await;
+    thread::test(&mut imap, &mut imap_check).await;
+    idle::test(&mut imap, &mut imap_check).await;
+    condstore::test(&mut imap, &mut imap_check).await;
     acl::test(&mut imap, &mut imap_check).await;
-
-    /*
-        TODO
-        - Tests
-            * ACL + Namespace
-        - Authenticate Bearer
-        - List all capabilities
-
-    */
 
     // Logout
     for imap in [&mut imap, &mut imap_check] {
+        imap.send("UNAUTHENTICATE").await;
+        imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+
         imap.send("LOGOUT").await;
         imap.assert_read(Type::Untagged, ResponseType::Bye).await;
     }

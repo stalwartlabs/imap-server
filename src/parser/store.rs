@@ -82,29 +82,36 @@ impl Request {
         };
 
         // Flags
-        if tokens
-            .next()
-            .map_or(true, |token| !token.is_parenthesis_open())
-        {
-            return Err((self.tag, "Expected store parameters between parentheses.").into());
-        }
-
         let mut keywords = Vec::new();
-        for token in tokens {
-            match token {
-                Token::Argument(flag) => {
-                    keywords.push(Flag::parse_imap(flag).map_err(|v| (self.tag.as_str(), v))?);
+        match tokens
+            .next()
+            .ok_or((self.tag.as_str(), "Missing flags to set."))?
+        {
+            Token::ParenthesisOpen => {
+                for token in tokens {
+                    match token {
+                        Token::Argument(flag) => {
+                            keywords
+                                .push(Flag::parse_imap(flag).map_err(|v| (self.tag.as_str(), v))?);
+                        }
+                        Token::ParenthesisClose => {
+                            break;
+                        }
+                        _ => {
+                            return Err((self.tag.as_str(), "Unsupported flag.").into());
+                        }
+                    }
                 }
-                Token::ParenthesisClose => {
-                    break;
-                }
-                _ => {
-                    return Err((self.tag.as_str(), "Unsupported flag.").into());
-                }
+            }
+            Token::Argument(flag) => {
+                keywords.push(Flag::parse_imap(flag).map_err(|v| (self.tag.as_str(), v))?);
+            }
+            _ => {
+                return Err((self.tag, "Invalid flags parameter.").into());
             }
         }
 
-        if !keywords.is_empty() {
+        if !keywords.is_empty() || operation == Operation::Set {
             Ok(store::Arguments {
                 tag: self.tag,
                 sequence_set,
@@ -114,7 +121,7 @@ impl Request {
                 unchanged_since,
             })
         } else {
-            Err((self.tag.as_str(), "Missing flags.").into())
+            Err((self.tag.as_str(), "Missing flags to set.").into())
         }
     }
 }
@@ -150,7 +157,7 @@ mod tests {
                 },
             ),
             (
-                "A004 STORE *:100 -FLAGS.SILENT ($Phishing $Junk)\"\r\n",
+                "A004 STORE *:100 -FLAGS.SILENT ($Phishing $Junk)\r\n",
                 store::Arguments {
                     sequence_set: Sequence::Range {
                         start: None,
@@ -164,7 +171,7 @@ mod tests {
                 },
             ),
             (
-                "d105 STORE 7,5,9 (UNCHANGEDSINCE 320162338) +FLAGS.SILENT (\\Deleted)\"\r\n",
+                "d105 STORE 7,5,9 (UNCHANGEDSINCE 320162338) +FLAGS.SILENT \\Deleted\r\n",
                 store::Arguments {
                     sequence_set: Sequence::List {
                         items: vec![

@@ -154,6 +154,9 @@ impl SessionData {
                                 ),
                             ));
                         }
+                        Status::Recent => {
+                            items_response.push((*item, StatusItemType::Number(0)));
+                        }
                     }
                 }
                 break;

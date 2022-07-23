@@ -18,40 +18,23 @@ impl Session {
     pub async fn handle_authenticate(&mut self, request: Request) -> Result<(), ()> {
         match request.parse_authenticate() {
             Ok(mut args) => match args.mechanism {
-                Mechanism::Plain => {
+                Mechanism::Plain | Mechanism::OAuthBearer => {
                     if !args.params.is_empty() {
                         match base64::decode(&args.params.pop().unwrap()) {
-                            Ok(credentials) => {
-                                let mut username = Vec::new();
-                                let mut secret = Vec::new();
-                                let mut arg_num = 0;
-                                for ch in credentials {
-                                    if ch != 0 {
-                                        if arg_num == 1 {
-                                            username.push(ch);
-                                        } else if arg_num == 2 {
-                                            secret.push(ch);
-                                        }
-                                    } else {
-                                        arg_num += 1;
-                                    }
-                                }
+                            Ok(challenge) => {
+                                let result = if args.mechanism == Mechanism::Plain {
+                                    decode_challenge_plain(&challenge)
+                                } else {
+                                    decode_challenge_oauth(&challenge)
+                                };
 
-                                match (String::from_utf8(username), String::from_utf8(secret)) {
-                                    (Ok(username), Ok(secret))
-                                        if !username.is_empty() && !secret.is_empty() =>
-                                    {
-                                        self.authenticate(
-                                            Credentials::basic(&username, &secret),
-                                            args.tag,
-                                        )
-                                        .await
+                                match result {
+                                    Ok(credentials) => {
+                                        self.authenticate(credentials, args.tag).await
                                     }
-                                    _ => {
+                                    Err(err) => {
                                         self.write_bytes(
-                                            StatusResponse::no("Invalid AUTH=PLAIN challenge.")
-                                                .with_tag(args.tag)
-                                                .into_bytes(),
+                                            StatusResponse::no(err).with_tag(args.tag).into_bytes(),
                                         )
                                         .await
                                     }
@@ -71,7 +54,7 @@ impl Session {
                         self.receiver.request = receiver::Request {
                             tag: args.tag,
                             command: Command::Authenticate,
-                            tokens: vec![receiver::Token::Argument(b"PLAIN".to_vec())],
+                            tokens: vec![receiver::Token::Argument(args.mechanism.into_bytes())],
                         };
                         self.receiver.state = receiver::State::Argument { last_ch: b' ' };
                         self.write_bytes(b"+ \"\"\r\n".to_vec()).await
@@ -175,5 +158,89 @@ impl Session {
                 .into_bytes(),
         )
         .await
+    }
+}
+
+fn decode_challenge_plain(challenge: &[u8]) -> Result<Credentials, &'static str> {
+    let mut username = Vec::new();
+    let mut secret = Vec::new();
+    let mut arg_num = 0;
+    for &ch in challenge {
+        if ch != 0 {
+            if arg_num == 1 {
+                username.push(ch);
+            } else if arg_num == 2 {
+                secret.push(ch);
+            }
+        } else {
+            arg_num += 1;
+        }
+    }
+
+    match (String::from_utf8(username), String::from_utf8(secret)) {
+        (Ok(username), Ok(secret)) if !username.is_empty() && !secret.is_empty() => {
+            Ok((username, secret).into())
+        }
+        _ => Err("Invalid AUTH=PLAIN challenge."),
+    }
+}
+
+fn decode_challenge_oauth(challenge: &[u8]) -> Result<Credentials, &'static str> {
+    let mut saw_marker = true;
+    for (pos, &ch) in challenge.iter().enumerate() {
+        if saw_marker {
+            if challenge
+                .get(pos..)
+                .map_or(false, |b| b.starts_with(b"auth=Bearer "))
+            {
+                let pos = pos + 12;
+                return Ok(Credentials::Bearer(
+                    String::from_utf8(
+                        challenge
+                            .get(
+                                pos..pos
+                                    + challenge
+                                        .get(pos..)
+                                        .and_then(|c| c.iter().position(|&ch| ch == 0x01))
+                                        .unwrap_or(challenge.len()),
+                            )
+                            .ok_or("Failed to find end of bearer token")?
+                            .to_vec(),
+                    )
+                    .map_err(|_| "Bearer token is not a valid UTF-8 string.")?,
+                ));
+            } else {
+                saw_marker = false;
+            }
+        } else if ch == 0x01 {
+            saw_marker = true;
+        }
+    }
+
+    Err("Failed to find 'auth=Bearer' in challenge.")
+}
+
+#[cfg(test)]
+mod tests {
+    use jmap_client::client::Credentials;
+
+    #[test]
+    fn decode_challenge_oauth() {
+        assert_eq!(
+            Credentials::Bearer("vF9dft4qmTc2Nvb3RlckBhbHRhdmlzdGEuY29tCg==".to_string()),
+            super::decode_challenge_oauth(
+                &base64::decode(
+                    concat!(
+                        "bixhPXVzZXJAZXhhbXBsZS5jb20sAWhv",
+                        "c3Q9c2VydmVyLmV4YW1wbGUuY29tAXBvcnQ9MTQzAWF1dGg9QmVhcmVyI",
+                        "HZGOWRmdDRxbVRjMk52YjNSbGNrQmhiSFJoZG1semRHRXVZMjl0Q2c9PQ",
+                        "EB"
+                    )
+                    .as_bytes(),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        );
     }
 }

@@ -5,7 +5,7 @@ use crate::{
 
 use super::{AssertResult, ImapConnection, Type};
 
-pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
+pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     // Test CONDSTORE parameter
     imap.send("SELECT INBOX (CONDSTORE)").await;
     let hms = imap
@@ -33,6 +33,10 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
             .into_highest_modseq(),
         hms
     );
+    imap_check.send("LIST \"\" \"*\"").await;
+    imap_check.assert_read(Type::Tagged, ResponseType::Ok).await;
+    imap_check.send("SELECT Pecorino (CONDSTORE)").await;
+    imap_check.assert_read(Type::Tagged, ResponseType::Ok).await;
 
     // SEQ 0: Init
     let mut messages = build_messages();
@@ -206,8 +210,11 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .await
         .assert_contains("ALL 2:4 MODSEQ");
 
-    imap.send(&format!("SEARCH MODSEQ {}", modseqs[4])).await;
-    imap.assert_read(Type::Tagged, ResponseType::Ok)
+    imap_check
+        .send(&format!("SEARCH MODSEQ {}", modseqs[4]))
+        .await;
+    imap_check
+        .assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("SEARCH 3 4 (MODSEQ");
 

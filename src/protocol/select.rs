@@ -54,25 +54,25 @@ impl ImapResponse for Response {
             if self.unseen_seq > 0 {
                 buf.extend_from_slice(b"* OK [UNSEEN ");
                 buf.extend_from_slice(self.unseen_seq.to_string().as_bytes());
-                buf.extend_from_slice(b"]\r\n");
+                buf.extend_from_slice(b"] Unseen messages\r\n");
             }
         }
         buf.extend_from_slice(
-            b"* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
+            b"* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)] All allowed\r\n",
         );
         buf.extend_from_slice(b"* OK [UIDVALIDITY ");
         buf.extend_from_slice(self.uid_validity.to_string().as_bytes());
-        buf.extend_from_slice(b"]\r\n* OK [UIDNEXT ");
+        buf.extend_from_slice(b"] UIDs valid\r\n* OK [UIDNEXT ");
         buf.extend_from_slice(self.uid_next.to_string().as_bytes());
-        buf.extend_from_slice(b"]\r\n");
+        buf.extend_from_slice(b"] Next predicted UID\r\n");
         if let Some(highest_modseq) = self.highest_modseq {
             buf.extend_from_slice(b"* OK [HIGHESTMODSEQ ");
             buf.extend_from_slice(highest_modseq.to_string().as_bytes());
-            buf.extend_from_slice(b"]\r\n");
+            buf.extend_from_slice(b"] Highest Modseq\r\n");
         }
         buf.extend_from_slice(b"* OK [MAILBOXID (");
         buf.extend_from_slice(self.mailbox_id.as_bytes());
-        buf.extend_from_slice(b")]\r\n");
+        buf.extend_from_slice(b")] Unique Mailbox ID\r\n");
         buf
     }
 }

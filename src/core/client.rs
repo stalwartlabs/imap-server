@@ -90,6 +90,15 @@ impl Session {
     }
 
     pub async fn ingest(&mut self, bytes: &[u8]) -> Result<Option<WriteHalf<TcpStream>>, ()> {
+        let tmp = "dd";
+        for line in String::from_utf8_lossy(bytes).split("\r\n") {
+            if let Some((tag, _)) = line.split_once(' ') {
+                if tag.len() < 10 && tag.contains('.') {
+                    println!("<- {:?}", &line[..std::cmp::min(line.len(), 100)]);
+                }
+            }
+        }
+
         let mut bytes = bytes.iter();
         let mut requests = Vec::with_capacity(2);
         let mut needs_literal = None;
