@@ -32,6 +32,11 @@ pub struct Response {
     pub mailbox_id: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct Exists {
+    pub total_messages: usize,
+}
+
 impl ImapResponse for Response {
     fn serialize(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(100);
@@ -77,6 +82,20 @@ impl ImapResponse for Response {
     }
 }
 
+impl Exists {
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(b"* ");
+        buf.extend_from_slice(self.total_messages.to_string().as_bytes());
+        buf.extend_from_slice(b" EXISTS\r\n");
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(15);
+        self.serialize(&mut buf);
+        buf
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::protocol::{list::ListItem, ImapResponse};
@@ -102,22 +121,22 @@ mod tests {
                     "* 172 EXISTS\r\n",
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
                     "* LIST () \"/\" \"INBOX\"\r\n",
-                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
-                    "* OK [UIDVALIDITY 3857529045]\r\n",
-                    "* OK [UIDNEXT 4392]\r\n",
-                    "* OK [HIGHESTMODSEQ 100]\r\n",
-                    "* OK [MAILBOXID (abc)]\r\n"
+                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)] All allowed\r\n",
+                    "* OK [UIDVALIDITY 3857529045] UIDs valid\r\n",
+                    "* OK [UIDNEXT 4392] Next predicted UID\r\n",
+                    "* OK [HIGHESTMODSEQ 100] Highest Modseq\r\n",
+                    "* OK [MAILBOXID (abc)] Unique Mailbox ID\r\n"
                 ),
                 concat!(
                     "* 172 EXISTS\r\n",
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
                     "* 5 RECENT\r\n",
-                    "* OK [UNSEEN 3]\r\n",
-                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
-                    "* OK [UIDVALIDITY 3857529045]\r\n",
-                    "* OK [UIDNEXT 4392]\r\n",
-                    "* OK [HIGHESTMODSEQ 100]\r\n",
-                    "* OK [MAILBOXID (abc)]\r\n"
+                    "* OK [UNSEEN 3] Unseen messages\r\n",
+                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)] All allowed\r\n",
+                    "* OK [UIDVALIDITY 3857529045] UIDs valid\r\n",
+                    "* OK [UIDNEXT 4392] Next predicted UID\r\n",
+                    "* OK [HIGHESTMODSEQ 100] Highest Modseq\r\n",
+                    "* OK [MAILBOXID (abc)] Unique Mailbox ID\r\n"
                 ),
             ),
             (
@@ -140,21 +159,21 @@ mod tests {
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
                     "* LIST () \"/\" \"~peter/mail/台北/日本語\" (\"OLDNAME\" ",
                     "(\"~peter/mail/&U,BTFw-/&ZeVnLIqe-\"))\r\n",
-                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
-                    "* OK [UIDVALIDITY 3857529045]\r\n",
-                    "* OK [UIDNEXT 4392]\r\n",
-                    "* OK [MAILBOXID (abc)]\r\n"
+                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)] All allowed\r\n",
+                    "* OK [UIDVALIDITY 3857529045] UIDs valid\r\n",
+                    "* OK [UIDNEXT 4392] Next predicted UID\r\n",
+                    "* OK [MAILBOXID (abc)] Unique Mailbox ID\r\n"
                 ),
                 concat!(
                     "* OK [CLOSED] Closed previous mailbox\r\n",
                     "* 172 EXISTS\r\n",
                     "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n",
                     "* 5 RECENT\r\n",
-                    "* OK [UNSEEN 3]\r\n",
-                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)]\r\n",
-                    "* OK [UIDVALIDITY 3857529045]\r\n",
-                    "* OK [UIDNEXT 4392]\r\n",
-                    "* OK [MAILBOXID (abc)]\r\n"
+                    "* OK [UNSEEN 3] Unseen messages\r\n",
+                    "* OK [PERMANENTFLAGS (\\Deleted \\Seen \\Answered \\Flagged \\Draft \\*)] All allowed\r\n",
+                    "* OK [UIDVALIDITY 3857529045] UIDs valid\r\n",
+                    "* OK [UIDNEXT 4392] Next predicted UID\r\n",
+                    "* OK [MAILBOXID (abc)] Unique Mailbox ID\r\n"
                 ),
             ),
         ] {

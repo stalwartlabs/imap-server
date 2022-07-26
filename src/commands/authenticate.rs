@@ -12,8 +12,6 @@ use crate::{
     protocol::authenticate::Mechanism,
 };
 
-use super::search::SavedSearch;
-
 impl Session {
     pub async fn handle_authenticate(&mut self, request: Request) -> Result<(), ()> {
         match request.parse_authenticate() {
@@ -104,7 +102,6 @@ impl Session {
                 self.state = State::Authenticated {
                     data: Arc::new(SessionData {
                         mailboxes: parking_lot::Mutex::new(mailboxes),
-                        saved_search: parking_lot::Mutex::new(SavedSearch::None),
                         client,
                         core: self.core.clone(),
                         writer: self.writer.clone(),

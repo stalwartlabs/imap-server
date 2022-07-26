@@ -1,10 +1,10 @@
 BODY (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "utf-8"
       ) NIL NIL "quoted-printable" 88 3
    ) (
-      "TEXT" "html" (
+      "text" "html" (
          "charset" "utf-8"
       ) NIL NIL "quoted-printable" 94 3
    ) "alternative"
@@ -12,7 +12,7 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "utf-8"
       ) NIL NIL "quoted-printable" 88 3 "42c3362e903b7a03fdc65680ef374c47" (
          "inline" (
@@ -20,7 +20,7 @@ BODYSTRUCTURE (
          )
       ) NIL NIL
    ) (
-      "TEXT" "html" (
+      "text" "html" (
          "charset" "utf-8"
       ) NIL NIL "quoted-printable" 94 3 "c9babbbcea4c673b1dfd6dc95ecb6bd1" (
          "inline" (
@@ -158,20 +158,24 @@ Content-Transfer-Encoding:  quoted-printable
 Content-Disposition:  inline
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {53}
-From:  sender@example.com
-To:  recipient@example.com
+BODY[HEADER.FIELDS (FROM TO)] {53}
+From: sender@example.com
+To: recipient@example.com
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
-der@example.com
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+er@example.com
+To: recipi
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {118}
-From:  sender@example.com
-To:  recipient@example.com
-Content-Type:  multipart/alternative; boundary="boundary-string"
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {117}
+From: sender@example.com
+To: recipient@example.com
+Content-Type: multipart/alternative; boundary="boundary-string"
+
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-der@example.com
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+er@example.com
+To: recipi
 ----------------------------------

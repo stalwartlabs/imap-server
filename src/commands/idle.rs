@@ -7,14 +7,16 @@ use tracing::debug;
 
 use crate::{
     core::{
-        client::{Session, SessionData, State},
-        message::MailboxData,
+        client::{SelectedMailbox, Session, SessionData, State},
         receiver::Request,
-        Command, ResponseCode, StatusResponse,
+        Command, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::{
+        expunge, fetch,
         list::{Attribute, ListItem},
+        select::Exists,
         status::Status,
+        Sequence,
     },
 };
 
@@ -58,9 +60,10 @@ impl Session {
         let (idle_tx, idle_rx) = watch::channel(true);
         self.idle_tx = idle_tx.into();
         let is_rev2 = self.version.is_rev2();
+        let is_qresync = self.is_qresync;
 
         tokio::spawn(async move {
-            data.idle(mailbox, changes, idle_rx, request.tag, is_rev2)
+            data.idle(mailbox, changes, idle_rx, request.tag, is_qresync, is_rev2)
                 .await;
         });
         Ok(())
@@ -70,29 +73,16 @@ impl Session {
 impl SessionData {
     pub async fn idle(
         &self,
-        mailbox: Option<Arc<MailboxData>>,
+        mailbox: Option<Arc<SelectedMailbox>>,
         mut changes: impl Stream<Item = jmap_client::Result<Changes>> + Unpin,
         mut idle_rx: watch::Receiver<bool>,
         tag: String,
+        is_qresync: bool,
         is_rev2: bool,
     ) {
-        // Obtain current state
-        let mut email_state = if let Some(mailbox) = &mailbox {
-            let mut request = self.client.build();
-            request
-                .get_email()
-                .account_id(&mailbox.account_id)
-                .ids(Vec::<&str>::new());
-            match request.send_get_email().await {
-                Ok(mut response) => response.take_state().into(),
-                Err(err) => {
-                    debug!("Failed to obtain state: {}", err);
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        // Write any pending changes
+        self.write_changes(mailbox.as_ref(), true, true, is_qresync, is_rev2)
+            .await;
 
         loop {
             tokio::select! {
@@ -100,31 +90,28 @@ impl SessionData {
                     match changes {
                         Some(Ok(changes)) => {
                             let mut has_mailbox_changes = false;
-                            let mut new_email_state = None;
+                            let mut has_email_changes = false;
                             for (account_id, changes) in changes.into_inner() {
-                                for (type_state, change_id) in changes {
+                                for (type_state, _) in changes {
                                     match type_state {
                                         TypeState::Mailbox => {
                                             has_mailbox_changes = true;
                                         }
-                                        TypeState::Email if mailbox.as_ref().map_or(false, |m| m.account_id == account_id) => {
-                                            new_email_state = Some(change_id);
+                                        TypeState::Email if mailbox.as_ref().map_or(false, |m| m.id.account_id == account_id) => {
+                                            has_email_changes = true;
                                         }
                                         _ => (),
                                     }
                                 }
                             }
 
-                            let has_email_changes = if new_email_state.is_some() {
-                                let tmp_state = email_state;
-                                email_state = new_email_state;
-                                tmp_state
-                            } else {
-                                None
-                            };
-
-                            self.write_changes(mailbox.as_ref(), has_mailbox_changes, has_email_changes, is_rev2).await;
-
+                            self.write_changes(
+                                mailbox.as_ref(),
+                                has_mailbox_changes,
+                                has_email_changes,
+                                is_qresync,
+                                is_rev2
+                            ).await;
 
                         },
                         Some(Err(err)) => {
@@ -157,17 +144,18 @@ impl SessionData {
 
     pub async fn write_changes(
         &self,
-        mailbox: Option<&Arc<MailboxData>>,
+        mailbox: Option<&Arc<SelectedMailbox>>,
         check_mailboxes: bool,
-        check_emails: Option<String>,
+        check_emails: bool,
+        is_qresync: bool,
         is_rev2: bool,
     ) {
-        let mut buf = Vec::with_capacity(64);
-
         // Fetch all changed mailboxes
         if check_mailboxes {
             match self.synchronize_mailboxes(true, false).await {
                 Ok(Some(changes)) => {
+                    let mut buf = Vec::with_capacity(64);
+
                     // List deleted mailboxes
                     for mailbox_name in changes.deleted {
                         ListItem {
@@ -187,7 +175,6 @@ impl SessionData {
                         }
                         .serialize(&mut buf, is_rev2, false);
                     }
-
                     // Obtain status of changed mailboxes
                     for mailbox_name in changes.changed {
                         if let Ok(status) = self
@@ -205,6 +192,10 @@ impl SessionData {
                             status.serialize(&mut buf, is_rev2);
                         }
                     }
+
+                    if !buf.is_empty() {
+                        self.write_bytes(buf).await;
+                    }
                 }
                 Err(err) => {
                     debug!("Failed to refresh mailboxes: {}", err);
@@ -214,74 +205,90 @@ impl SessionData {
         }
 
         // Fetch selected mailbox changes
-        if let (Some(mailbox), Some(check_emails)) = (mailbox, check_emails) {
-            let mut request = self.client.build();
-            request
-                .changes_email(check_emails)
-                .account_id(&mailbox.account_id);
-            match request.send_changes_email().await {
-                Ok(mut changes) => {
-                    // Obtain deleted seqnums
-                    let mut has_deletions = false;
-                    if !changes.destroyed().is_empty() {
-                        if let Ok(ids) = self
-                            .core
-                            .jmap_deletions_to_imap(
-                                mailbox.clone(),
-                                changes.take_destroyed(),
-                                false,
-                                false,
-                            )
-                            .await
-                        {
-                            for id in ids {
-                                has_deletions = true;
-                                buf.extend_from_slice(format!("* {} EXPUNGE\r\n", id).as_bytes());
-                            }
-                        }
+        if check_emails {
+            // Synchronize emails
+            if let Some(mailbox) = mailbox {
+                // Obtain changes since last sync
+                let mut request = self.client.build();
+                request
+                    .changes_email(&mailbox.state.lock().last_state)
+                    .account_id(&mailbox.id.account_id);
+                let mut response = match request.send_changes_email().await {
+                    Ok(response) => response,
+                    Err(err) => {
+                        debug!("Failed to obtain emails changes: {}", err);
+                        self.write_bytes(err.into_status_response().into_bytes())
+                            .await;
+                        return;
                     }
+                };
 
-                    // Synchronize emails
-                    if let Ok(mailbox_status) = self.synchronize_messages(mailbox.clone()).await {
-                        let mut has_changes = false;
-                        if !changes.updated().is_empty() || !changes.created().is_empty() {
-                            if let Ok(ids) = self
-                                .core
-                                .jmap_to_imap(
-                                    mailbox.clone(),
-                                    changes
-                                        .take_created()
-                                        .into_iter()
-                                        .chain(changes.take_updated())
-                                        .collect::<Vec<_>>(),
-                                    false,
-                                    true,
-                                )
-                                .await
-                            {
-                                if !ids.uids.is_empty() {
-                                    has_changes = true;
-                                }
-                            }
-                        };
-
-                        if has_changes || has_deletions {
-                            buf.extend_from_slice(
-                                format!("* {} EXISTS\r\n", mailbox_status.total_messages)
-                                    .as_bytes(),
-                            );
-                        }
+                // Synchronize messages
+                let new_state = match self.synchronize_messages(mailbox.id.clone()).await {
+                    Ok(new_state) => new_state,
+                    Err(err) => {
+                        self.write_bytes(err.into_bytes()).await;
+                        return;
                     }
+                };
+
+                // Update UIDs
+                let mut buf = Vec::with_capacity(64);
+                let (new_message_count, deletions) =
+                    mailbox.synchronize_uids(new_state.jmap_ids, new_state.imap_uids, true);
+                if let Some(deletions) = deletions {
+                    expunge::Response {
+                        is_uid: false,
+                        is_qresync,
+                        ids: deletions.into_iter().map(|id| id.seqnum).collect(),
+                    }
+                    .serialize_to(&mut buf);
                 }
-                Err(err) => {
-                    debug!("Failed to fetch email changes: {}", err);
+                if let Some(new_message_count) = new_message_count {
+                    Exists {
+                        total_messages: new_message_count,
+                    }
+                    .serialize(&mut buf);
+                }
+                if !buf.is_empty() {
+                    self.write_bytes(buf).await;
+                }
+
+                if response.total_changes() > 0 {
+                    // Obtain ids of changed emails
+                    let mut changed_ids = Vec::with_capacity(response.total_changes());
+                    {
+                        // Update state
+                        let mut state = mailbox.state.lock();
+                        state.last_state = response.take_new_state();
+                        for (pos, jmap_id) in state.jmap_ids.iter().enumerate() {
+                            if response.updated().contains(jmap_id)
+                                || response.created().contains(jmap_id)
+                            {
+                                changed_ids.push(Sequence::Number {
+                                    value: (pos + 1) as u32,
+                                });
+                            }
+                        }
+                    }
+
+                    if !changed_ids.is_empty() {
+                        self.fetch(
+                            fetch::Arguments {
+                                tag: String::new(),
+                                sequence_set: Sequence::List { items: changed_ids },
+                                attributes: vec![fetch::Attribute::Flags, fetch::Attribute::Uid],
+                                changed_since: None,
+                                include_vanished: false,
+                            },
+                            mailbox.clone(),
+                            false,
+                            is_qresync,
+                        )
+                        .await;
+                    }
                 }
             }
-        }
-
-        // Write changes
-        if !buf.is_empty() {
-            self.write_bytes(buf).await;
         }
     }
 }

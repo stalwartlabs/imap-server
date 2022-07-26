@@ -4,78 +4,88 @@ use jmap_client::{core::query, email::query::Filter};
 
 use crate::{
     core::{
-        client::{Session, SessionData},
-        message::MailboxData,
-        receiver::Request,
+        client::{SelectedMailbox, Session, SessionData},
+        receiver::{Request, Token},
         Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
-    protocol::{expunge::Response, ImapResponse},
+    parser::parse_sequence_set,
+    protocol::{expunge::Response, select::Exists, Sequence},
 };
+
+use super::search::SavedSearch;
 
 impl Session {
     pub async fn handle_expunge(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
-        let (data, mailbox, is_select, _) = self.state.select_data();
-        if !is_select {
-            return self
-                .write_bytes(
-                    StatusResponse::no("EXPUNGE only allowed in SELECT mode.")
-                        .with_tag(request.tag)
-                        .into_bytes(),
-                )
-                .await;
-        }
+        let (data, mailbox) = self.state.select_data();
 
-        match data.expunge(mailbox.clone()).await {
-            Ok(Some(jmap_ids)) if !jmap_ids.is_empty() => {
-                match data
-                    .core
-                    .jmap_to_imap(mailbox, jmap_ids, false, is_uid || self.is_qresync)
-                    .await
-                {
-                    Ok(ids) => {
-                        self.write_bytes(
-                            StatusResponse::completed(Command::Expunge(is_uid))
-                                .with_tag(request.tag)
-                                .serialize(
-                                    Response {
-                                        is_uid,
-                                        is_qresync: self.is_qresync,
-                                        ids: {
-                                            let mut ids = if is_uid || self.is_qresync {
-                                                ids.uids
-                                            } else {
-                                                ids.seqnums.unwrap()
-                                            };
-                                            ids.sort_unstable();
-                                            ids
-                                        },
-                                    }
-                                    .serialize(),
-                                ),
-                        )
-                        .await
-                    }
-                    Err(_) => {
-                        self.write_bytes(
-                            StatusResponse::database_failure()
-                                .with_tag(request.tag)
-                                .into_bytes(),
-                        )
-                        .await
-                    }
-                }
+        // Parse sequence to operate on
+        let sequence = if let Some(Token::Argument(value)) = request.tokens.into_iter().next() {
+            parse_sequence_set(&value).ok()
+        } else {
+            None
+        };
+
+        let jmap_state = match data.expunge(mailbox.clone(), sequence).await {
+            Ok(jmap_state) => jmap_state,
+            Err(response) => {
+                return self
+                    .write_bytes(response.with_tag(request.tag).into_bytes())
+                    .await;
             }
-            Ok(_) => {
+        };
+
+        // Remove saved searches
+        *mailbox.saved_search.lock() = SavedSearch::None;
+
+        match data.synchronize_messages(mailbox.id.clone()).await {
+            Ok(mut new_state) => {
+                let mut buf = Vec::with_capacity(64);
+
+                {
+                    let mut deleted_ids = Vec::new();
+                    let mut state = mailbox.state.lock();
+
+                    for (seqnum, uid) in state.imap_uids.iter().enumerate() {
+                        if !new_state.imap_uids.contains(uid) {
+                            deleted_ids.push(if is_uid || self.is_qresync {
+                                *uid
+                            } else {
+                                (seqnum + 1) as u32
+                            });
+                        }
+                    }
+
+                    if !deleted_ids.is_empty() || state.total_messages != new_state.total_messages {
+                        if !deleted_ids.is_empty() {
+                            deleted_ids.sort_unstable();
+                            Response {
+                                is_uid,
+                                is_qresync: self.is_qresync,
+                                ids: deleted_ids,
+                            }
+                            .serialize_to(&mut buf);
+                        }
+                        Exists {
+                            total_messages: new_state.total_messages,
+                        }
+                        .serialize(&mut buf);
+                    }
+
+                    new_state.last_state = jmap_state;
+                    *state = new_state;
+                }
+
                 self.write_bytes(
                     StatusResponse::completed(Command::Expunge(is_uid))
                         .with_tag(request.tag)
-                        .into_bytes(),
+                        .serialize(buf),
                 )
                 .await
             }
-            Err(mut response) => {
-                response.tag = request.tag.into();
-                self.write_bytes(response.into_bytes()).await
+            Err(response) => {
+                return self
+                    .write_bytes(response.with_tag(request.tag).into_bytes())
+                    .await;
             }
         }
     }
@@ -84,26 +94,32 @@ impl Session {
 impl SessionData {
     pub async fn expunge(
         &self,
-        mailbox: Arc<MailboxData>,
-    ) -> crate::core::Result<Option<Vec<String>>> {
+        mailbox: Arc<SelectedMailbox>,
+        sequence: Option<Sequence>,
+    ) -> crate::core::Result<String> {
         let mut request = self.client.build();
         let result_ref = request
             .query_email()
-            .account_id(&mailbox.account_id)
-            .filter(query::Filter::and(
-                if let Some(mailbox_id) = &mailbox.mailbox_id {
-                    vec![
-                        Filter::in_mailbox(mailbox_id),
-                        Filter::has_keyword(Flag::Deleted.to_jmap()),
-                    ]
-                } else {
-                    vec![Filter::has_keyword(Flag::Deleted.to_jmap())]
-                },
-            ))
+            .account_id(&mailbox.id.account_id)
+            .filter(query::Filter::and({
+                let mut filters = vec![Filter::has_keyword(Flag::Deleted.to_jmap())];
+
+                if let Some(mailbox_id) = &mailbox.id.mailbox_id {
+                    filters.push(Filter::in_mailbox(mailbox_id));
+                }
+
+                if let Some(sequence) = sequence {
+                    filters.push(Filter::id(
+                        mailbox.sequence_to_jmap(&sequence, true).await?.into_keys(),
+                    ));
+                }
+
+                filters
+            }))
             .result_reference();
         request
             .set_email()
-            .account_id(&mailbox.account_id)
+            .account_id(&mailbox.id.account_id)
             .destroy_ref(result_ref);
         let mut response = request
             .send()
@@ -120,6 +136,6 @@ impl SessionData {
             .unwrap()
             .unwrap_set_email()
             .map_err(|err| err.into_status_response())?
-            .take_destroyed_ids())
+            .take_new_state())
     }
 }

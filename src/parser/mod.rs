@@ -188,10 +188,13 @@ pub fn parse_number<T: FromStr>(value: &[u8]) -> Result<T> {
 
 pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
     let mut sequence_set = Vec::new();
-    let mut is_range = false;
+
     let mut range_start = None;
     let mut token_start = None;
-    let mut has_wildcard = false;
+
+    let mut is_wildcard = false;
+    let mut is_range = false;
+    let mut is_saved_search = false;
 
     for (mut pos, ch) in value.iter().enumerate() {
         let mut add_token = false;
@@ -211,8 +214,8 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                             })?)?
                             .into();
                         token_start = None;
-                    } else if has_wildcard {
-                        has_wildcard = false;
+                    } else if is_wildcard {
+                        is_wildcard = false;
                     } else {
                         return Err(Cow::from(format!(
                             "Invalid sequence set {:?}, number expected before ':'.",
@@ -228,14 +231,14 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                 }
             }
             b'*' => {
-                if !has_wildcard {
+                if !is_wildcard {
                     if value.len() == 1 {
                         return Ok(Sequence::Range {
                             start: None,
                             end: None,
                         });
                     } else if token_start.is_none() {
-                        has_wildcard = true;
+                        is_wildcard = true;
                     } else {
                         return Err(Cow::from(format!(
                             "Invalid sequence set {:?}, invalid use of '*'.",
@@ -250,18 +253,18 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                 }
             }
             b'$' => {
-                if value.len() == 1 {
-                    return Ok(Sequence::SavedSearch);
+                if value.get(pos + 1).map_or(true, |&ch| ch == b',') {
+                    is_saved_search = true;
                 } else {
                     return Err(Cow::from(format!(
-                        "Invalid sequence set {:?}, can't parse '$' marker.",
+                        "Invalid sequence set {:?}, unexpected token after '$'.",
                         String::from_utf8_lossy(value)
                     )));
                 }
             }
             _ => {
                 if ch.is_ascii_digit() {
-                    if has_wildcard {
+                    if is_wildcard {
                         return Err(Cow::from(format!(
                             "Invalid sequence set {:?}, invalid use of '*'.",
                             String::from_utf8_lossy(value)
@@ -285,7 +288,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
             if is_range {
                 sequence_set.push(Sequence::Range {
                     start: range_start,
-                    end: if !has_wildcard {
+                    end: if !is_wildcard {
                         if !add_token {
                             pos += 1;
                         }
@@ -308,7 +311,7 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                         )?
                         .into()
                     } else {
-                        has_wildcard = false;
+                        is_wildcard = false;
                         None
                     },
                 });
@@ -318,25 +321,35 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                 if !add_token {
                     pos += 1;
                 }
-                sequence_set.push(Sequence::Number {
-                    value: parse_number(
-                        value
-                            .get(
-                                token_start.ok_or_else(|| {
+                if is_wildcard {
+                    return Ok(Sequence::Range {
+                        start: None,
+                        end: None,
+                    });
+                } else if is_saved_search {
+                    sequence_set.push(Sequence::SavedSearch);
+                    is_saved_search = false;
+                } else {
+                    sequence_set.push(Sequence::Number {
+                        value: parse_number(
+                            value
+                                .get(
+                                    token_start.ok_or_else(|| {
+                                        Cow::from(format!(
+                                            "Invalid sequence set {:?}, expected number.",
+                                            String::from_utf8_lossy(value)
+                                        ))
+                                    })?..pos,
+                                )
+                                .ok_or_else(|| {
                                     Cow::from(format!(
-                                        "Invalid sequence set {:?}, expected number.",
+                                        "Invalid sequence set {:?}, parse error.",
                                         String::from_utf8_lossy(value)
                                     ))
-                                })?..pos,
-                            )
-                            .ok_or_else(|| {
-                                Cow::from(format!(
-                                    "Invalid sequence set {:?}, parse error.",
-                                    String::from_utf8_lossy(value)
-                                ))
-                            })?,
-                    )?,
-                });
+                                })?,
+                        )?,
+                    });
+                }
             }
             token_start = None;
         }

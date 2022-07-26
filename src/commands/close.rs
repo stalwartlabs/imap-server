@@ -6,9 +6,9 @@ use crate::core::{
 
 impl Session {
     pub async fn handle_close(&mut self, request: Request) -> Result<(), ()> {
-        let (data, mailbox, is_rw, _) = self.state.select_data();
-        if is_rw {
-            data.expunge(mailbox).await.ok();
+        let (data, mailbox) = self.state.select_data();
+        if mailbox.is_select {
+            data.expunge(mailbox, None).await.ok();
         }
 
         self.state = State::Authenticated { data };

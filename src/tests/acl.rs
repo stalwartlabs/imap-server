@@ -122,16 +122,16 @@ pub async fn test(mut imap_john: &mut ImapConnection, _imap_check: &mut ImapConn
             .await;
         imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     }
-    imap_john.send("UID STORE 0 +FLAGS (\\Deleted)").await;
+    imap_john.send("UID STORE 1 +FLAGS (\\Deleted)").await;
     imap_john.assert_read(Type::Tagged, ResponseType::No).await;
 
-    imap_bill.send("UID STORE 0 +FLAGS (\\Deleted)").await;
+    imap_bill.send("UID STORE 1 +FLAGS (\\Deleted)").await;
     imap_bill.assert_read(Type::Tagged, ResponseType::Ok).await;
 
     imap_john.send("UID EXPUNGE").await;
     imap_john.assert_read(Type::Tagged, ResponseType::Ok).await;
 
-    imap_john.send("UID FETCH 0 (PREVIEW)").await;
+    imap_john.send("UID FETCH 1 (PREVIEW)").await;
     imap_john
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
@@ -140,7 +140,7 @@ pub async fn test(mut imap_john: &mut ImapConnection, _imap_check: &mut ImapConn
     imap_bill.send("UID EXPUNGE").await;
     imap_bill.assert_read(Type::Tagged, ResponseType::Ok).await;
 
-    imap_bill.send("UID FETCH 0 (PREVIEW)").await;
+    imap_bill.send("UID FETCH 1 (PREVIEW)").await;
     imap_bill
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
@@ -180,6 +180,9 @@ pub async fn test(mut imap_john: &mut ImapConnection, _imap_check: &mut ImapConn
         .into_copy_uid();
 
     // Check that both Bill and Jane can see the message
+    imap_bill.send("NOOP").await;
+    imap_bill.assert_read(Type::Tagged, ResponseType::Ok).await;
+
     imap_bill
         .send(&format!("UID FETCH {} (PREVIEW)", uid))
         .await;

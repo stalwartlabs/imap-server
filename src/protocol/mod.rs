@@ -55,18 +55,21 @@ impl Sequence {
         Sequence::Range { start, end }
     }
 
-    pub fn contains(&self, value: u32) -> bool {
+    pub fn contains(&self, value: u32, max_value: u32) -> bool {
         match self {
             Sequence::Number { value: number } => *number == value,
             Sequence::Range { start, end } => match (start, end) {
-                (Some(start), Some(end)) => value >= *start && value <= *end,
-                (Some(start), None) => value >= *start,
-                (None, Some(end)) => value <= *end,
+                (Some(start), Some(end)) => {
+                    value >= *start && value <= *end || value >= *end && value <= *start
+                }
+                (Some(range), None) | (None, Some(range)) => {
+                    value >= *range && value <= max_value || value >= max_value && value <= *range
+                }
                 (None, None) => true,
             },
             Sequence::List { items } => {
                 for item in items {
-                    if item.contains(value) {
+                    if item.contains(value, max_value) {
                         return true;
                     }
                 }
@@ -76,9 +79,17 @@ impl Sequence {
         }
     }
 
-    pub fn try_expand(&self) -> Option<Vec<u32>> {
+    pub fn is_saved_search(&self) -> bool {
         match self {
-            Sequence::Number { value } => Some(vec![*value]),
+            Sequence::SavedSearch => true,
+            Sequence::List { items } => items.iter().any(|s| s.is_saved_search()),
+            _ => false,
+        }
+    }
+
+    pub fn try_expand(&self) -> Option<HashSet<u32>> {
+        match self {
+            Sequence::Number { value } => Some(HashSet::from_iter([*value])),
             Sequence::List { items } => {
                 let mut result = HashSet::with_capacity(items.len());
                 for item in items {
@@ -101,7 +112,7 @@ impl Sequence {
                         _ => return None,
                     }
                 }
-                Some(result.into_iter().collect())
+                Some(result)
             }
             Sequence::Range {
                 start: Some(start),
@@ -157,9 +168,15 @@ pub fn quoted_timestamp(buf: &mut Vec<u8>, timestamp: i64) {
     buf.push(b'"');
 }
 
-pub fn quoted_timestamp_or_nil(buf: &mut Vec<u8>, timestamp: Option<i64>) {
+pub fn quoted_rfc2822(buf: &mut Vec<u8>, timestamp: i64) {
+    buf.push(b'"');
+    buf.extend_from_slice(from_timestamp(timestamp).to_rfc2822().as_bytes());
+    buf.push(b'"');
+}
+
+pub fn quoted_rfc2822_or_nil(buf: &mut Vec<u8>, timestamp: Option<i64>) {
     if let Some(timestamp) = timestamp {
-        quoted_timestamp(buf, timestamp);
+        quoted_rfc2822(buf, timestamp);
     } else {
         buf.extend_from_slice(b"NIL");
     }
@@ -394,18 +411,18 @@ mod tests {
 
     #[test]
     fn sequence_set_contains() {
-        for (sequence, expected_result) in [
-            ("1,5:10", vec![1, 5, 6, 7, 8, 9, 10]),
-            ("2,4:7,9,12:*", vec![2, 4, 5, 6, 7, 9, 12, 13, 14, 15]),
-            ("*:4,5:7", vec![1, 2, 3, 4, 5, 6, 7]),
-            ("2,4,5", vec![2, 4, 5]),
+        for (sequence, expected_result, max_value) in [
+            ("1,5:10", vec![1, 5, 6, 7, 8, 9, 10], 10),
+            ("2,4:7,9,12:*", vec![2, 4, 5, 6, 7, 9, 12, 13, 14, 15], 15),
+            ("*:4,5:7", vec![4, 5, 6, 7], 7),
+            ("2,4,5", vec![2, 4, 5], 5),
         ] {
             let sequence = parse_sequence_set(sequence.as_bytes()).unwrap();
 
             assert_eq!(
                 (1..=15)
                     .into_iter()
-                    .filter(|num| sequence.contains(*num))
+                    .filter(|num| sequence.contains(*num, max_value))
                     .collect::<Vec<_>>(),
                 expected_result
             );

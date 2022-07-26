@@ -8,7 +8,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("10 EXISTS")
-        .assert_contains("[UIDNEXT 10]");
+        .assert_contains("[UIDNEXT 11]");
 
     // Set all messages to flag "Seen"
     imap.send("UID STORE * +FLAGS.SILENT (\\Seen)").await;
@@ -28,7 +28,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .await
         .assert_contains("MESSAGES 10")
         .assert_contains("UNSEEN 0")
-        .assert_contains("UIDNEXT 10");
+        .assert_contains("UIDNEXT 11");
 
     // Remove Seen flag from all messages
     imap.send("UID STORE * -FLAGS (\\Seen)").await;

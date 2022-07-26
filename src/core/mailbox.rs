@@ -1,7 +1,7 @@
 use super::{
     client::SessionData,
     message::{
-        increment_uid, serialize_highestmodseq, serialize_modseq, MailboxData, MODSEQ_TO_STATE,
+        increment_uid, serialize_highestmodseq, serialize_modseq, MailboxId, MODSEQ_TO_STATE,
         STATE_TO_MODSEQ,
     },
     Core,
@@ -454,7 +454,7 @@ impl SessionData {
         Ok(changes)
     }
 
-    pub fn get_mailbox_by_name(&self, mailbox_name: &str) -> Option<MailboxData> {
+    pub fn get_mailbox_by_name(&self, mailbox_name: &str) -> Option<MailboxId> {
         if !self.is_all_mailbox(mailbox_name) {
             for account in self.mailboxes.lock().iter() {
                 if account
@@ -464,7 +464,7 @@ impl SessionData {
                 {
                     for (mailbox_name_, mailbox_id_) in account.mailbox_names.iter() {
                         if mailbox_name_ == mailbox_name {
-                            return MailboxData {
+                            return MailboxId {
                                 account_id: account.account_id.to_string(),
                                 mailbox_id: Some(mailbox_id_.to_string()),
                             }
@@ -475,7 +475,7 @@ impl SessionData {
             }
             None
         } else {
-            MailboxData {
+            MailboxId {
                 account_id: self.client.default_account_id().to_string(),
                 mailbox_id: None,
             }

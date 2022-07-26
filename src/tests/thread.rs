@@ -25,7 +25,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
                 imap.assert_read(Type::Tagged, ResponseType::Ok)
                     .await
                     .into_append_uid(),
-                format!("0:{}", messages.len() - 1),
+                format!("1:{}", messages.len()),
             );
         }
     }
@@ -36,7 +36,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
 
     let mut email_id = None;
     let mut thread_id = None;
-    imap.send("UID FETCH 0 (EMAILID THREADID)").await;
+    imap.send("UID FETCH 1 (EMAILID THREADID)").await;
     for line in imap.assert_read(Type::Tagged, ResponseType::Ok).await {
         if let Some((_, value)) = line.split_once("EMAILID (") {
             email_id = value
@@ -81,14 +81,14 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("(0 1 2 3)")
+        .assert_contains("(1 2 3 4)")
         .assert_count("(", 1);
 
     imap.send(&format!("UID THREAD REFERENCES UTF-8 EMAILID {}", email_id))
         .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("(0)")
+        .assert_contains("(1)")
         .assert_count("(", 1);
 
     // Delete all messages

@@ -1,10 +1,12 @@
 BODY (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL NIL 49 2
+      ) NIL NIL "7bit" 49 2
    ) (
-      "TEXT" "enriched" NIL NIL NIL NIL 70 3
+      "text" "enriched" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 70 3
    ) (
       "application" "x-whatever" NIL NIL NIL NIL 52
    ) "alternative"
@@ -12,11 +14,13 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL NIL 49 2 "78ac59b311794bce68b262894b2fa29a" NIL NIL NIL
+      ) NIL NIL "7bit" 49 2 "78ac59b311794bce68b262894b2fa29a" NIL NIL NIL
    ) (
-      "TEXT" "enriched" NIL NIL NIL NIL 70 3 "bb64063ef7935f59bdd6cf4a04274dcc" NIL NIL NIL
+      "text" "enriched" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 70 3 "bb64063ef7935f59bdd6cf4a04274dcc" NIL NIL NIL
    ) (
       "application" "x-whatever" NIL NIL NIL NIL 52 "63f1d03f4e5cb89a4fe8128dc3153294" NIL NIL NIL
    ) "alternative" (
@@ -163,22 +167,24 @@ BODY[3.MIME] {38}
 Content-Type:  application/x-whatever
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {81}
-From:  Nathaniel Borenstein <nsb@bellcore.com>
-To:  Ned Freed <ned@innosoft.com>
+BODY[HEADER.FIELDS (FROM TO)] {81}
+From: Nathaniel Borenstein <nsb@bellcore.com>
+To: Ned Freed <ned@innosoft.com>
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
-haniel Borenste
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+aniel Borenstein <nsb@bel
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {203}
-From:  Nathaniel Borenstein <nsb@bellcore.com>
-To:  Ned Freed <ned@innosoft.com>
-Date:  Mon, 22 Mar 1993 09:41:09 -0800 (PST)
-MIME-Version:  1.0
-Content-Type:  multipart/alternative; boundary=boundary42
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {200}
+From: Nathaniel Borenstein <nsb@bellcore.com>
+To: Ned Freed <ned@innosoft.com>
+Date: Mon, 22 Mar 1993 09:41:09 -0800 (PST)
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary=boundary42
+
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-haniel Borenste
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+aniel Borenstein <nsb@bel
 ----------------------------------

@@ -12,7 +12,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("10 EXISTS")
-        .assert_contains("[UIDNEXT 10]");
+        .assert_contains("[UIDNEXT 11]");
     imap_check.send("SELECT INBOX").await;
     imap_check.assert_read(Type::Tagged, ResponseType::Ok).await;
 
@@ -25,7 +25,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 0 1 2 3 4 5 6 7 8 9");
+        .assert_equals("* SEARCH 1 2 3 4 5 6 7 8 9 10");
 
     // Filters
     imap_check
@@ -34,7 +34,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 0 2 3 5");
+        .assert_equals("* SEARCH 1 3 4 6");
 
     imap_check
         .send("UID SEARCH UNSEEN OR KEYWORD Flag_007 KEYWORD Flag_004")
@@ -42,7 +42,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 4 7");
+        .assert_equals("* SEARCH 5 8");
 
     imap_check
         .send("UID SEARCH TEXT coffee FROM vandelay SUBJECT exporting SENTON 20-Nov-2021")
@@ -50,7 +50,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 9");
+        .assert_equals("* SEARCH 10");
 
     imap_check
         .send("UID SEARCH NOT (FROM nathaniel ANSWERED)")
@@ -58,7 +58,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 1 2 4 6 7 8 9");
+        .assert_equals("* SEARCH 2 3 5 7 8 9 10");
 
     imap_check
         .send("UID SEARCH UID 0:6 LARGER 1000 SMALLER 2000")
@@ -66,7 +66,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 0 1");
+        .assert_equals("* SEARCH 1 2");
 
     // Saved search
     imap_check.send(
@@ -76,13 +76,13 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("0,2:3,5,7,9");
+        .assert_contains("1,3:4,6,8,10");
 
     imap_check.send("UID SEARCH NOT $").await;
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 1 4 6 8");
+        .assert_equals("* SEARCH 2 5 7 9");
 
     imap_check
         .send("UID SEARCH $ SMALLER 1000 SUBJECT section")
@@ -90,13 +90,13 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SEARCH 7");
+        .assert_equals("* SEARCH 8");
 
     imap_check.send("UID SEARCH RETURN (MIN MAX) NOT $").await;
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("MIN 1 MAX 8");
+        .assert_contains("MIN 2 MAX 9");
 
     // Sort
     imap_check
@@ -105,11 +105,11 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap_check
         .assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_equals("* SORT 5 3 0");
+        .assert_equals("* SORT 6 4 1");
 
     imap.send("UID SORT RETURN (COUNT ALL) (DATE SUBJECT) UTF-8 ALL")
         .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("COUNT 10 ALL 5,3:4,0,2,6:7,9,1,8");
+        .assert_contains("COUNT 10 ALL 6,4:5,1,3,7:8,10,2,9");
 }

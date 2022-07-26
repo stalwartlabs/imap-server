@@ -172,7 +172,7 @@ impl Request {
                                                 match token {
                                                     Token::ParenthesisClose => break,
                                                     Token::Argument(value) => {
-                                                        fields.push_unique(String::from_utf8(value).map_err(
+                                                        fields.push(String::from_utf8(value).map_err(
                                                         |_| (self.tag.as_str(), "Invalid UTF-8 in header field name."),
                                                     )?);
                                                     }
@@ -416,7 +416,7 @@ pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Op
             .unwrap_bytes(),
     )?;
 
-    if end == 0 || end < start {
+    if end == 0 {
         return Err("Invalid partial range.".into());
     }
 

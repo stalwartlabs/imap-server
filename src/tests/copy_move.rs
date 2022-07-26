@@ -35,7 +35,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("COPYUID")
-        .assert_contains("0:3");
+        .assert_contains("1:4");
 
     // Check status
     imap.send("STATUS \"Scamorza Affumicata\" (UIDNEXT MESSAGES UNSEEN SIZE)")
@@ -44,7 +44,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .await
         .assert_contains("MESSAGES 4")
         .assert_contains("UNSEEN 4")
-        .assert_contains("UIDNEXT 4")
+        .assert_contains("UIDNEXT 5")
         .assert_contains("SIZE 5851");
 
     // Move all messages to Burrata
@@ -55,16 +55,20 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("* OK [COPYUID")
-        .assert_contains("0:3");
+        .assert_contains("1:4")
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 2 EXPUNGE")
+        .assert_contains("* 3 EXPUNGE")
+        .assert_contains("* 4 EXPUNGE");
 
     // Check status
     imap.send("LIST \"\" % RETURN (STATUS (UIDNEXT MESSAGES UNSEEN SIZE))")
         .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("\"Burrata al Tartufo\" (UIDNEXT 4 MESSAGES 4 UNSEEN 4 SIZE 5851)")
-        .assert_contains("\"Scamorza Affumicata\" (UIDNEXT 4 MESSAGES 0 UNSEEN 0 SIZE 0)")
-        .assert_contains("\"INBOX\" (UIDNEXT 10 MESSAGES 10 UNSEEN 10 SIZE 12193)");
+        .assert_contains("\"Burrata al Tartufo\" (UIDNEXT 5 MESSAGES 4 UNSEEN 4 SIZE 5851)")
+        .assert_contains("\"Scamorza Affumicata\" (UIDNEXT 5 MESSAGES 0 UNSEEN 0 SIZE 0)")
+        .assert_contains("\"INBOX\" (UIDNEXT 11 MESSAGES 10 UNSEEN 10 SIZE 12193)");
 
     // Move the messages back to Scamorza, UIDNEXT should increase.
     imap.send("SELECT \"Burrata al Tartufo\"").await;
@@ -74,14 +78,18 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("* OK [COPYUID")
-        .assert_contains("4:7");
+        .assert_contains("5:8")
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 2 EXPUNGE")
+        .assert_contains("* 3 EXPUNGE")
+        .assert_contains("* 4 EXPUNGE");
 
     // Check status
     imap.send("LIST \"\" % RETURN (STATUS (UIDNEXT MESSAGES UNSEEN SIZE))")
         .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("\"Burrata al Tartufo\" (UIDNEXT 4 MESSAGES 0 UNSEEN 0 SIZE 0)")
-        .assert_contains("\"Scamorza Affumicata\" (UIDNEXT 8 MESSAGES 4 UNSEEN 4 SIZE 5851)")
-        .assert_contains("\"INBOX\" (UIDNEXT 10 MESSAGES 10 UNSEEN 10 SIZE 12193)");
+        .assert_contains("\"Burrata al Tartufo\" (UIDNEXT 5 MESSAGES 0 UNSEEN 0 SIZE 0)")
+        .assert_contains("\"Scamorza Affumicata\" (UIDNEXT 9 MESSAGES 4 UNSEEN 4 SIZE 5851)")
+        .assert_contains("\"INBOX\" (UIDNEXT 11 MESSAGES 10 UNSEEN 10 SIZE 12193)");
 }

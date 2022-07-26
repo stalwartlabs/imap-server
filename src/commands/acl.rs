@@ -6,7 +6,7 @@ use tracing::debug;
 use crate::{
     core::{
         client::{Session, SessionData},
-        message::MailboxData,
+        message::MailboxId,
         receiver::Request,
         Command, IntoStatusResponse, StatusResponse,
     },
@@ -357,7 +357,7 @@ impl SessionData {
     pub async fn get_acl_mailbox(
         &self,
         arguments: &Arguments,
-    ) -> Result<Arc<MailboxData>, &'static str> {
+    ) -> Result<Arc<MailboxId>, &'static str> {
         if let Some(mailbox) = self.get_mailbox_by_name(&arguments.mailbox_name) {
             if mailbox.mailbox_id.is_some() {
                 Ok(Arc::new(mailbox))

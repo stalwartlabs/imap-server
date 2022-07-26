@@ -36,7 +36,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
         .assert_contains("STATUS \"Provolone\"")
         .assert_contains("MESSAGES 1")
         .assert_contains("UNSEEN 1")
-        .assert_contains("UIDNEXT 1");
+        .assert_contains("UIDNEXT 2");
 
     // Change message to Seen and expect an update
     imap.send("SELECT Provolone").await;
@@ -49,7 +49,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
         .assert_contains("STATUS \"Provolone\"")
         .assert_contains("MESSAGES 1")
         .assert_contains("UNSEEN 0")
-        .assert_contains("UIDNEXT 1");
+        .assert_contains("UIDNEXT 2");
 
     // Delete message and expect an update
     imap.send("STORE * +FLAGS (\\Deleted)").await;
@@ -62,7 +62,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
         .assert_contains("STATUS \"Provolone\"")
         .assert_contains("MESSAGES 0")
         .assert_contains("UNSEEN 0")
-        .assert_contains("UIDNEXT 1");
+        .assert_contains("UIDNEXT 2");
 
     // Delete folder and expect an update
     imap.send("DELETE Provolone").await;
@@ -96,7 +96,8 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     imap.send("UID EXPUNGE").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("* 0 EXPUNGE");
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 0 EXISTS");
     imap_check
         .assert_read(Type::Status, ResponseType::Ok)
         .await

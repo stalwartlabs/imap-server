@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use jmap_client::email::{self, Header, Property};
 use mail_parser::{Message, MessageAttachment, PartType, RfcHeader};
@@ -6,8 +6,8 @@ use tracing::debug;
 
 use crate::{
     core::{
-        client::{Session, SessionData},
-        message::{IdMappings, MailboxData},
+        client::{SelectedMailbox, Session, SessionData},
+        message::MappingOptions,
         receiver::Request,
         Command, Flag, IntoStatusResponse, ResponseCode, StatusResponse,
     },
@@ -25,11 +25,11 @@ impl Session {
     pub async fn handle_fetch(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
         match request.parse_fetch() {
             Ok(arguments) => {
-                let (data, mailbox, is_writable, _) = self.state.select_data();
+                let (data, mailbox) = self.state.select_data();
                 let is_qresync = self.is_qresync;
                 tokio::spawn(async move {
                     data.write_bytes(
-                        data.fetch(arguments, mailbox, is_writable, is_uid, is_qresync)
+                        data.fetch(arguments, mailbox, is_uid, is_qresync)
                             .await
                             .into_bytes(),
                     )
@@ -46,13 +46,12 @@ impl SessionData {
     pub async fn fetch(
         &self,
         mut arguments: Arguments,
-        mailbox: Arc<MailboxData>,
-        is_writable: bool,
+        mailbox: Arc<SelectedMailbox>,
         is_uid: bool,
         is_qresync: bool,
     ) -> StatusResponse {
         // Validate VANISHED parameter
-        let sequence_set = if arguments.include_vanished {
+        if arguments.include_vanished {
             if !is_qresync {
                 return StatusResponse::bad("Enable QRESYNC first to use the VANISHED parameter.")
                     .with_tag(arguments.tag);
@@ -60,25 +59,14 @@ impl SessionData {
                 return StatusResponse::bad("VANISHED parameter is only available for UID FETCH.")
                     .with_tag(arguments.tag);
             }
-
-            arguments.sequence_set.try_expand()
-        } else {
-            None
-        };
+        }
 
         // Convert IMAP ids to JMAP ids.
-        let mut ids = match self
-            .imap_sequence_to_jmap(mailbox.clone(), arguments.sequence_set, is_uid)
+        let mut ids = match mailbox
+            .sequence_to_jmap(&arguments.sequence_set, is_uid)
             .await
         {
-            Ok(ids) => {
-                if !ids.jmap_ids.is_empty() {
-                    ids
-                } else {
-                    return StatusResponse::completed(Command::Fetch(is_uid))
-                        .with_tag(arguments.tag);
-                }
-            }
+            Ok(ids) => ids,
             Err(response) => {
                 return response.with_tag(arguments.tag);
             }
@@ -89,7 +77,7 @@ impl SessionData {
             // Convert MODSEQ to JMAP State
             let state = match self
                 .core
-                .modseq_to_state(&mailbox.account_id, changed_since as u32)
+                .modseq_to_state(&mailbox.id.account_id, changed_since as u32)
                 .await
             {
                 Ok(Some(state)) => state,
@@ -105,91 +93,41 @@ impl SessionData {
 
             // Obtain changes since the modseq.
             let mut request = self.client.build();
-            request.changes_email(state).account_id(&mailbox.account_id);
+            request
+                .changes_email(state)
+                .account_id(&mailbox.id.account_id);
             match request.send_changes_email().await {
                 Ok(mut changes) => {
                     // Send vanished UIDs
                     if arguments.include_vanished {
-                        let mut vanished =
-                            Vec::with_capacity(changes.destroyed().len() + changes.updated().len());
-
                         // Add to vanished all known destroyed Ids
-                        if !changes.destroyed().is_empty() {
-                            let destroyed_ids = changes
-                                .take_destroyed()
-                                .into_iter()
-                                .filter_map(|jmap_id| {
-                                    if ids.jmap_ids.contains(&jmap_id) {
-                                        Some(jmap_id)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<_>>();
-                            if !destroyed_ids.is_empty() {
-                                vanished.extend(
-                                    self.core
-                                        .jmap_deletions_to_imap(
-                                            mailbox.clone(),
-                                            destroyed_ids,
-                                            true,
-                                            false,
-                                        )
-                                        .await
-                                        .unwrap_or_default(),
-                                );
+                        if !changes.destroyed().is_empty() || !changes.updated().is_empty() {
+                            let mut destroyed_ids = changes.take_destroyed();
+                            if !changes.updated().is_empty() {
+                                destroyed_ids.extend(changes.updated().iter().cloned());
                             }
-                        }
-
-                        // Add to vanished all message Ids that have been updated
-                        // but are no longer in this mailbox. This is the case when
-                        // messages are moved. There might be some false positives
-                        // when a message is changed while in a different folder.
-                        if !changes.updated().is_empty() {
-                            let missing_ids = changes
-                                .updated()
-                                .iter()
-                                .filter_map(|jmap_id| {
-                                    if !ids.jmap_ids.contains(jmap_id) {
-                                        Some(jmap_id.to_string())
-                                    } else {
-                                        None
+                            if let Ok((_, mut vanished)) = self
+                                .core
+                                .jmap_to_imap(
+                                    mailbox.id.clone(),
+                                    destroyed_ids,
+                                    MappingOptions::OnlyIncludeDeleted,
+                                )
+                                .await
+                            {
+                                if !vanished.is_empty() {
+                                    vanished.sort_unstable();
+                                    let mut buf = Vec::with_capacity(vanished.len() * 3);
+                                    Vanished {
+                                        earlier: true,
+                                        ids: vanished,
                                     }
-                                })
-                                .collect::<Vec<_>>();
-                            if !missing_ids.is_empty() {
-                                vanished.extend(
-                                    self.core
-                                        .jmap_deletions_to_imap(
-                                            mailbox.clone(),
-                                            missing_ids,
-                                            true,
-                                            true,
-                                        )
-                                        .await
-                                        .unwrap_or_default(),
-                                );
-                            }
-                        }
-
-                        // Add messages no longer in this mailbox to the vanished list.
-                        if let Some(sequence_set) = sequence_set {
-                            for uid in sequence_set {
-                                if !ids.uids.contains(&uid) && !vanished.contains(&uid) {
-                                    vanished.push(uid);
+                                    .serialize(&mut buf);
+                                    self.write_bytes(buf).await;
                                 }
+                            } else {
+                                debug!("Failed to convert destroyed ids to IMAP ids");
                             }
-                        }
-
-                        if !vanished.is_empty() {
-                            vanished.sort_unstable();
-                            let mut buf = Vec::with_capacity(vanished.len() * 3);
-                            Vanished {
-                                earlier: true,
-                                ids: vanished,
-                            }
-                            .serialize(&mut buf);
-                            self.write_bytes(buf).await;
                         }
                     }
 
@@ -199,40 +137,21 @@ impl SessionData {
                             .with_tag(arguments.tag);
                     }
                     let mut changed_ids =
-                        Vec::with_capacity(changes.created().len() + changes.updated().len());
-                    let mut changed_uids =
-                        Vec::with_capacity(changes.created().len() + changes.updated().len());
-                    let mut changed_seqnums = if !is_uid {
-                        Vec::with_capacity(changes.created().len() + changes.updated().len()).into()
-                    } else {
-                        None
-                    };
+                        HashMap::with_capacity(changes.created().len() + changes.updated().len());
                     for jmap_id in changes
                         .take_created()
                         .into_iter()
                         .chain(changes.take_updated())
                     {
-                        if let Some(pos) = ids.jmap_ids.iter().position(|id| id == &jmap_id) {
-                            changed_ids.push(jmap_id);
-                            changed_uids.push(ids.uids[pos]);
-                            if let (Some(seqnums), Some(changed_seqnums)) =
-                                (&ids.seqnums, &mut changed_seqnums)
-                            {
-                                changed_seqnums.push(seqnums[pos]);
-                            }
+                        if let Some(imap_ids) = ids.remove(&jmap_id) {
+                            changed_ids.insert(jmap_id, imap_ids);
                         }
                     }
                     if changed_ids.is_empty() {
                         return StatusResponse::completed(Command::Fetch(is_uid))
                             .with_tag(arguments.tag);
                     }
-                    if changed_ids.len() != ids.jmap_ids.len() {
-                        ids = Arc::new(IdMappings {
-                            jmap_ids: changed_ids,
-                            uids: changed_uids,
-                            seqnums: changed_seqnums,
-                        });
-                    }
+                    ids = changed_ids;
                 }
                 Err(err) => {
                     return err.into_status_response().with_tag(arguments.tag);
@@ -278,6 +197,7 @@ impl SessionData {
                     properties.push(Property::Size);
                 }
                 Attribute::Rfc822Header
+                | Attribute::Body
                 | Attribute::BodyStructure
                 | Attribute::BinarySize { .. } => {
                     /*
@@ -291,14 +211,14 @@ impl SessionData {
                     properties.push_unique(Property::BlobId);
                 }
                 Attribute::BodySection { peek, .. } | Attribute::Binary { peek, .. } => {
-                    if is_writable && !*peek {
+                    if mailbox.is_select && !*peek {
                         set_seen_flags = true;
                     }
                     needs_blobs = true;
                     properties.push_unique(Property::BlobId);
                 }
-                Attribute::Body | Attribute::Rfc822Text | Attribute::Rfc822 => {
-                    if is_writable {
+                Attribute::Rfc822Text | Attribute::Rfc822 => {
+                    if mailbox.is_select {
                         set_seen_flags = true;
                     }
                     needs_blobs = true;
@@ -316,6 +236,9 @@ impl SessionData {
         if set_seen_flags {
             properties.push_unique(Property::Keywords);
         }
+        if is_uid {
+            arguments.attributes.push_unique(Attribute::Uid);
+        }
 
         // Send request to JMAP server
         let max_objects_in_get = self
@@ -326,12 +249,13 @@ impl SessionData {
             .unwrap_or(500);
 
         let mut set_seen_ids = Vec::new();
-        for jmap_ids in ids.jmap_ids.chunks(max_objects_in_get) {
+        let ids_vec = ids.keys().collect::<Vec<_>>();
+        for jmap_ids in ids_vec.chunks(max_objects_in_get) {
             let mut request = self.client.build();
             request
                 .get_email()
-                .account_id(&mailbox.account_id)
-                .ids(jmap_ids.iter())
+                .account_id(&mailbox.id.account_id)
+                .ids(jmap_ids.iter().cloned())
                 .properties(properties.clone());
             let mut response = match request.send_get_email().await {
                 Ok(response) => response,
@@ -343,7 +267,7 @@ impl SessionData {
             // Obtain modseq
             let modseq = if needs_modseq {
                 self.core
-                    .state_to_modseq(&mailbox.account_id, response.take_state())
+                    .state_to_modseq(&mailbox.id.account_id, response.take_state())
                     .await
                     .unwrap_or(u32::MAX)
             } else {
@@ -353,17 +277,13 @@ impl SessionData {
             // Process each message
             for mut email in response.take_list() {
                 // Obtain result position
-                let id_pos = if let Some(pos) = ids
-                    .jmap_ids
-                    .iter()
-                    .position(|id| id == email.id().unwrap_or(""))
-                {
-                    pos
+                let (uid, seqnum) = if let Some(imap_id) = ids.get(email.id().unwrap_or("")) {
+                    (imap_id.uid, imap_id.seqnum)
                 } else {
                     debug!(
                         "JMAP server returned unexpected email Id {:?}, account {:?}",
                         email.id().unwrap_or(""),
-                        mailbox.account_id
+                        mailbox.id.account_id
                     );
                     continue;
                 };
@@ -377,7 +297,7 @@ impl SessionData {
                                 debug!(
                                     "Failed to download blob for email Id {:?}, account {:?}: {}",
                                     email.id().unwrap_or(""),
-                                    mailbox.account_id,
+                                    mailbox.id.account_id,
                                     err
                                 );
                                 continue;
@@ -387,7 +307,7 @@ impl SessionData {
                             debug!(
                                 "JMAP server returned missing blobId for email Id {:?}, account {:?}",
                                 email.id().unwrap_or(""),
-                                mailbox.account_id,
+                                mailbox.id.account_id,
                             );
                             continue;
                         }
@@ -402,7 +322,7 @@ impl SessionData {
                         debug!(
                             "Failed to parse email Id {:?}, account {:?}",
                             email.id().unwrap_or(""),
-                            mailbox.account_id
+                            mailbox.id.account_id
                         );
                         continue;
                     }
@@ -497,9 +417,7 @@ impl SessionData {
                             items.push(DataItem::Rfc822Size { size: email.size() });
                         }
                         Attribute::Uid => {
-                            items.push(DataItem::Uid {
-                                uid: ids.uids[id_pos],
-                            });
+                            items.push(DataItem::Uid { uid });
                         }
                         Attribute::Rfc822 => {
                             items.push(DataItem::Rfc822 {
@@ -525,7 +443,7 @@ impl SessionData {
                                 .unwrap()
                                 .get(message.offset_body..message.offset_end)
                             {
-                                items.push(DataItem::Rfc822Header {
+                                items.push(DataItem::Rfc822Text {
                                     contents: String::from_utf8_lossy(text),
                                 });
                             }
@@ -584,11 +502,7 @@ impl SessionData {
                                             .map(|s| s.to_string())
                                             .collect::<Vec<_>>()
                                             .join("."),
-                                        if is_uid {
-                                            ids.uids[id_pos]
-                                        } else {
-                                            ids.seqnums.as_ref().unwrap()[id_pos]
-                                        }
+                                        if is_uid { uid } else { seqnum }
                                     ))
                                     .with_code(ResponseCode::UnknownCte)
                                     .into_bytes(),
@@ -614,14 +528,14 @@ impl SessionData {
                         Attribute::EmailId => {
                             if let Some(email_id) = email.id() {
                                 items.push(DataItem::EmailId {
-                                    email_id: format!("{}-{}", mailbox.account_id, email_id),
+                                    email_id: format!("{}-{}", mailbox.id.account_id, email_id),
                                 });
                             }
                         }
                         Attribute::ThreadId => {
                             if let Some(thread_id) = email.thread_id() {
                                 items.push(DataItem::ThreadId {
-                                    thread_id: format!("{}-{}", mailbox.account_id, thread_id),
+                                    thread_id: format!("{}-{}", mailbox.id.account_id, thread_id),
                                 });
                             }
                         }
@@ -640,16 +554,8 @@ impl SessionData {
                 }
 
                 // Serialize fetch item
-                let fetch_item = FetchItem {
-                    id: if is_uid {
-                        ids.uids[id_pos]
-                    } else {
-                        ids.seqnums.as_ref().unwrap()[id_pos]
-                    },
-                    items,
-                };
                 let mut buf = Vec::with_capacity(128);
-                fetch_item.serialize(&mut buf);
+                FetchItem { id: seqnum, items }.serialize(&mut buf);
                 if !self.write_bytes(buf).await {
                     return StatusResponse::completed(Command::Fetch(is_uid))
                         .with_tag(arguments.tag);
@@ -673,7 +579,7 @@ impl SessionData {
 
             let mut request = self.client.build();
             for set_seen_ids in set_seen_ids.chunks(max_objects_in_set) {
-                let set_request = request.set_email().account_id(&mailbox.account_id);
+                let set_request = request.set_email().account_id(&mailbox.id.account_id);
                 for set_seen_id in set_seen_ids {
                     set_request
                         .update(set_seen_id)
@@ -787,7 +693,11 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         let part = &self.parts[part_id];
         let headers = &part.headers_rfc();
         let body = raw_message.get(part.offset_body..part.offset_end);
-        let is_multipart = part.is_multipart();
+        let (is_multipart, is_text) = match &part.body {
+            PartType::Text(_) | PartType::Html(_) => (false, true),
+            PartType::Multipart(_) => (true, false),
+            _ => (false, false),
+        };
         let content_type = headers
             .get(&RfcHeader::ContentType)
             .and_then(|ct| ct.as_content_type_ref());
@@ -836,6 +746,18 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 .and_then(|ct| ct.as_text_ref().map(|ct| ct.into()));
 
             fields.body_size_octets = body.as_ref().map(|b| b.len()).unwrap_or(0);
+
+            if is_text {
+                if fields.body_subtype.is_none() {
+                    fields.body_subtype = Some("plain".into());
+                }
+                if fields.body_encoding.is_none() {
+                    fields.body_encoding = Some("7bit".into());
+                }
+                if fields.body_parameters.is_none() {
+                    fields.body_parameters = Some(vec![("charset".into(), "us-ascii".into())]);
+                }
+            }
         }
 
         if is_extended {
@@ -902,11 +824,8 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 extension,
             },
             _ => {
-                match content_type
-                    .as_ref()
-                    .map(|ct| Cow::from(ct.c_type.as_ref()))
-                {
-                    Some(ct) if ct == "text" => BodyPart::Text {
+                if is_text {
+                    BodyPart::Text {
                         fields,
                         body_size_lines: body
                             .as_ref()
@@ -914,13 +833,16 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                             .unwrap_or(0),
                         body_md5,
                         extension,
-                    },
-                    body_type => BodyPart::Basic {
-                        body_type,
+                    }
+                } else {
+                    BodyPart::Basic {
+                        body_type: content_type
+                            .as_ref()
+                            .map(|ct| Cow::from(ct.c_type.as_ref())),
                         fields,
                         body_md5,
                         extension,
-                    },
+                    }
                 }
             }
         }
@@ -984,12 +906,15 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                         let header = header.as_str();
                         if fields.iter().any(|f| header.eq_ignore_ascii_case(f)) != *not {
                             headers.extend_from_slice(header.as_bytes());
-                            headers.extend_from_slice(b": ");
+                            headers.push(b':');
                             headers.extend_from_slice(
                                 raw_message.get(offset.start..offset.end).unwrap_or(b""),
                             );
                         }
                     }
+
+                    headers.extend_from_slice(b"\r\n");
+
                     return Some(if partial.is_none() {
                         String::from_utf8(headers).map_or_else(
                             |err| String::from_utf8_lossy(err.as_bytes()).into_owned().into(),
@@ -1182,7 +1107,9 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
 #[inline(always)]
 fn get_partial_bytes(bytes: &[u8], partial: Option<(u32, u32)>) -> &[u8] {
     if let Some((start, end)) = partial {
-        if let Some(bytes) = bytes.get(start as usize..std::cmp::min(end as usize, bytes.len())) {
+        if let Some(bytes) =
+            bytes.get(start as usize..std::cmp::min((start + end) as usize, bytes.len()))
+        {
             bytes
         } else {
             &[]

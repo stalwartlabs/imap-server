@@ -90,6 +90,36 @@ pub struct ListItem {
     pub tags: Vec<Tag>,
 }
 
+impl Arguments {
+    pub fn is_separator_query(&self) -> bool {
+        match self {
+            Arguments::Basic {
+                mailbox_name,
+                reference_name,
+                ..
+            }
+            | Arguments::Lsub {
+                mailbox_name,
+                reference_name,
+                ..
+            } => mailbox_name.is_empty() && reference_name.is_empty(),
+            Arguments::Extended {
+                mailbox_name,
+                reference_name,
+                ..
+            } => mailbox_name.is_empty() && reference_name.is_empty(),
+        }
+    }
+
+    pub fn unwrap_tag(self) -> String {
+        match self {
+            Arguments::Basic { tag, .. } => tag,
+            Arguments::Extended { tag, .. } => tag,
+            Arguments::Lsub { tag, .. } => tag,
+        }
+    }
+}
+
 impl Attribute {
     pub fn is_rev1(&self) -> bool {
         matches!(

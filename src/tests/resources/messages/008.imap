@@ -1,26 +1,34 @@
 BODY (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "utf-8"
       ) NIL NIL "7bit" 55 1
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL "base64" 1180 (
+      "message" "rfc822" NIL NIL NIL "base64" 1180 (
          "Tue, 14 Dec 2021 10:48:25 +0000" "HTML test" (
             (
                "Name" NIL "email" "example.com"
             )
-         ) NIL NIL (
+         ) (
+            (
+               "Name" NIL "email" "example.com"
+            )
+         ) (
+            (
+               "Name" NIL "email" "example.com"
+            )
+         ) (
             (
                "email@example.com" NIL "email" "example.com"
             )
-         ) NIL NIL NIL "random-message-id@example.com"
+         ) NIL NIL NIL "<random-message-id@example.com>"
       ) (
          (
-            "TEXT" "plain" (
+            "text" "plain" (
                "charset" "utf-8" "format" "flowed"
             ) NIL NIL "7bit" 32 1
          ) (
-            "TEXT" "html" (
+            "text" "html" (
                "charset" "utf-8"
             ) NIL NIL "7bit" 175 3
          ) "alternative"
@@ -30,27 +38,35 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "utf-8"
       ) NIL NIL "7bit" 55 1 "91c97a2055f3d4e24a2e63e370635838" NIL NIL NIL
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL "base64" 1180 (
+      "message" "rfc822" NIL NIL NIL "base64" 1180 (
          "Tue, 14 Dec 2021 10:48:25 +0000" "HTML test" (
             (
                "Name" NIL "email" "example.com"
             )
-         ) NIL NIL (
+         ) (
+            (
+               "Name" NIL "email" "example.com"
+            )
+         ) (
+            (
+               "Name" NIL "email" "example.com"
+            )
+         ) (
             (
                "email@example.com" NIL "email" "example.com"
             )
-         ) NIL NIL NIL "random-message-id@example.com"
+         ) NIL NIL NIL "<random-message-id@example.com>"
       ) (
          (
-            "TEXT" "plain" (
+            "text" "plain" (
                "charset" "utf-8" "format" "flowed"
             ) NIL NIL "7bit" 32 1 "6430bd4648acdbc1bb1ff27c0e94c295" NIL NIL NIL
          ) (
-            "TEXT" "html" (
+            "text" "html" (
                "charset" "utf-8"
             ) NIL NIL "7bit" 175 3 "b3fac00c2c4a6ce8d6ea79de3556f608" NIL NIL NIL
          ) "alternative" (
@@ -308,17 +324,20 @@ Content-Type:  text/html; charset=utf-8
 Content-Transfer-Encoding:  7bit
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {0}
+BODY[HEADER.FIELDS (FROM TO)] {2}
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {0}
+BODY[HEADER.FIELDS (FROM TO)]<10> {0}
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {83}
-Content-Type:  multipart/mixed;
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {84}
+Content-Type: multipart/mixed;
  boundary=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
+
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-pe:  multipart/
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+pe: multipart/mixed;
+ bou
 ----------------------------------

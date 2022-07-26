@@ -1,19 +1,27 @@
 BODY (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "us-ascii"
       ) NIL NIL "7bit" 62 6
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL "7bit" 1980 (
+      "message" "rfc822" NIL NIL NIL "7bit" 1980 (
          "Thu, 13 Aug 1998 07:42:41 +0000" "Map of Argentina with Description" (
             (
                "Bill Clinton" NIL "president" "whitehouse.gov"
             )
-         ) NIL NIL (
+         ) (
+            (
+               "Bill Clinton" NIL "president" "whitehouse.gov"
+            )
+         ) (
+            (
+               "Bill Clinton" NIL "president" "whitehouse.gov"
+            )
+         ) (
             (
                "A1 Gore (The Enforcer)" NIL "vice-president" "whitehouse.gov"
             )
-         ) NIL NIL NIL "199804130742.RAA20366@mai1host.whitehouse.gov"
+         ) NIL NIL NIL "<199804130742.RAA20366@mai1host.whitehouse.gov>"
       ) (
          "image" "gif" (
             "name" "map_of_Argentina.gif"
@@ -24,20 +32,28 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "us-ascii"
       ) NIL NIL "7bit" 62 6 "60268be6f44d0a55b25e2d89861a4d24" NIL NIL NIL
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL "7bit" 1980 (
+      "message" "rfc822" NIL NIL NIL "7bit" 1980 (
          "Thu, 13 Aug 1998 07:42:41 +0000" "Map of Argentina with Description" (
             (
                "Bill Clinton" NIL "president" "whitehouse.gov"
             )
-         ) NIL NIL (
+         ) (
+            (
+               "Bill Clinton" NIL "president" "whitehouse.gov"
+            )
+         ) (
+            (
+               "Bill Clinton" NIL "president" "whitehouse.gov"
+            )
+         ) (
             (
                "A1 Gore (The Enforcer)" NIL "vice-president" "whitehouse.gov"
             )
-         ) NIL NIL NIL "199804130742.RAA20366@mai1host.whitehouse.gov"
+         ) NIL NIL NIL "<199804130742.RAA20366@mai1host.whitehouse.gov>"
       ) (
          "image" "gif" (
             "name" "map_of_Argentina.gif"
@@ -470,23 +486,25 @@ Content-Transfer-Encoding:  base64
 Content-Disposition:  inline; fi1ename="map_of_Argentina.gif"
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {125}
-From:   Al Gore <vice-president@whitehouse.gov>
-To:   White House Transportation Coordinator
+BODY[HEADER.FIELDS (FROM TO)] {125}
+From:  Al Gore <vice-president@whitehouse.gov>
+To:  White House Transportation Coordinator
      <transport@whitehouse.gov>
 
+
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
- Gore <vice-pre
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+Gore <vice-president@whit
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {222}
-From:   Al Gore <vice-president@whitehouse.gov>
-To:   White House Transportation Coordinator
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {221}
+From:  Al Gore <vice-president@whitehouse.gov>
+To:  White House Transportation Coordinator
      <transport@whitehouse.gov>
-Content-Type:  multipart/mixed;
+Content-Type: multipart/mixed;
               boundary="D7F------------D7FD5A0B8AB9C65CCDBFA872"
 
+
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
- Gore <vice-pre
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+Gore <vice-president@whit
 ----------------------------------

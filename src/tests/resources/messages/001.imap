@@ -234,26 +234,31 @@ Content-Type:  message/external-body;
             expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {29}
-From:  Whomever
-To:  Someone
+BODY[HEADER.FIELDS (FROM TO)] {29}
+From: Whomever
+To: Someone
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
-mever
-To:  Some
-----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {186}
-From:  Whomever
-To:  Someone
-Date:  Whenever
-MIME-Version:  1.0
-Message-ID:  <id1@host.com>
-Content-Type:  multipart/alternative; boundary=42
-Content-ID:  <id001@guppylake.bellcore.com>
+BODY[HEADER.FIELDS (FROM TO)]<10> {19}
+ever
+To: Someone
+
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-mever
-To:  Some
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {181}
+From: Whomever
+To: Someone
+Date: Whenever
+MIME-Version: 1.0
+Message-ID: <id1@host.com>
+Content-Type: multipart/alternative; boundary=42
+Content-ID: <id001@guppylake.bellcore.com>
+
+
+----------------------------------
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+ever
+To: Someone
+Date: Wh
 ----------------------------------

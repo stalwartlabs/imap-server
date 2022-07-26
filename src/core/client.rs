@@ -13,7 +13,7 @@ use crate::{commands::search::SavedSearch, protocol::ProtocolVersion};
 
 use super::{
     mailbox::Account,
-    message::MailboxData,
+    message::{MailboxData, MailboxId},
     receiver::{self, Receiver, Request},
     writer, Command, Core, StatusResponse,
 };
@@ -36,7 +36,14 @@ pub struct SessionData {
     pub core: Arc<Core>,
     pub writer: mpsc::Sender<writer::Event>,
     pub mailboxes: parking_lot::Mutex<Vec<Account>>,
+}
+
+pub struct SelectedMailbox {
+    pub id: Arc<MailboxId>,
+    pub state: parking_lot::Mutex<MailboxData>,
     pub saved_search: parking_lot::Mutex<SavedSearch>,
+    pub is_select: bool,
+    pub is_condstore: bool,
 }
 
 pub enum State {
@@ -48,9 +55,7 @@ pub enum State {
     },
     Selected {
         data: Arc<SessionData>,
-        mailbox: Arc<MailboxData>,
-        rw: bool,
-        condstore: bool,
+        mailbox: Arc<SelectedMailbox>,
     },
 }
 
@@ -269,14 +274,16 @@ impl Request {
             }
             Command::Login => {
                 if let State::NotAuthenticated { .. } = state {
-                    if is_tls {
+                    let coco = "aa";
+                    Ok(self)
+                    /*if is_tls {
                         Ok(self)
                     } else {
                         Err(
                             StatusResponse::no("LOGIN is disabled on the clear-text port.")
                                 .with_tag(self.tag),
                         )
-                    }
+                    }*/
                 } else {
                     Err(StatusResponse::no("Already authenticated.").with_tag(self.tag))
                 }
@@ -318,8 +325,8 @@ impl Request {
             | Command::Check
             | Command::Sort(_)
             | Command::Thread(_) => match state {
-                State::Selected { rw, .. } => {
-                    if *rw
+                State::Selected { mailbox, .. } => {
+                    if mailbox.is_select
                         || !matches!(
                             self.command,
                             Command::Store(_) | Command::Expunge(_) | Command::Move(_),
@@ -358,29 +365,25 @@ impl State {
         }
     }
 
-    pub fn mailbox_data(&self) -> (Arc<SessionData>, Arc<MailboxData>) {
+    pub fn mailbox_data(&self) -> (Arc<SessionData>, Arc<SelectedMailbox>) {
         match self {
             State::Selected { data, mailbox, .. } => (data.clone(), mailbox.clone()),
             _ => unreachable!(),
         }
     }
 
-    pub fn select_data(&self) -> (Arc<SessionData>, Arc<MailboxData>, bool, bool) {
+    pub fn session_mailbox_data(&self) -> (Arc<SessionData>, Option<Arc<SelectedMailbox>>) {
         match self {
-            State::Selected {
-                data,
-                mailbox,
-                rw,
-                condstore,
-            } => (data.clone(), mailbox.clone(), *rw, *condstore),
+            State::Authenticated { data } => (data.clone(), None),
+            State::Selected { data, mailbox, .. } => (data.clone(), mailbox.clone().into()),
             _ => unreachable!(),
         }
     }
 
-    pub fn is_read_write(&self) -> bool {
+    pub fn select_data(&self) -> (Arc<SessionData>, Arc<SelectedMailbox>) {
         match self {
-            State::Selected { rw, .. } => *rw,
-            _ => false,
+            State::Selected { data, mailbox } => (data.clone(), mailbox.clone()),
+            _ => unreachable!(),
         }
     }
 

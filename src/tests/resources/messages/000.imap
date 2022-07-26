@@ -1,20 +1,28 @@
 BODY (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 263 8
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 263 8
    ) (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "US-ASCII"
-      ) NIL NIL NIL 112 4
+      ) NIL NIL "7bit" 112 4
    ) (
       (
-         "audio" "basic" NIL NIL NIL "base64" 86
+         "text" "basic" (
+            "charset" "us-ascii"
+         ) NIL NIL "base64" 86 3
       ) (
-         "image" "jpeg" NIL NIL NIL "base64" 45
+         "text" "jpeg" (
+            "charset" "us-ascii"
+         ) NIL NIL "base64" 45 2
       ) "parallel"
    ) (
-      "TEXT" "enriched" NIL NIL NIL NIL 141 6
+      "text" "enriched" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 141 6
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL NIL 224 (
+      "message" "rfc822" NIL NIL NIL NIL 224 (
          NIL "(subject in US-ASCII)" NIL NIL NIL NIL NIL NIL NIL NIL
       ) NIL 0
    ) "mixed"
@@ -22,23 +30,31 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 263 8 "3aaf75e135462c696ff9cffbaa49b0c0" NIL NIL NIL
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 263 8 "3aaf75e135462c696ff9cffbaa49b0c0" NIL NIL NIL
    ) (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "US-ASCII"
-      ) NIL NIL NIL 112 4 "4529f576a224984e4c435e7ce97bca38" NIL NIL NIL
+      ) NIL NIL "7bit" 112 4 "4529f576a224984e4c435e7ce97bca38" NIL NIL NIL
    ) (
       (
-         "audio" "basic" NIL NIL NIL "base64" 86 "85e9dc977fa0214015db65a30451e1f8" NIL NIL NIL
+         "text" "basic" (
+            "charset" "us-ascii"
+         ) NIL NIL "base64" 86 3 "85e9dc977fa0214015db65a30451e1f8" NIL NIL NIL
       ) (
-         "image" "jpeg" NIL NIL NIL "base64" 45 "3a07cec657fb40c359551edb14552ed1" NIL NIL NIL
+         "text" "jpeg" (
+            "charset" "us-ascii"
+         ) NIL NIL "base64" 45 2 "3a07cec657fb40c359551edb14552ed1" NIL NIL NIL
       ) "parallel" (
          "boundary" "unique-boundary-2"
       ) NIL NIL NIL
    ) (
-      "TEXT" "enriched" NIL NIL NIL NIL 141 6 "3cd49e0236b0bc59195cef5acd6e0d79" NIL NIL NIL
+      "text" "enriched" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 141 6 "3cd49e0236b0bc59195cef5acd6e0d79" NIL NIL NIL
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL NIL 224 (
+      "message" "rfc822" NIL NIL NIL NIL 224 (
          NIL "(subject in US-ASCII)" NIL NIL NIL NIL NIL NIL NIL NIL
       ) NIL 0 "9525368d9cdd5981b849d5ef39040cb5" NIL NIL NIL
    ) "mixed" (
@@ -450,24 +466,26 @@ Content-Type:  Text/plain; charset=ISO-8859-1
 Content-Transfer-Encoding:  Quoted-printable
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {79}
-From:  Nathaniel Borenstein <nsb@nsb.fv.com>
-To:  Ned Freed <ned@innosoft.com>
+BODY[HEADER.FIELDS (FROM TO)] {79}
+From: Nathaniel Borenstein <nsb@nsb.fv.com>
+To: Ned Freed <ned@innosoft.com>
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
-haniel Borenste
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+aniel Borenstein <nsb@nsb
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {214}
-MIME-Version:  1.0
-From:  Nathaniel Borenstein <nsb@nsb.fv.com>
-To:  Ned Freed <ned@innosoft.com>
-Date:  Fri, 07 Oct 1994 16:15:05 -0700 (PDT)
-Content-Type:  multipart/mixed;
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {211}
+MIME-Version: 1.0
+From: Nathaniel Borenstein <nsb@nsb.fv.com>
+To: Ned Freed <ned@innosoft.com>
+Date: Fri, 07 Oct 1994 16:15:05 -0700 (PDT)
+Content-Type: multipart/mixed;
             boundary=unique-boundary-1
 
+
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-on:  1.0
-From: 
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+on: 1.0
+From: Nathaniel B
 ----------------------------------

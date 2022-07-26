@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::core::Flag;
 
 use super::{
-    literal_string, quoted_string, quoted_string_or_nil, quoted_timestamp, quoted_timestamp_or_nil,
+    literal_string, quoted_rfc2822_or_nil, quoted_string, quoted_string_or_nil, quoted_timestamp,
     ImapResponse, Sequence,
 };
 
@@ -244,8 +244,18 @@ impl<'x> EmailAddress<'x> {
         } else {
             buf.extend_from_slice(b"NIL");
         }
-        buf.extend_from_slice(b" NIL ");
-        if let Some((local, host)) = self.address.split_once('@') {
+
+        let addr = if let Some((route, addr)) = self.address.split_once(':') {
+            buf.push(b' ');
+            quoted_string(buf, route);
+            buf.push(b' ');
+            addr
+        } else {
+            buf.extend_from_slice(b" NIL ");
+            &self.address
+        };
+
+        if let Some((local, host)) = addr.split_once('@') {
             quoted_string(buf, local);
             buf.push(b' ');
             quoted_string(buf, host);
@@ -274,10 +284,9 @@ impl<'x> AddressGroup<'x> {
         }
         buf.extend_from_slice(b" NIL)");
         for addr in &self.addresses {
-            buf.push(b' ');
             addr.serialize(buf);
         }
-        buf.extend_from_slice(b" (NIL NIL NIL NIL)");
+        buf.extend_from_slice(b"(NIL NIL NIL NIL)");
     }
 
     pub fn into_owned<'y>(self) -> AddressGroup<'y> {
@@ -351,7 +360,7 @@ impl<'x> BodyPart<'x> {
                 body_md5,
                 extension,
             } => {
-                buf.extend_from_slice(b"\"TEXT\" ");
+                buf.extend_from_slice(b"\"text\" ");
                 fields.serialize(buf);
                 buf.push(b' ');
                 buf.extend_from_slice(body_size_lines.to_string().as_bytes());
@@ -370,7 +379,7 @@ impl<'x> BodyPart<'x> {
                 body_md5,
                 extension,
             } => {
-                buf.extend_from_slice(b"\"MESSAGE\" ");
+                buf.extend_from_slice(b"\"message\" ");
                 fields.serialize(buf);
                 buf.push(b' ');
                 if let Some(envelope) = envelope {
@@ -601,7 +610,7 @@ impl Section {
                     if pos > 0 {
                         buf.push(b' ');
                     }
-                    buf.extend_from_slice(field.as_str().as_bytes());
+                    buf.extend_from_slice(field.as_str().to_ascii_uppercase().as_bytes());
                 }
                 buf.push(b')');
             }
@@ -618,36 +627,47 @@ impl Section {
 impl<'x> Envelope<'x> {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         buf.push(b'(');
-        quoted_timestamp_or_nil(buf, self.date);
+        quoted_rfc2822_or_nil(buf, self.date);
         buf.push(b' ');
         quoted_string_or_nil(buf, self.subject.as_deref());
-        for addresses in [
-            &self.from,
-            &self.sender,
-            &self.reply_to,
-            &self.to,
-            &self.cc,
-            &self.bcc,
-        ] {
-            buf.push(b' ');
-            if !addresses.is_empty() {
-                buf.push(b'(');
-                for (pos, address) in addresses.iter().enumerate() {
-                    if pos > 0 {
-                        buf.push(b' ');
-                    }
-                    address.serialize(buf);
-                }
-                buf.push(b')');
+        self.serialize_addresses(buf, &self.from);
+        self.serialize_addresses(
+            buf,
+            if !self.sender.is_empty() {
+                &self.sender
             } else {
-                buf.extend_from_slice(b"NIL");
-            }
-        }
+                &self.from
+            },
+        );
+        self.serialize_addresses(
+            buf,
+            if !self.reply_to.is_empty() {
+                &self.reply_to
+            } else {
+                &self.from
+            },
+        );
+        self.serialize_addresses(buf, &self.to);
+        self.serialize_addresses(buf, &self.cc);
+        self.serialize_addresses(buf, &self.bcc);
         for item in [&self.in_reply_to, &self.message_id] {
             buf.push(b' ');
             quoted_string_or_nil(buf, item.as_deref());
         }
         buf.push(b')');
+    }
+
+    fn serialize_addresses(&self, buf: &mut Vec<u8>, addresses: &[Address]) {
+        buf.push(b' ');
+        if !addresses.is_empty() {
+            buf.push(b'(');
+            for address in addresses {
+                address.serialize(buf);
+            }
+            buf.push(b')');
+        } else {
+            buf.extend_from_slice(b"NIL");
+        }
     }
 
     pub fn into_owned<'y>(self) -> Envelope<'y> {
@@ -919,13 +939,13 @@ mod tests {
                     },
                 },
                 concat!(
-                    "ENVELOPE (\"17-Jul-1996 02:23:25 +0000\" ",
+                    "ENVELOPE (\"Wed, 17 Jul 1996 02:23:25 +0000\" ",
                     "\"IMAP4rev2 WG mtg summary and minutes\" ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((NIL NIL \"imap\" \"cac.washington.edu\")) ",
-                    "((NIL NIL \"minutes\" \"CNRI.Reston.VA.US\") ",
+                    "((NIL NIL \"minutes\" \"CNRI.Reston.VA.US\")",
                     "(\"John Klensin\" NIL \"KLENSIN\" \"MIT.EDU\")) NIL NIL ",
                     "\"<B27397-0100000@cac.washington.ed>\")"
                 ),
@@ -961,12 +981,14 @@ mod tests {
                     },
                 },
                 concat!(
-                    "ENVELOPE (\"17-Jul-1996 02:23:25 +0000\" ",
+                    "ENVELOPE (\"Wed, 17 Jul 1996 02:23:25 +0000\" ",
                     "\"Group test\" ",
-                    "((\"Bill Foobar\" NIL \"foobar\" \"example.com\")) NIL NIL ",
-                    "((NIL NIL \"Friends and Family\" NIL) ",
-                    "(\"John Doe\" NIL \"jdoe\" \"example.com\") ",
-                    "(\"Jane Smith\" NIL \"jane.smith\" \"example.com\") ",
+                    "((\"Bill Foobar\" NIL \"foobar\" \"example.com\")) ",
+                    "((\"Bill Foobar\" NIL \"foobar\" \"example.com\")) ",
+                    "((\"Bill Foobar\" NIL \"foobar\" \"example.com\")) ",
+                    "((NIL NIL \"Friends and Family\" NIL)",
+                    "(\"John Doe\" NIL \"jdoe\" \"example.com\")",
+                    "(\"Jane Smith\" NIL \"jane.smith\" \"example.com\")",
                     "(NIL NIL NIL NIL)) ",
                     "NIL NIL NIL \"<B27397-0100000@cac.washington.ed>\")"
                 ),
@@ -991,7 +1013,7 @@ mod tests {
                         },
                     },
                 },
-                "BODY (\"TEXT\" \"PLAIN\" (\"CHARSET\" \"US-ASCII\") NIL NIL \"7BIT\" 2279 48)",
+                "BODY (\"text\" \"PLAIN\" (\"CHARSET\" \"US-ASCII\") NIL NIL \"7BIT\" 2279 48)",
             ),
             (
                 super::DataItem::Body {
@@ -1057,14 +1079,14 @@ mod tests {
                     },
                 },
                 concat!(
-                    "BODY (\"MESSAGE\" \"RFC822\" NIL \"<abc@123>\" \"An attached email\" ",
-                    "\"quoted-printable\" 9323 (\"17-Jul-1996 02:23:25 +0000\" ",
+                    "BODY (\"message\" \"RFC822\" NIL \"<abc@123>\" \"An attached email\" ",
+                    "\"quoted-printable\" 9323 (\"Wed, 17 Jul 1996 02:23:25 +0000\" ",
                     "\"Hello world!\" ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((\"Terry Gray\" NIL \"gray\" \"cac.washington.edu\")) ",
                     "((NIL NIL \"imap\" \"cac.washington.edu\")) NIL NIL NIL ",
-                    "\"<4234324@domain.com>\") (\"TEXT\" \"HTML\" NIL NIL NIL ",
+                    "\"<4234324@domain.com>\") (\"text\" \"HTML\" NIL NIL NIL ",
                     "\"8BIT\" 4234 431) 908)"
                 ),
             ),
@@ -1124,9 +1146,9 @@ mod tests {
                     },
                 },
                 concat!(
-                    "BODY ((\"TEXT\" \"PLAIN\" (\"CHARSET\" \"US-ASCII\") ",
+                    "BODY ((\"text\" \"PLAIN\" (\"CHARSET\" \"US-ASCII\") ",
                     "NIL NIL \"7BIT\" 1152 23) ",
-                    "(\"TEXT\" \"PLAIN\" (\"CHARSET\" \"US-ASCII\" \"NAME\" \"cc.diff\") ",
+                    "(\"text\" \"PLAIN\" (\"CHARSET\" \"US-ASCII\" \"NAME\" \"cc.diff\") ",
                     "\"<960723163407.20117h@cac.washington.edu>\" \"Compiler diff\" ",
                     "\"BASE64\" 4554 73) \"MIXED\")",
                 ),
@@ -1233,10 +1255,10 @@ mod tests {
                     },
                 },
                 concat!(
-                    "BODYSTRUCTURE (((\"TEXT\" \"PLAIN\" (\"CHARSET\" \"UTF-8\") ",
+                    "BODYSTRUCTURE (((\"text\" \"PLAIN\" (\"CHARSET\" \"UTF-8\") ",
                     "\"<111@domain.com>\" \"Text part\" \"7BIT\" 1152 23 \"8o3456\" ",
                     "(\"inline\" ()) \"en-US\" \"right here\") ",
-                    "(\"TEXT\" \"HTML\" (\"CHARSET\" \"UTF-8\") ",
+                    "(\"text\" \"HTML\" (\"CHARSET\" \"UTF-8\") ",
                     "\"<54535@domain.com>\" \"HTML part\" \"8BIT\" 45345 994 \"53454\" ",
                     "(\"attachment\" (\"filename\" \"myfile.txt\")) ",
                     "(\"en-US\" \"de-DE\") ",
@@ -1287,7 +1309,7 @@ mod tests {
                     origin_octet: None,
                     contents: "howdy".into(),
                 },
-                "BODY[HEADER.FIELDS.NOT (Subject x-special)] {5}\r\nhowdy",
+                "BODY[HEADER.FIELDS.NOT (SUBJECT X-SPECIAL)] {5}\r\nhowdy",
             ),
             (
                 super::DataItem::BodySection {
@@ -1298,7 +1320,7 @@ mod tests {
                     origin_octet: None,
                     contents: "howdy".into(),
                 },
-                "BODY[HEADER.FIELDS (From List-Archive)] {5}\r\nhowdy",
+                "BODY[HEADER.FIELDS (FROM LIST-ARCHIVE)] {5}\r\nhowdy",
             ),
             (
                 super::DataItem::Flags {

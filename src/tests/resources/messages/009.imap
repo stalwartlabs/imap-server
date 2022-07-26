@@ -1,15 +1,23 @@
 BODY (
    (
-      "TEXT" "html" (
+      "text" "html" (
          "charset" "us-ascii"
       ) NIL NIL "base64" 240 4
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL NIL 724 (
+      "message" "rfc822" NIL NIL NIL NIL 724 (
          NIL "Exporting my book about coffee tables" (
             (
                "Cosmo Kramer" NIL "kramer" "kramerica.com"
             )
-         ) NIL NIL NIL NIL NIL NIL NIL
+         ) (
+            (
+               "Cosmo Kramer" NIL "kramer" "kramerica.com"
+            )
+         ) (
+            (
+               "Cosmo Kramer" NIL "kramer" "kramerica.com"
+            )
+         ) NIL NIL NIL NIL NIL
       ) (
          "image" "gif" (
             "name" "Book about ☕ tables.gif"
@@ -20,16 +28,24 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "html" (
+      "text" "html" (
          "charset" "us-ascii"
       ) NIL NIL "base64" 240 4 "bbd48b00b757cefb9bb72d53a4cdb531" NIL NIL NIL
    ) (
-      "MESSAGE" "rfc822" NIL NIL NIL NIL 724 (
+      "message" "rfc822" NIL NIL NIL NIL 724 (
          NIL "Exporting my book about coffee tables" (
             (
                "Cosmo Kramer" NIL "kramer" "kramerica.com"
             )
-         ) NIL NIL NIL NIL NIL NIL NIL
+         ) (
+            (
+               "Cosmo Kramer" NIL "kramer" "kramerica.com"
+            )
+         ) (
+            (
+               "Cosmo Kramer" NIL "kramer" "kramerica.com"
+            )
+         ) NIL NIL NIL NIL NIL
       ) (
          "image" "gif" (
             "name" "Book about ☕ tables.gif"
@@ -287,23 +303,25 @@ Content-Transfer-Encoding:  Base64
 Content-Disposition:  attachment
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {196}
-From:  Art Vandelay <art@vandelay.com> (Vandelay Industries)
-To:  "Colleagues": "James Smythe" <james@vandelay.com>; Friends:
+BODY[HEADER.FIELDS (FROM TO)] {196}
+From: Art Vandelay <art@vandelay.com> (Vandelay Industries)
+To: "Colleagues": "James Smythe" <james@vandelay.com>; Friends:
     jane@example.com, =?UTF-8?Q?John_Sm=C3=AEth?= <john@example.com>;
 
-----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
- Vandelay <art@
-----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {288}
-From:  Art Vandelay <art@vandelay.com> (Vandelay Industries)
-To:  "Colleagues": "James Smythe" <james@vandelay.com>; Friends:
-    jane@example.com, =?UTF-8?Q?John_Sm=C3=AEth?= <john@example.com>;
-Date:  Sat, 20 Nov 2021 14:22:01 -0800
-Content-Type:  multipart/mixed; boundary="festivus";
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
- Vandelay <art@
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+Vandelay <art@vandelay.co
+----------------------------------
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {286}
+From: Art Vandelay <art@vandelay.com> (Vandelay Industries)
+To: "Colleagues": "James Smythe" <james@vandelay.com>; Friends:
+    jane@example.com, =?UTF-8?Q?John_Sm=C3=AEth?= <john@example.com>;
+Date: Sat, 20 Nov 2021 14:22:01 -0800
+Content-Type: multipart/mixed; boundary="festivus";
+
+
+----------------------------------
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+Vandelay <art@vandelay.co
 ----------------------------------

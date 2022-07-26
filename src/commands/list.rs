@@ -17,18 +17,40 @@ use crate::{
 
 impl Session {
     pub async fn handle_list(&mut self, request: Request) -> Result<(), ()> {
+        let command = request.command;
         match if request.command == Command::List {
             request.parse_list(self.version)
         } else {
             request.parse_lsub()
         } {
             Ok(arguments) => {
-                let data = self.state.session_data();
-                let version = self.version;
-                tokio::spawn(async move {
-                    data.list(arguments, version).await;
-                });
-                Ok(())
+                if !arguments.is_separator_query() {
+                    let data = self.state.session_data();
+                    let version = self.version;
+                    tokio::spawn(async move {
+                        data.list(arguments, version).await;
+                    });
+                    Ok(())
+                } else {
+                    self.write_bytes(
+                        StatusResponse::completed(command)
+                            .with_tag(arguments.unwrap_tag())
+                            .serialize(
+                                list::Response {
+                                    is_rev2: self.version.is_rev2(),
+                                    is_lsub: command == Command::Lsub,
+                                    list_items: vec![ListItem {
+                                        mailbox_name: String::new(),
+                                        attributes: vec![Attribute::NoSelect],
+                                        tags: vec![],
+                                    }],
+                                    status_items: Vec::new(),
+                                }
+                                .serialize(),
+                            ),
+                    )
+                    .await
+                }
             }
             Err(response) => self.write_bytes(response.into_bytes()).await,
         }

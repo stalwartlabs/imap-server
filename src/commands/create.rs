@@ -111,9 +111,7 @@ impl SessionData {
         };
 
         // Update state
-        if let Some(new_state) = response.take_new_state() {
-            account.mailbox_state = new_state;
-        }
+        account.mailbox_state = response.take_new_state();
 
         // Add mailboxes
         if mailbox_ids.len() != params.path.len() {

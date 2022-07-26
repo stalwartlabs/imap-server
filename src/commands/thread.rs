@@ -5,12 +5,12 @@ use tracing::debug;
 
 use crate::{
     core::{
-        client::{Session, SessionData},
-        message::MailboxData,
+        client::{SelectedMailbox, Session, SessionData},
         receiver::Request,
         IntoStatusResponse, StatusResponse,
     },
     protocol::{
+        select::Exists,
         thread::{Arguments, Response},
         ImapResponse,
     },
@@ -43,7 +43,7 @@ impl SessionData {
     pub async fn thread(
         &self,
         arguments: Arguments,
-        mailbox: Arc<MailboxData>,
+        mailbox: Arc<SelectedMailbox>,
         is_uid: bool,
     ) -> Result<(Response, String), StatusResponse> {
         // Convert IMAP to JMAP query
@@ -124,28 +124,35 @@ impl SessionData {
             break;
         }
 
-        // Convert to IMAP ids
-        let ids = match self
-            .core
-            .jmap_to_imap(mailbox, jmap_ids, true, is_uid)
-            .await
-        {
-            Ok(ids) => ids,
-            Err(_) => return Err(StatusResponse::database_failure().with_tag(arguments.tag)),
-        };
+        // Check that the mailbox is in-sync
+        if !mailbox.is_in_sync(&jmap_ids) {
+            // Mailbox is out of sync
+            let new_state = self
+                .synchronize_messages(mailbox.id.clone())
+                .await
+                .map_err(|err| err.with_tag(arguments.tag.to_string()))?;
+            let (new_message_count, _) =
+                mailbox.synchronize_uids(new_state.jmap_ids, new_state.imap_uids, false);
+
+            if let Some(new_message_count) = new_message_count {
+                self.write_bytes(
+                    Exists {
+                        total_messages: new_message_count,
+                    }
+                    .into_bytes(),
+                )
+                .await;
+            }
+        }
 
         // Build response
-        let ids_ = if is_uid {
-            &ids.uids
-        } else {
-            ids.seqnums.as_ref().unwrap()
-        };
         let threads = threads
             .values()
             .map(|jmap_ids| {
-                jmap_ids
-                    .iter()
-                    .map(|jmap_id| ids_[ids.jmap_ids.iter().position(|id| id == jmap_id).unwrap()])
+                mailbox
+                    .jmap_to_imap(jmap_ids)
+                    .into_iter()
+                    .map(|id| if is_uid { id.uid } else { id.seqnum })
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();

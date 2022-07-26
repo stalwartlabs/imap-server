@@ -114,9 +114,7 @@ impl SessionData {
                 for account in mailboxes.iter_mut() {
                     if account.account_id == params.account_id {
                         // Update state
-                        if let Some(new_state) = response.take_new_state() {
-                            account.mailbox_state = new_state;
-                        }
+                        account.mailbox_state = response.take_new_state();
 
                         // Update parents
                         if arguments.mailbox_name.contains('/') {

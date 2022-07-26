@@ -1,20 +1,24 @@
 BODY (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 80 2
-   ) (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL NIL 77 3
+      ) NIL NIL "7bit" 80 2
+   ) (
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 77 3
    ) "mixed"
 )
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 80 2 "9584a9ae1db1a594d8f2278412c98ded" NIL NIL NIL
-   ) (
-      "TEXT" "plain" (
+      "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL NIL 77 3 "c1f5156a59ed121b1ae08bdcf9a215ec" NIL NIL NIL
+      ) NIL NIL "7bit" 80 2 "9584a9ae1db1a594d8f2278412c98ded" NIL NIL NIL
+   ) (
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 77 3 "c1f5156a59ed121b1ae08bdcf9a215ec" NIL NIL NIL
    ) "mixed" (
       "boundary" "simple boundary"
    ) NIL NIL NIL
@@ -128,22 +132,24 @@ BODY[2.MIME] {44}
 Content-Type:  text/plain; charset=us-ascii
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {81}
-From:  Nathaniel Borenstein <nsb@bellcore.com>
-To:  Ned Freed <ned@innosoft.com>
+BODY[HEADER.FIELDS (FROM TO)] {81}
+From: Nathaniel Borenstein <nsb@bellcore.com>
+To: Ned Freed <ned@innosoft.com>
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
-haniel Borenste
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+aniel Borenstein <nsb@bel
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {204}
-From:  Nathaniel Borenstein <nsb@bellcore.com>
-To:  Ned Freed <ned@innosoft.com>
-Date:  Sun, 21 Mar 1993 23:56:48 -0800 (PST)
-MIME-Version:  1.0
-Content-Type:  multipart/mixed; boundary="simple boundary"
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {201}
+From: Nathaniel Borenstein <nsb@bellcore.com>
+To: Ned Freed <ned@innosoft.com>
+Date: Sun, 21 Mar 1993 23:56:48 -0800 (PST)
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="simple boundary"
+
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-haniel Borenste
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+aniel Borenstein <nsb@bel
 ----------------------------------

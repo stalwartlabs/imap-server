@@ -1,8 +1,10 @@
+use tracing::debug;
+
 use crate::{
     core::{
-        client::{Session, State},
+        client::{SelectedMailbox, Session, State},
         receiver::Request,
-        Command, ResponseCode, StatusResponse,
+        Command, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::{fetch, list::ListItem, select::Response, ImapResponse},
 };
@@ -17,25 +19,70 @@ impl Session {
         match request.parse_select(self.version) {
             Ok(arguments) => {
                 let data = self.state.session_data();
+
+                // Refresh mailboxes
+                if let Err(err) = data.synchronize_mailboxes(false, false).await {
+                    debug!("Failed to synchronize mailboxes: {}", err);
+                    return self
+                        .write_bytes(
+                            err.into_status_response()
+                                .with_tag(arguments.tag)
+                                .into_bytes(),
+                        )
+                        .await;
+                }
+
                 if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
                     // Syncronize messages
                     let mailbox = Arc::new(mailbox);
                     match data.synchronize_messages(mailbox.clone()).await {
-                        Ok(status) => {
+                        Ok(mut state) => {
                             let closed_previous = self.state.is_mailbox_selected();
+                            let is_condstore = self.is_condstore || arguments.condstore;
+
+                            // Obtain JMAP state
+                            state.last_state = match data.get_jmap_state(&mailbox.account_id).await
+                            {
+                                Ok(jmap_state) => jmap_state,
+                                Err(mut response) => {
+                                    response.tag = arguments.tag.into();
+                                    return self.write_bytes(response.into_bytes()).await;
+                                }
+                            };
 
                             // Obtain highest modseq
-                            let highest_modseq = if self.is_condstore || arguments.condstore {
-                                match data.synchronize_state(&mailbox.account_id).await {
+                            let highest_modseq = if is_condstore {
+                                match data
+                                    .core
+                                    .state_to_modseq(&mailbox.account_id, state.last_state.clone())
+                                    .await
+                                {
                                     Ok(highest_modseq) => highest_modseq.into(),
-                                    Err(mut response) => {
-                                        response.tag = arguments.tag.into();
-                                        return self.write_bytes(response.into_bytes()).await;
+                                    Err(_) => {
+                                        return self
+                                            .write_bytes(
+                                                StatusResponse::database_failure()
+                                                    .with_tag(arguments.tag)
+                                                    .into_bytes(),
+                                            )
+                                            .await;
                                     }
                                 }
                             } else {
                                 None
                             };
+
+                            // Build new state
+                            let uid_validity = state.uid_validity;
+                            let uid_next = state.uid_next;
+                            let total_messages = state.imap_uids.len();
+                            let mailbox = Arc::new(SelectedMailbox {
+                                id: mailbox,
+                                state: parking_lot::Mutex::new(state),
+                                saved_search: parking_lot::Mutex::new(SavedSearch::None),
+                                is_select,
+                                is_condstore,
+                            });
 
                             // Validate QRESYNC arguments
                             if let Some(qresync) = arguments.qresync {
@@ -48,7 +95,7 @@ impl Session {
                                         )
                                         .await;
                                 }
-                                if qresync.uid_validity == status.uid_validity {
+                                if qresync.uid_validity == uid_validity {
                                     // Send flags for changed messages
                                     data.fetch(
                                         fetch::Arguments {
@@ -61,7 +108,6 @@ impl Session {
                                             include_vanished: true,
                                         },
                                         mailbox.clone(),
-                                        is_select,
                                         true,
                                         true,
                                     )
@@ -72,29 +118,23 @@ impl Session {
                             // Build response
                             let response = Response {
                                 mailbox: ListItem::new(arguments.mailbox_name),
-                                total_messages: status.total_messages,
+                                total_messages,
                                 recent_messages: 0,
                                 unseen_seq: 0,
-                                uid_validity: status.uid_validity,
-                                uid_next: status.uid_next,
+                                uid_validity,
+                                uid_next,
                                 closed_previous,
                                 is_rev2: self.version.is_rev2(),
                                 highest_modseq,
-                                mailbox_id: if let Some(mailbox_id) = &mailbox.mailbox_id {
-                                    format!("{}-{}", mailbox.account_id, mailbox_id)
+                                mailbox_id: if let Some(mailbox_id) = &mailbox.id.mailbox_id {
+                                    format!("{}-{}", mailbox.id.account_id, mailbox_id)
                                 } else {
-                                    mailbox.account_id.clone()
+                                    mailbox.id.account_id.clone()
                                 },
                             };
 
                             // Update state
-                            *data.saved_search.lock() = SavedSearch::None;
-                            self.state = State::Selected {
-                                data,
-                                mailbox,
-                                rw: is_select,
-                                condstore: arguments.condstore,
-                            };
+                            self.state = State::Selected { data, mailbox };
 
                             self.write_bytes(
                                 StatusResponse::completed(command)

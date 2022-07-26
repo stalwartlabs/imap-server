@@ -1,13 +1,15 @@
 BODY (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 46 2
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 46 2
    ) (
       (
-         "MESSAGE" "rfc822" NIL NIL NIL NIL 101 (
+         "message" "rfc822" NIL NIL NIL NIL 101 (
             "Fri, 26 Mar 1993 09:13:32 +0000" "my opinion" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0
       ) (
-         "MESSAGE" "rfc822" NIL NIL NIL NIL 126 (
+         "message" "rfc822" NIL NIL NIL NIL 126 (
             "Fri, 26 Mar 1993 15:07:13 +0000" "my different opinion" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0
       ) "digest"
@@ -16,14 +18,16 @@ BODY (
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 46 2 "a4660602a5b6f1a77c4b0f611a30973c" NIL NIL NIL
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 46 2 "a4660602a5b6f1a77c4b0f611a30973c" NIL NIL NIL
    ) (
       (
-         "MESSAGE" "rfc822" NIL NIL NIL NIL 101 (
+         "message" "rfc822" NIL NIL NIL NIL 101 (
             "Fri, 26 Mar 1993 09:13:32 +0000" "my opinion" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0 "99227c358833cb35bb29ed071a7ec7e0" NIL NIL NIL
       ) (
-         "MESSAGE" "rfc822" NIL NIL NIL NIL 126 (
+         "message" "rfc822" NIL NIL NIL NIL 126 (
             "Fri, 26 Mar 1993 15:07:13 +0000" "my different opinion" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0 "ea613f80b181d7ffb2e8ad38820a48e5" NIL NIL NIL
       ) "digest" (
@@ -252,25 +256,27 @@ BODY[2.2.TEXT] {32}
 BODY[2.2.MIME] {0}
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {45}
-From:  Moderator-Address
-To:  Recipient-List
+BODY[HEADER.FIELDS (FROM TO)] {45}
+From: Moderator-Address
+To: Recipient-List
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {15}
-erator-Address
-
+BODY[HEADER.FIELDS (FROM TO)]<10> {25}
+rator-Address
+To: Recipie
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {182}
-From:  Moderator-Address
-To:  Recipient-List
-Date:  Mon, 22 Mar 1994 13:34:51 +0000
-MIME-Version:  1.0
-Content-Type:  multipart/mixed;
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {179}
+From: Moderator-Address
+To: Recipient-List
+Date: Mon, 22 Mar 1994 13:34:51 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
             boundary="---- main boundary ----"
 
-----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-erator-Address
 
+----------------------------------
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+rator-Address
+To: Recipie
 ----------------------------------

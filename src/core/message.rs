@@ -10,25 +10,32 @@ use tracing::{debug, error};
 
 use crate::protocol::Sequence;
 
-use super::{client::SessionData, mailbox::Account, Core, IntoStatusResponse, StatusResponse};
+use super::{
+    client::{SelectedMailbox, SessionData},
+    mailbox::Account,
+    Core, IntoStatusResponse, StatusResponse,
+};
 
-pub struct MailboxData {
+#[derive(Debug, PartialEq, Eq)]
+pub struct MailboxId {
     pub account_id: String,
     pub mailbox_id: Option<String>,
 }
 
 #[derive(Debug)]
-pub struct MailboxStatus {
+pub struct MailboxData {
     pub uid_next: u32,
     pub uid_validity: u32,
+    pub jmap_ids: Vec<String>,
+    pub imap_uids: Vec<u32>,
     pub total_messages: usize,
+    pub last_state: String,
 }
 
-#[derive(Debug, Default)]
-pub struct IdMappings {
-    pub jmap_ids: Vec<String>,
-    pub uids: Vec<u32>,
-    pub seqnums: Option<Vec<u32>>,
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ImapId {
+    pub uid: u32,
+    pub seqnum: u32,
 }
 
 pub const JMAP_TO_UID: u8 = 0;
@@ -43,11 +50,10 @@ pub const JMAP_DELETED_IDS: u8 = 7;
 impl SessionData {
     pub async fn synchronize_messages(
         &self,
-        mailbox: Arc<MailboxData>,
-    ) -> Result<MailboxStatus, StatusResponse> {
+        mailbox: Arc<MailboxId>,
+    ) -> Result<MailboxData, StatusResponse> {
         let mut valid_ids = Vec::new();
         let mut position = 0;
-        let mut total_messages = 0;
 
         // Fetch all ids in the mailbox.
         for _ in 0..100 {
@@ -64,7 +70,7 @@ impl SessionData {
                 .send_query_email()
                 .await
                 .map_err(|err| err.into_status_response())?;
-            total_messages = response.total().unwrap_or(0);
+            let total_messages = response.total().unwrap_or(0);
             let emails = response.take_ids();
 
             let emails_len = emails.len();
@@ -79,101 +85,89 @@ impl SessionData {
         }
 
         // Update mailbox
-        let update_result = self
-            .core
+        self.core
             .update_uids(mailbox, valid_ids)
             .await
-            .map_err(|_| StatusResponse::database_failure())?;
-
-        Ok(MailboxStatus {
-            uid_next: update_result.uid_next,
-            uid_validity: update_result.uid_validity,
-            total_messages,
-        })
+            .map_err(|_| StatusResponse::database_failure())
     }
 
-    pub async fn synchronize_state(&self, account_id: &str) -> Result<u32, StatusResponse> {
+    pub async fn get_jmap_state(&self, account_id: &str) -> Result<String, StatusResponse> {
         let mut request = self.client.build();
         request
             .get_email()
             .account_id(account_id)
             .ids(Vec::<&str>::new());
-        let mut response = request
+        request
             .send_get_email()
             .await
-            .map_err(|err| err.into_status_response())?;
+            .map_err(|err| err.into_status_response())
+            .map(|mut r| r.take_state())
+    }
 
+    pub async fn synchronize_state(&self, account_id: &str) -> Result<u32, StatusResponse> {
         // Update modseq
         self.core
-            .state_to_modseq(account_id, response.take_state())
+            .state_to_modseq(account_id, self.get_jmap_state(account_id).await?)
             .await
             .map_err(|_| StatusResponse::database_failure())
     }
-
-    pub async fn imap_sequence_to_jmap(
-        &self,
-        mailbox: Arc<MailboxData>,
-        sequence: Sequence,
-        is_uid: bool,
-    ) -> crate::core::Result<Arc<IdMappings>> {
-        if sequence != Sequence::SavedSearch {
-            self.core
-                .imap_sequence_to_jmap(mailbox, sequence, is_uid)
-                .await
-                .map(Arc::new)
-                .map_err(|_| StatusResponse::database_failure())
-        } else {
-            self.get_saved_search()
-                .await
-                .ok_or_else(|| StatusResponse::no("No saved search found."))
-        }
-    }
 }
 
-#[derive(Debug)]
-pub struct UpdateResult {
-    pub uid_validity: u32,
-    pub uid_next: u32,
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum MappingOptions {
+    None,
+    AddIfMissing,
+    IncludeDeleted,
+    OnlyIncludeDeleted,
 }
 
 impl Core {
     pub async fn update_uids(
         &self,
-        mailbox: Arc<MailboxData>,
-        jmap_ids: Vec<String>,
-    ) -> Result<UpdateResult, ()> {
+        mailbox: Arc<MailboxId>,
+        mut update_jmap_ids: Vec<String>,
+    ) -> Result<MailboxData, ()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             // Obtain/generate UIDVALIDITY
             let uid_validity = db.uid_validity(&mailbox)?;
 
             // Remove from cache messages no longer present in the mailbox.
-            let mut jmap_ids_map = jmap_ids
+            let mut jmap_ids_map = update_jmap_ids
                 .iter()
-                .map(|id| id.as_bytes())
-                .collect::<HashSet<_>>();
+                .enumerate()
+                .map(|(pos, id)| (id.as_bytes(), pos))
+                .collect::<HashMap<_, _>>();
+            let mut imap_uids = Vec::with_capacity(update_jmap_ids.len());
+            let mut jmap_ids = Vec::with_capacity(update_jmap_ids.len());
+            let mut found_ids = vec![0u8; update_jmap_ids.len()];
 
-            let prefix = serialize_key_prefix(&mailbox, JMAP_TO_UID);
+            let prefix = serialize_key_prefix(&mailbox, UID_TO_JMAP);
             let mut batch = sled::Batch::default();
             let mut has_deletions = false;
-            let mut seq_num: u32 = 0;
 
             for kv_result in db.scan_prefix(&prefix) {
                 let (key, value) = kv_result.map_err(|err| {
                     error!("Failed to scan db: {}", err);
                 })?;
                 if key.len() > prefix.len() {
-                    seq_num += 1;
-                    let jmap_id = &key[prefix.len()..];
-                    if !jmap_ids_map.remove(jmap_id) {
-                        // Add UID and seqnum to deleted messages
+                    let imap_uid = &key[prefix.len()..];
+                    let jmap_id = &value[..];
+
+                    if let Some(pos) = jmap_ids_map.remove(jmap_id) {
+                        imap_uids.push(u32::from_be_bytes(imap_uid.try_into().map_err(|_| {
+                            error!("Failed to convert bytes to u32.");
+                        })?));
+                        jmap_ids.push(String::from_utf8(value.to_vec()).map_err(|_| {
+                            error!("Failed to convert bytes to string.");
+                        })?);
+                        found_ids[pos] = 1;
+                    } else {
+                        // Add UID to deleted messages
                         let mut buf = Vec::with_capacity(
-                            (key.len() - prefix.len())
-                                + std::mem::size_of::<u64>()
-                                + std::mem::size_of::<u32>(),
+                            std::mem::size_of::<u32>() + std::mem::size_of::<u64>(),
                         );
-                        buf.extend_from_slice(&value);
-                        buf.extend_from_slice(&seq_num.to_be_bytes());
+                        buf.extend_from_slice(imap_uid);
                         buf.extend_from_slice(
                             &SystemTime::now()
                                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -187,8 +181,8 @@ impl Core {
                         batch.remove(key);
                         batch.remove(sled::IVec::from(serialize_key(
                             &mailbox,
-                            UID_TO_JMAP,
-                            &value,
+                            JMAP_TO_UID,
+                            jmap_id,
                         )));
 
                         //TODO: Delete old deleted IDs after X days
@@ -206,20 +200,35 @@ impl Core {
 
             // Add to the db any new ids.
             if !jmap_ids_map.is_empty() {
-                #[cfg(test)]
+                /*#[cfg(test)]
                 let jmap_ids_map = jmap_ids_map
                     .into_iter()
-                    .collect::<std::collections::BTreeSet<_>>();
+                    .collect::<std::collections::BTreeSet<_>>();*/
 
                 let uid_next_key = serialize_uid_next_key(&mailbox);
-                for jmap_id in jmap_ids_map {
-                    db.insert_jmap_id(&mailbox, jmap_id, &uid_next_key)?;
+
+                for (pos, found) in found_ids.into_iter().enumerate() {
+                    if found == 0 {
+                        let jmap_id = std::mem::take(update_jmap_ids.get_mut(pos).unwrap());
+                        let imap_uid =
+                            db.insert_jmap_id(&mailbox, jmap_id.as_bytes(), &uid_next_key)?;
+                        jmap_ids.push(jmap_id);
+                        imap_uids.push(u32::from_be_bytes((&imap_uid[..]).try_into().map_err(
+                            |_| {
+                                error!("Failed to convert bytes to u32.");
+                            },
+                        )?));
+                    }
                 }
             }
 
-            Ok(UpdateResult {
+            Ok(MailboxData {
                 uid_validity,
                 uid_next: db.uid_next(&mailbox)?,
+                total_messages: imap_uids.len(),
+                jmap_ids,
+                imap_uids,
+                last_state: String::new(),
             })
         })
         .await
@@ -227,279 +236,148 @@ impl Core {
 
     pub async fn jmap_to_imap(
         &self,
-        mailbox: Arc<MailboxData>,
-        jmap_ids: Vec<String>,
-        add_missing: bool,
-        as_uid: bool,
-    ) -> Result<IdMappings, ()> {
-        if jmap_ids.is_empty() {
-            return Ok(IdMappings::default());
-        }
-
+        mailbox: Arc<MailboxId>,
+        update_jmap_ids: Vec<String>,
+        options: MappingOptions,
+    ) -> Result<(Vec<String>, Vec<u32>), ()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
-            if as_uid {
-                let mut uids = Vec::with_capacity(jmap_ids.len());
-                let mut uid_next_key = None;
-                for jmap_id in &jmap_ids {
-                    let jmap_id = jmap_id.as_bytes();
-                    let uid = if let Some(uid) = db
-                        .get(serialize_key(&mailbox, JMAP_TO_UID, jmap_id))
-                        .map_err(|err| {
-                            error!("Failed to get key: {}", err);
-                        })? {
-                        uid
-                    } else if add_missing {
-                        db.insert_jmap_id(
-                            &mailbox,
-                            jmap_id,
-                            uid_next_key.get_or_insert_with(|| serialize_uid_next_key(&mailbox)),
-                        )?
-                    } else {
-                        continue;
-                    };
-                    uids.push(u32::from_be_bytes((&uid[..]).try_into().map_err(|_| {
-                        error!("Failed to convert bytes to u32.");
-                    })?));
-                }
+            let mut jmap_ids = Vec::with_capacity(update_jmap_ids.len());
+            let mut imap_uids = Vec::with_capacity(update_jmap_ids.len());
+            let mut uid_next_key = None;
 
-                Ok(IdMappings {
-                    jmap_ids,
-                    uids,
-                    seqnums: None,
-                })
-            } else {
-                let prefix = serialize_key_prefix(&mailbox, UID_TO_JMAP);
-                let mut jmap_ids_map = jmap_ids.iter().collect::<HashSet<_>>();
-                let mut seq_num = 0;
-                let mut seq_nums_map = HashMap::with_capacity(jmap_ids.len());
-                let mut uids = Vec::with_capacity(jmap_ids.len());
+            for jmap_id in update_jmap_ids {
+                let jmap_id_bytes = jmap_id.as_bytes();
 
-                for kv_result in db.scan_prefix(&prefix) {
-                    let (key, value) = kv_result.map_err(|err| {
-                        error!("Failed to scan db: {}", err);
-                    })?;
-                    if key.len() > prefix.len() {
-                        seq_num += 1;
-
-                        let value = String::from_utf8(value.to_vec()).map_err(|_| {
-                            error!("Failed to convert bytes to string.");
-                        })?;
-                        if jmap_ids_map.remove(&value) {
-                            uids.push(u32::from_be_bytes(
-                                (&key[prefix.len()..]).try_into().map_err(|_| {
-                                    error!("Failed to convert bytes to u32.");
-                                })?,
-                            ));
-                            seq_nums_map.insert(value, seq_num);
-                            if seq_nums_map.len() == jmap_ids.len() {
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Add missing ids
-                if add_missing {
-                    let mut uid_next_key = None;
-                    for jmap_id in jmap_ids_map {
-                        seq_num += 1;
-                        let uid = db.insert_jmap_id(
-                            &mailbox,
-                            jmap_id.as_bytes(),
-                            uid_next_key.get_or_insert_with(|| serialize_uid_next_key(&mailbox)),
-                        )?;
-                        uids.push(u32::from_be_bytes((&uid[..]).try_into().map_err(|_| {
-                            error!("Failed to convert bytes to u32.");
-                        })?));
-                        seq_nums_map.insert(jmap_id.to_string(), seq_num);
-                    }
-                }
-
-                Ok(IdMappings {
-                    uids,
-                    seqnums: jmap_ids
-                        .iter()
-                        .filter_map(|jmap_id| seq_nums_map.remove(jmap_id))
-                        .collect::<Vec<_>>()
-                        .into(),
-                    jmap_ids,
-                })
-            }
-        })
-        .await
-    }
-
-    pub async fn jmap_deletions_to_imap(
-        &self,
-        mailbox: Arc<MailboxData>,
-        jmap_ids: Vec<String>,
-        as_uid: bool,
-        only_deleted: bool,
-    ) -> Result<Vec<u32>, ()> {
-        if jmap_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let db = self.db.clone();
-        self.spawn_worker(move || {
-            let mut uids = Vec::with_capacity(jmap_ids.len());
-
-            for jmap_id in &jmap_ids {
-                let jmap_id = jmap_id.as_bytes();
-
-                if !only_deleted {
+                if options != MappingOptions::OnlyIncludeDeleted {
                     if let Some(uid) = db
-                        .get(serialize_key(&mailbox, JMAP_TO_UID, jmap_id))
+                        .get(serialize_key(&mailbox, JMAP_TO_UID, jmap_id_bytes))
                         .map_err(|err| {
                             error!("Failed to get key: {}", err);
                         })?
                     {
-                        uids.push(u32::from_be_bytes((&uid[..]).try_into().map_err(|_| {
-                            error!("Failed to convert bytes to u32.");
-                        })?));
+                        jmap_ids.push(jmap_id);
+                        imap_uids.push(u32::from_be_bytes((&uid[..]).try_into().map_err(
+                            |_| {
+                                error!("Failed to convert bytes to u32.");
+                            },
+                        )?));
+                        continue;
+                    } else if options == MappingOptions::AddIfMissing {
+                        let uid = db.insert_jmap_id(
+                            &mailbox,
+                            jmap_id_bytes,
+                            uid_next_key.get_or_insert_with(|| serialize_uid_next_key(&mailbox)),
+                        )?;
+                        jmap_ids.push(jmap_id);
+                        imap_uids.push(u32::from_be_bytes((&uid[..]).try_into().map_err(
+                            |_| {
+                                error!("Failed to convert bytes to u32.");
+                            },
+                        )?));
+                        continue;
+                    } else if options != MappingOptions::IncludeDeleted {
                         continue;
                     }
                 }
 
                 if let Some(uid) = db
-                    .get(serialize_key(&mailbox, JMAP_DELETED_IDS, jmap_id))
+                    .get(serialize_key(&mailbox, JMAP_DELETED_IDS, jmap_id_bytes))
                     .map_err(|err| {
                         error!("Failed to get key: {}", err);
                     })?
                 {
-                    uids.push(u32::from_be_bytes(
-                        (if as_uid {
-                            &uid[..std::mem::size_of::<u32>()]
-                        } else {
-                            &uid[std::mem::size_of::<u32>()..(std::mem::size_of::<u32>() * 2)]
-                        })
-                        .try_into()
-                        .map_err(|_| {
-                            error!("Failed to convert bytes to u32.");
-                        })?,
+                    imap_uids.push(u32::from_be_bytes(
+                        (&uid[..std::mem::size_of::<u32>()])
+                            .try_into()
+                            .map_err(|_| {
+                                error!("Failed to convert bytes to u32.");
+                            })?,
                     ));
                 }
             }
 
-            Ok(uids)
+            Ok((jmap_ids, imap_uids))
         })
         .await
     }
 
     pub async fn imap_to_jmap(
         &self,
-        mailbox: Arc<MailboxData>,
+        mailbox: Arc<MailboxId>,
         imap_ids: Vec<u32>,
-        is_uid: bool,
-    ) -> Result<IdMappings, ()> {
+    ) -> Result<(Vec<String>, Vec<u32>), ()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             let mut jmap_ids = Vec::with_capacity(imap_ids.len());
-            if is_uid {
-                let mut uids = Vec::with_capacity(imap_ids.len());
-                for uid in imap_ids {
-                    if let Some(jmap_id) = db
-                        .get(serialize_key(&mailbox, UID_TO_JMAP, &uid.to_be_bytes()[..]))
-                        .map_err(|err| {
-                            error!("Failed to get key: {}", err);
-                        })?
-                    {
-                        uids.push(uid);
-                        jmap_ids.push(String::from_utf8(jmap_id.to_vec()).map_err(|_| {
-                            error!("Failed to convert bytes to string.");
-                        })?);
-                    }
+            let mut imap_uids = Vec::with_capacity(imap_ids.len());
+            for uid in imap_ids {
+                if let Some(jmap_id) = db
+                    .get(serialize_key(&mailbox, UID_TO_JMAP, &uid.to_be_bytes()[..]))
+                    .map_err(|err| {
+                        error!("Failed to get key: {}", err);
+                    })?
+                {
+                    imap_uids.push(uid);
+                    jmap_ids.push(String::from_utf8(jmap_id.to_vec()).map_err(|_| {
+                        error!("Failed to convert bytes to string.");
+                    })?);
                 }
-                Ok(IdMappings {
-                    jmap_ids,
-                    uids,
-                    seqnums: None,
-                })
-            } else {
-                let prefix = serialize_key_prefix(&mailbox, UID_TO_JMAP);
-                let mut uids = Vec::with_capacity(imap_ids.len());
-                let mut seqnums = Vec::with_capacity(imap_ids.len());
-                let mut seq_num = 0;
-
-                for kv_result in db.scan_prefix(&prefix) {
-                    let (key, value) = kv_result.map_err(|err| {
-                        error!("Failed to scan db: {}", err);
-                    })?;
-                    if key.len() > prefix.len() {
-                        seq_num += 1;
-
-                        if imap_ids.contains(&seq_num) {
-                            seqnums.push(seq_num);
-                            uids.push(u32::from_be_bytes(
-                                (&key[prefix.len()..]).try_into().map_err(|_| {
-                                    error!("Failed to convert bytes to u32.");
-                                })?,
-                            ));
-                            jmap_ids.push(String::from_utf8(value.to_vec()).map_err(|_| {
-                                error!("Failed to convert bytes to string.");
-                            })?);
-                            if jmap_ids.len() == imap_ids.len() {
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                Ok(IdMappings {
-                    jmap_ids,
-                    uids,
-                    seqnums: seqnums.into(),
-                })
             }
+            Ok((jmap_ids, imap_uids))
         })
         .await
     }
 
-    pub async fn imap_sequence_to_jmap(
+    pub async fn delete_ids(
         &self,
-        mailbox: Arc<MailboxData>,
-        sequence: Sequence,
-        is_uid: bool,
-    ) -> Result<IdMappings, ()> {
-        if let Some(ids) = sequence.try_expand() {
-            return self.imap_to_jmap(mailbox, ids, is_uid).await;
-        }
-
+        mailbox: Arc<MailboxId>,
+        jmap_ids: Vec<String>,
+    ) -> Result<(), ()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
-            let prefix = serialize_key_prefix(&mailbox, UID_TO_JMAP);
-            let mut seq_num = 0;
-            let mut jmap_ids = Vec::new();
-            let mut uids = Vec::new();
-            let mut seqnums = Vec::new();
+            let mut batch = sled::Batch::default();
+            let mut has_deletions = false;
 
-            for kv_result in db.scan_prefix(&prefix) {
-                let (key, value) = kv_result.map_err(|err| {
-                    error!("Failed to scan db: {}", err);
-                })?;
-                if key.len() > prefix.len() {
-                    seq_num += 1;
-                    let uid =
-                        u32::from_be_bytes((&key[prefix.len()..]).try_into().map_err(|_| {
-                            error!("Failed to convert bytes to u32.");
-                        })?);
+            for jmap_id in jmap_ids {
+                let jmap_id = jmap_id.as_bytes();
+                let key = serialize_key(&mailbox, JMAP_TO_UID, jmap_id);
 
-                    if sequence.contains(if is_uid { uid } else { seq_num }) {
-                        jmap_ids.push(String::from_utf8(value.to_vec()).map_err(|_| {
-                            error!("Failed to convert bytes to string.");
-                        })?);
-                        uids.push(uid);
-                        seqnums.push(seq_num);
-                    }
+                if let Some(imap_uid) = db.get(&key).map_err(|err| {
+                    error!("Failed to get key: {}", err);
+                })? {
+                    // Add UID to deleted messages
+                    let mut buf =
+                        Vec::with_capacity(std::mem::size_of::<u32>() + std::mem::size_of::<u64>());
+                    buf.extend_from_slice(&imap_uid[..]);
+                    buf.extend_from_slice(
+                        &SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0)
+                            .to_be_bytes(),
+                    );
+                    batch.insert(serialize_key(&mailbox, JMAP_DELETED_IDS, jmap_id), buf);
+
+                    // Delete mappings from cache
+                    batch.remove(key);
+                    batch.remove(sled::IVec::from(serialize_key(
+                        &mailbox,
+                        UID_TO_JMAP,
+                        &imap_uid[..],
+                    )));
+
+                    has_deletions = true;
                 }
             }
 
-            Ok(IdMappings {
-                jmap_ids,
-                uids,
-                seqnums: seqnums.into(),
-            })
+            if has_deletions {
+                db.apply_batch(batch).map_err(|err| {
+                    error!("Failed to delete batch: {}", err);
+                })?;
+            }
+
+            Ok(())
         })
         .await
     }
@@ -551,7 +429,7 @@ impl Core {
         .await
     }
 
-    pub async fn uids(&self, mailbox: Arc<MailboxData>) -> Result<(u32, u32), ()> {
+    pub async fn uids(&self, mailbox: Arc<MailboxId>) -> Result<(u32, u32), ()> {
         let db = self.db.clone();
         self.spawn_worker(move || Ok((db.uid_validity(&mailbox)?, db.uid_next(&mailbox)?)))
             .await
@@ -618,21 +496,179 @@ impl Core {
     }
 }
 
+impl SelectedMailbox {
+    pub async fn sequence_to_jmap(
+        &self,
+        sequence: &Sequence,
+        is_uid: bool,
+    ) -> crate::core::Result<HashMap<String, ImapId>> {
+        if !sequence.is_saved_search() {
+            let mut ids = HashMap::new();
+            let state = self.state.lock();
+            if state.imap_uids.is_empty() {
+                return Ok(ids);
+            }
+
+            let max_uid = state.imap_uids.last().copied().unwrap_or(0) as u32;
+            let max_seqnum = state.imap_uids.len() as u32;
+
+            for (pos, &uid) in state.imap_uids.iter().enumerate() {
+                if uid != 0 {
+                    let matched = if is_uid {
+                        sequence.contains(uid, max_uid)
+                    } else {
+                        sequence.contains((pos + 1) as u32, max_seqnum)
+                    };
+                    if matched {
+                        ids.insert(
+                            state.jmap_ids[pos].clone(),
+                            ImapId::new(uid, (pos + 1) as u32),
+                        );
+                    }
+                }
+            }
+
+            Ok(ids)
+        } else {
+            let saved_ids = self
+                .get_saved_search()
+                .await
+                .ok_or_else(|| StatusResponse::no("No saved search found."))?;
+            let mut ids = HashMap::with_capacity(saved_ids.len());
+            let state = self.state.lock();
+
+            for imap_id in saved_ids.iter() {
+                if state.imap_uids.contains(&imap_id.uid) {
+                    ids.insert(
+                        state.jmap_ids[imap_id.seqnum.saturating_sub(1) as usize].clone(),
+                        *imap_id,
+                    );
+                }
+            }
+
+            Ok(ids)
+        }
+    }
+
+    pub fn jmap_to_imap(&self, jmap_ids: &[String]) -> Vec<ImapId> {
+        let mut imap_ids = Vec::with_capacity(jmap_ids.len());
+        let state = self.state.lock();
+
+        for jmap_id in jmap_ids {
+            if let Some(seqnum) = state.jmap_ids.iter().position(|id| id == jmap_id) {
+                imap_ids.push(ImapId::new(state.imap_uids[seqnum], (seqnum + 1) as u32));
+            }
+        }
+
+        imap_ids
+    }
+
+    pub fn imap_to_jmap(&self, imap_ids: &[ImapId]) -> Vec<String> {
+        let mut jmap_ids = Vec::with_capacity(imap_ids.len());
+        let state = self.state.lock();
+
+        for imap_id in imap_ids {
+            if let Some(pos) = state.imap_uids.iter().position(|uid| *uid == imap_id.uid) {
+                jmap_ids.push(state.jmap_ids[pos].clone());
+            }
+        }
+
+        jmap_ids
+    }
+
+    pub fn is_in_sync(&self, jmap_ids: &[String]) -> bool {
+        let state = self.state.lock();
+
+        for jmap_id in jmap_ids {
+            if !state.jmap_ids.contains(jmap_id) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn synchronize_uids(
+        &self,
+        jmap_ids: Vec<String>,
+        imap_uids: Vec<u32>,
+        remove_missing: bool,
+    ) -> (Option<usize>, Option<Vec<ImapId>>) {
+        let mut state = self.state.lock();
+        let mut has_inserts = false;
+
+        let deletions = if remove_missing {
+            let mut deletions = Vec::new();
+
+            let mut new_jmap_ids = Vec::with_capacity(state.jmap_ids.len());
+            let mut new_imap_uids = Vec::with_capacity(state.imap_uids.len());
+
+            for (pos, (jmap_id, imap_uid)) in std::mem::take(&mut state.jmap_ids)
+                .into_iter()
+                .zip(std::mem::take(&mut state.imap_uids))
+                .enumerate()
+            {
+                if imap_uids.contains(&imap_uid) {
+                    new_jmap_ids.push(jmap_id);
+                    new_imap_uids.push(imap_uid);
+                } else {
+                    deletions.push(ImapId::new(imap_uid, (pos + 1) as u32));
+                }
+            }
+
+            state.jmap_ids = new_jmap_ids;
+            state.imap_uids = new_imap_uids;
+
+            if !deletions.is_empty() {
+                state.total_messages = state.total_messages.saturating_sub(deletions.len());
+                deletions.into()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        for (pos, jmap_id) in jmap_ids.into_iter().enumerate() {
+            let uid = imap_uids[pos];
+            if !state.imap_uids.contains(&uid) {
+                state.imap_uids.push(uid);
+                state.jmap_ids.push(jmap_id);
+                state.total_messages += 1;
+                has_inserts = true;
+            }
+        }
+        (
+            if has_inserts || deletions.is_some() {
+                state.total_messages.into()
+            } else {
+                None
+            },
+            deletions,
+        )
+    }
+}
+
+impl ImapId {
+    pub fn new(uid: u32, seqnum: u32) -> Self {
+        ImapId { uid, seqnum }
+    }
+}
+
 trait ImapUtils {
     fn insert_jmap_id(
         &self,
-        mailbox: &MailboxData,
+        mailbox: &MailboxId,
         jmap_id: &[u8],
         uid_next_key: &[u8],
     ) -> Result<sled::IVec, ()>;
-    fn uid_next(&self, mailbox: &MailboxData) -> Result<u32, ()>;
-    fn uid_validity(&self, mailbox: &MailboxData) -> Result<u32, ()>;
+    fn uid_next(&self, mailbox: &MailboxId) -> Result<u32, ()>;
+    fn uid_validity(&self, mailbox: &MailboxId) -> Result<u32, ()>;
 }
 
 impl ImapUtils for sled::Db {
     fn insert_jmap_id(
         &self,
-        mailbox: &MailboxData,
+        mailbox: &MailboxId,
         jmap_id: &[u8],
         uid_next_key: &[u8],
     ) -> Result<sled::IVec, ()> {
@@ -658,7 +694,7 @@ impl ImapUtils for sled::Db {
         Ok(uid)
     }
 
-    fn uid_next(&self, mailbox: &MailboxData) -> Result<u32, ()> {
+    fn uid_next(&self, mailbox: &MailboxId) -> Result<u32, ()> {
         Ok(
             if let Some(uid_bytes) = self.get(serialize_uid_next_key(mailbox)).map_err(|err| {
                 error!("Failed to read key: {}", err);
@@ -667,12 +703,12 @@ impl ImapUtils for sled::Db {
                     error!("Failed to decode UID next: {}", err);
                 })?) + 1
             } else {
-                0
+                1
             },
         )
     }
 
-    fn uid_validity(&self, mailbox: &MailboxData) -> Result<u32, ()> {
+    fn uid_validity(&self, mailbox: &MailboxId) -> Result<u32, ()> {
         // Obtain/generate UIDVALIDITY
         let uid_validity_key = serialize_uid_validity_key(mailbox);
         Ok(
@@ -700,7 +736,7 @@ impl ImapUtils for sled::Db {
     }
 }
 
-fn serialize_key(mailbox: &MailboxData, separator: u8, value: &[u8]) -> Vec<u8> {
+fn serialize_key(mailbox: &MailboxId, separator: u8, value: &[u8]) -> Vec<u8> {
     let mut buf = Vec::with_capacity(
         mailbox.account_id.len()
             + mailbox.mailbox_id.as_ref().map_or(0, |m| m.len())
@@ -717,7 +753,7 @@ fn serialize_key(mailbox: &MailboxData, separator: u8, value: &[u8]) -> Vec<u8> 
     buf
 }
 
-fn serialize_key_prefix(mailbox: &MailboxData, separator: u8) -> Vec<u8> {
+fn serialize_key_prefix(mailbox: &MailboxId, separator: u8) -> Vec<u8> {
     let mut buf = Vec::with_capacity(
         mailbox.account_id.len() + mailbox.mailbox_id.as_ref().map_or(0, |m| m.len()) + 2,
     );
@@ -737,7 +773,7 @@ fn serialize_key_account_prefix(account_id: &str) -> Vec<u8> {
     buf
 }
 
-fn serialize_uid_next_key(mailbox: &MailboxData) -> Vec<u8> {
+fn serialize_uid_next_key(mailbox: &MailboxId) -> Vec<u8> {
     let mut buf = Vec::with_capacity(
         mailbox.account_id.len() + mailbox.mailbox_id.as_ref().map_or(0, |m| m.len()) + 2,
     );
@@ -750,7 +786,7 @@ fn serialize_uid_next_key(mailbox: &MailboxData) -> Vec<u8> {
     buf
 }
 
-fn serialize_uid_validity_key(mailbox: &MailboxData) -> Vec<u8> {
+fn serialize_uid_validity_key(mailbox: &MailboxId) -> Vec<u8> {
     let mut buf = Vec::with_capacity(
         mailbox.account_id.len() + mailbox.mailbox_id.as_ref().map_or(0, |m| m.len()) + 2,
     );
@@ -783,7 +819,7 @@ pub fn serialize_highestmodseq(account_id: &[u8]) -> Vec<u8> {
 pub fn increment_uid(old: Option<&[u8]>) -> Option<Vec<u8>> {
     match old {
         Some(bytes) => u32::from_be_bytes(bytes.try_into().ok()?) + 1,
-        None => 0,
+        None => 1,
     }
     .to_be_bytes()
     .to_vec()
@@ -801,11 +837,12 @@ mod tests {
         core::{
             config::load_config,
             mailbox::{Account, Mailbox},
+            message::MappingOptions,
         },
         tests::init_settings,
     };
 
-    use super::MailboxData;
+    use super::MailboxId;
 
     #[tokio::test]
     async fn synchronize_messages() {
@@ -813,15 +850,15 @@ mod tests {
         let core = load_config(&settings);
 
         // Initial test data
-        let mailbox = Arc::new(MailboxData {
+        let mailbox = Arc::new(MailboxId {
             account_id: "john".to_string(),
             mailbox_id: "inbox_id".to_string().into(),
         });
-        let mailbox_abc = Arc::new(MailboxData {
+        let mailbox_abc = Arc::new(MailboxId {
             account_id: "abc".to_string(),
             mailbox_id: "inbox_id".to_string().into(),
         });
-        let mailbox_xyz = Arc::new(MailboxData {
+        let mailbox_xyz = Arc::new(MailboxId {
             account_id: "xyz".to_string(),
             mailbox_id: "inbox_id".to_string().into(),
         });
@@ -837,61 +874,40 @@ mod tests {
             "i08".to_string(),
             "j09".to_string(),
         ];
-        let uids = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let seqnums = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let uids = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
         // Insert test data
         let update_result = core
             .update_uids(mailbox.clone(), jmap_ids.clone())
             .await
             .unwrap();
-        assert_eq!(update_result.uid_next, 10);
+        assert_eq!(update_result.uid_next, 11);
 
         let update_result = core
             .update_uids(mailbox_abc.clone(), jmap_ids.clone())
             .await
             .unwrap();
-        assert_eq!(update_result.uid_next, 10);
+        assert_eq!(update_result.uid_next, 11);
 
         let update_result = core
             .update_uids(mailbox_xyz.clone(), jmap_ids.clone())
             .await
             .unwrap();
-        assert_eq!(update_result.uid_next, 10);
+        assert_eq!(update_result.uid_next, 11);
 
         // Check generated UIDs
         assert_eq!(
-            core.jmap_to_imap(mailbox.clone(), jmap_ids.clone(), false, true)
+            core.jmap_to_imap(mailbox.clone(), jmap_ids.clone(), MappingOptions::None)
                 .await
                 .unwrap()
-                .uids,
+                .1,
             uids
         );
         assert_eq!(
-            core.jmap_to_imap(
-                mailbox.clone(),
-                jmap_ids.iter().rev().cloned().collect(),
-                false,
-                false
-            )
-            .await
-            .unwrap()
-            .seqnums
-            .unwrap(),
-            seqnums.iter().rev().cloned().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), uids.clone(), true)
+            core.imap_to_jmap(mailbox.clone(), uids.clone())
                 .await
                 .unwrap()
-                .jmap_ids,
-            jmap_ids
-        );
-        assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), seqnums.clone(), false)
-                .await
-                .unwrap()
-                .jmap_ids,
+                .0,
             jmap_ids
         );
 
@@ -899,16 +915,12 @@ mod tests {
         core.delete_account("abc".to_string()).await.unwrap();
         let (uid_validity, uid_next) = core.uids(mailbox_abc.clone()).await.unwrap();
         assert_ne!(uid_validity, 0);
-        assert_eq!(uid_next, 0);
+        assert_eq!(uid_next, 1);
         assert_eq!(
-            core.imap_to_jmap(
-                mailbox_abc.clone(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                false
-            )
-            .await
-            .unwrap()
-            .jmap_ids,
+            core.imap_to_jmap(mailbox_abc.clone(), vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],)
+                .await
+                .unwrap()
+                .0,
             Vec::<String>::new()
         );
 
@@ -919,56 +931,37 @@ mod tests {
         .into_iter()
         .map(|i| i.to_string())
         .collect::<Vec<_>>();
-        let uids = vec![0, 1, 2, 7, 8, 9, 10, 11, 12, 13];
+        let uids = vec![1, 2, 3, 8, 9, 10, 11, 12, 13, 14];
 
         let update_result = core
             .update_uids(mailbox.clone(), jmap_ids.clone())
             .await
             .unwrap();
-        assert_eq!(update_result.uid_next, 14);
+        assert_eq!(update_result.uid_next, 15);
 
         // Check IDs
         assert_eq!(
-            core.jmap_to_imap(mailbox.clone(), jmap_ids.clone(), false, true)
+            core.jmap_to_imap(mailbox.clone(), jmap_ids.clone(), MappingOptions::None)
                 .await
                 .unwrap()
-                .uids,
+                .1,
             uids
         );
+
         assert_eq!(
-            core.jmap_to_imap(
-                mailbox.clone(),
-                jmap_ids.iter().rev().cloned().collect(),
-                false,
-                false
-            )
-            .await
-            .unwrap()
-            .seqnums
-            .unwrap(),
-            seqnums.iter().rev().cloned().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), uids.clone(), true)
+            core.imap_to_jmap(mailbox.clone(), uids.clone())
                 .await
                 .unwrap()
-                .jmap_ids,
-            jmap_ids
-        );
-        assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), seqnums.clone(), false)
-                .await
-                .unwrap()
-                .jmap_ids,
+                .0,
             jmap_ids
         );
 
         // Non existant UIDs
         assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9], true)
+            core.imap_to_jmap(mailbox.clone(), vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
                 .await
                 .unwrap()
-                .jmap_ids,
+                .0,
             vec![
                 "a00".to_string(),
                 "b01".to_string(),
@@ -978,53 +971,39 @@ mod tests {
                 "j09".to_string()
             ]
         );
-        assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![10, 11, 1, 12], false)
-                .await
-                .unwrap()
-                .jmap_ids,
-            vec!["a00".to_string(), "k13".to_string()]
-        );
 
         // Remove all ids and add some new ids later
         let update_result = core.update_uids(mailbox.clone(), vec![]).await.unwrap();
-        assert_eq!(update_result.uid_next, 14);
+        assert_eq!(update_result.uid_next, 15);
         assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![0, 7, 14], true)
+            core.imap_to_jmap(mailbox.clone(), vec![1, 8, 15])
                 .await
                 .unwrap()
-                .jmap_ids,
+                .0,
             Vec::<String>::new()
         );
         assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![1, 5, 10], true)
+            core.imap_to_jmap(mailbox.clone(), vec![1, 5, 10])
                 .await
                 .unwrap()
-                .jmap_ids,
+                .0,
             Vec::<String>::new()
         );
         let update_result = core
             .update_uids(mailbox.clone(), vec!["x01".to_string(), "y02".to_string()])
             .await
             .unwrap();
-        assert_eq!(update_result.uid_next, 16);
+        assert_eq!(update_result.uid_next, 17);
         assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![14, 15], true)
+            core.imap_to_jmap(mailbox.clone(), vec![15, 16])
                 .await
                 .unwrap()
-                .jmap_ids,
+                .0,
             vec!["x01".to_string(), "y02".to_string(),]
-        );
-        assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![1, 2, 3], false)
-                .await
-                .unwrap()
-                .jmap_ids,
-            vec!["x01".to_string(), "y02".to_string()]
         );
 
         // Test mailbox purge
-        let mailbox_2 = Arc::new(MailboxData {
+        let mailbox_2 = Arc::new(MailboxId {
             account_id: "john".to_string(),
             mailbox_id: "folder_id".to_string().into(),
         });
@@ -1040,12 +1019,12 @@ mod tests {
             "i08".to_string(),
             "j09".to_string(),
         ];
-        let uids = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let uids = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let update_result = core
             .update_uids(mailbox_2.clone(), jmap_ids.clone())
             .await
             .unwrap();
-        assert_eq!(update_result.uid_next, 10);
+        assert_eq!(update_result.uid_next, 11);
 
         core.purge_deleted_mailboxes(&Account {
             account_id: "john".to_string(),
@@ -1059,20 +1038,20 @@ mod tests {
         .unwrap();
         let (uid_validity, uid_next) = core.uids(mailbox.clone()).await.unwrap();
         assert_ne!(uid_validity, 0);
-        assert_eq!(uid_next, 0);
+        assert_eq!(uid_next, 1);
 
         assert_eq!(
-            core.imap_to_jmap(mailbox_2.clone(), uids.clone(), true)
+            core.imap_to_jmap(mailbox_2.clone(), uids.clone())
                 .await
                 .unwrap()
-                .jmap_ids,
+                .0,
             jmap_ids
         );
         assert_eq!(
-            core.imap_to_jmap(mailbox.clone(), vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], false)
+            core.imap_to_jmap(mailbox.clone(), vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
                 .await
                 .unwrap()
-                .jmap_ids,
+                .0,
             Vec::<String>::new()
         );
 

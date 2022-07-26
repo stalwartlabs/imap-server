@@ -1,19 +1,27 @@
 BODY (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 2 1
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 2 1
    ) (
       (
          (
             (
-               "TEXT" "plain" NIL NIL NIL NIL 2 1
+               "text" "plain" (
+                  "charset" "us-ascii"
+               ) NIL NIL "7bit" 2 1
             ) (
                "image" "jpeg" NIL NIL NIL NIL 2
             ) (
-               "TEXT" "plain" NIL NIL NIL NIL 2 1
+               "text" "plain" (
+                  "charset" "us-ascii"
+               ) NIL NIL "7bit" 2 1
             ) "mixed"
          ) (
             (
-               "TEXT" "html" NIL NIL NIL NIL 15 1
+               "text" "html" (
+                  "charset" "us-ascii"
+               ) NIL NIL "7bit" 15 1
             ) (
                "image" "jpeg" NIL NIL NIL NIL 2
             ) "related"
@@ -23,18 +31,22 @@ BODY (
       ) (
          "application" "x-excel" NIL NIL NIL NIL 2
       ) (
-         "MESSAGE" "rfc822" NIL NIL NIL NIL 14 (
+         "message" "rfc822" NIL NIL NIL NIL 14 (
             NIL "J" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0
       ) "mixed"
    ) (
-      "TEXT" "plain" NIL NIL NIL NIL 2 1
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 2 1
    ) "mixed"
 )
 
 BODYSTRUCTURE (
    (
-      "TEXT" "plain" NIL NIL NIL NIL 2 1 "bf072e9119077b4e76437a93986787ef" (
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 2 1 "bf072e9119077b4e76437a93986787ef" (
          "inline" (
             
          )
@@ -43,7 +55,9 @@ BODYSTRUCTURE (
       (
          (
             (
-               "TEXT" "plain" NIL NIL NIL NIL 2 1 "30cf3d7d133b08543cb6c8933c29dfd7" (
+               "text" "plain" (
+                  "charset" "us-ascii"
+               ) NIL NIL "7bit" 2 1 "30cf3d7d133b08543cb6c8933c29dfd7" (
                   "inline" (
                      
                   )
@@ -55,7 +69,9 @@ BODYSTRUCTURE (
                   )
                ) NIL NIL
             ) (
-               "TEXT" "plain" NIL NIL NIL NIL 2 1 "57b8d745384127342f95660d97e1c9c2" (
+               "text" "plain" (
+                  "charset" "us-ascii"
+               ) NIL NIL "7bit" 2 1 "57b8d745384127342f95660d97e1c9c2" (
                   "inline" (
                      
                   )
@@ -65,7 +81,9 @@ BODYSTRUCTURE (
             ) NIL NIL NIL
          ) (
             (
-               "TEXT" "html" NIL NIL NIL NIL 15 1 "af4d50c8f2e7d5f0a217c0c5bba81942" NIL NIL NIL
+               "text" "html" (
+                  "charset" "us-ascii"
+               ) NIL NIL "7bit" 15 1 "af4d50c8f2e7d5f0a217c0c5bba81942" NIL NIL NIL
             ) (
                "image" "jpeg" NIL NIL NIL NIL 2 "d2a33790e5bf28b33cdbf61722a06989" NIL NIL NIL
             ) "related" (
@@ -83,14 +101,16 @@ BODYSTRUCTURE (
       ) (
          "application" "x-excel" NIL NIL NIL NIL 2 "c8a8a19969fcb59d1351de2b5a3cd7c6" NIL NIL NIL
       ) (
-         "MESSAGE" "rfc822" NIL NIL NIL NIL 14 (
+         "message" "rfc822" NIL NIL NIL NIL 14 (
             NIL "J" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0 "435a283c6893fc45d12dbe98f9e68a7a" NIL NIL NIL
       ) "mixed" (
          "boundary" "2"
       ) NIL NIL NIL
    ) (
-      "TEXT" "plain" NIL NIL NIL NIL 2 1 "46028609922581afcfc377a820ab5684" (
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 2 1 "46028609922581afcfc377a820ab5684" (
          "inline" (
             
          )
@@ -795,16 +815,18 @@ Content-Type:  text/plain
 Content-Disposition:  inline
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)] {0}
+BODY[HEADER.FIELDS (FROM TO)] {2}
+
 
 ----------------------------------
-BODY[HEADER.FIELDS (From To)]<10> {0}
+BODY[HEADER.FIELDS (FROM TO)]<10> {0}
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)] {45}
-Content-Type:  multipart/mixed; boundary="1"
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {46}
+Content-Type: multipart/mixed; boundary="1"
+
 
 ----------------------------------
-BODY[HEADER.FIELDS.NOT (Subject Cc)]<10> {15}
-pe:  multipart/
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+pe: multipart/mixed; boun
 ----------------------------------
