@@ -129,16 +129,25 @@ pub enum Flag {
 pub enum ResponseCode {
     Alert,
     AlreadyExists,
-    AppendUid { uid_validity: u32, uids: Vec<u32> },
+    AppendUid {
+        uid_validity: u32,
+        uids: Vec<u32>,
+    },
     AuthenticationFailed,
     AuthorizationFailed,
     BadCharset,
     Cannot,
-    Capability { capabilities: Vec<Capability> },
+    Capability {
+        capabilities: Vec<Capability>,
+    },
     ClientBug,
     Closed,
     ContactAdmin,
-    CopyUid { uid_validity: u32, uids: Vec<u32> },
+    CopyUid {
+        uid_validity: u32,
+        src_uids: Vec<u32>,
+        dest_uids: Vec<u32>,
+    },
     Corruption,
     Expired,
     ExpungeIssued,
@@ -162,10 +171,17 @@ pub enum ResponseCode {
     UnknownCte,
 
     // CONDSTORE
-    Modified { ids: Vec<u32> },
+    Modified {
+        ids: Vec<u32>,
+    },
+    HighestModseq {
+        modseq: u32,
+    },
 
     // ObjectID
-    MailboxId { mailbox_id: String },
+    MailboxId {
+        mailbox_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

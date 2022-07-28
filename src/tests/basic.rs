@@ -18,9 +18,8 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_contains("* ID (\"name\" \"Stalwart IMAP\" \"version\" ");
 
     // Login should be disabled
-    let coco = "ddd";
-    //imap.send("LOGIN jdoe@example.com secret").await;
-    //imap.assert_read(Type::Tagged, ResponseType::No).await;
+    imap.send("LOGIN jdoe@example.com secret").await;
+    imap.assert_read(Type::Tagged, ResponseType::No).await;
 
     // Try logging in with wrong password
     imap.send("AUTHENTICATE PLAIN {24}").await;

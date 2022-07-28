@@ -226,15 +226,13 @@ U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 --D7F------------D7FD5A0B8AB9C65CCDBFA872--
 
 ----------------------------------
-BODY[MIME] {97}
-Content-Type:  multipart/mixed;
+BODY[MIME] {98}
+Content-Type: multipart/mixed;
               boundary="D7F------------D7FD5A0B8AB9C65CCDBFA872"
 
-----------------------------------
-BODY[1] {138}
-Content-Type: text/plain; charset=us-ascii
-Content-Transfer-Encoding: 7bit
 
+----------------------------------
+BODY[1] {62}
 Fred,
 
 Fire up Air Force One!  We're going South!
@@ -267,15 +265,12 @@ Al
 
 ----------------------------------
 BODY[1.MIME] {77}
-Content-Type:  text/plain; charset=us-ascii
-Content-Transfer-Encoding:  7bit
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
 
 ----------------------------------
-BODY[2] {2070}
-Content-Type: message/rfc822
-Content-Transfer-Encoding: 7bit
-Content-Disposition: inline
-
+BODY[2] {1980}
 Return-Path: <president@whitehouse.gov>
 Received: from mailhost.whitehouse.gov ([192.168.51.200])
         by heartbeat.whitehouse.gov (8.8.8/8.8.8) with ESMTP id SAA22453
@@ -382,15 +377,13 @@ U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 --DC8------------DC8638F443D87A7F0726DEF7--
 
 ----------------------------------
-BODY[2.MIME] {97}
-Content-Type:  multipart/mixed;
+BODY[2.MIME] {98}
+Content-Type: multipart/mixed;
               boundary="DC8------------DC8638F443D87A7F0726DEF7"
 
-----------------------------------
-BODY[2.1] {432}
-Content-Type: text/plain; charset=us-ascii
-Content-Transfer-Encoding: 7bit
 
+----------------------------------
+BODY[2.1] {356}
 Hi A1,
 
 I finally figured out this MIME thing.  Pretty cool.  I'll send you
@@ -444,15 +437,12 @@ Bill
 
 ----------------------------------
 BODY[2.1.MIME] {77}
-Content-Type:  text/plain; charset=us-ascii
-Content-Transfer-Encoding:  7bit
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
 
 ----------------------------------
-BODY[2.2] {539}
-Content-Type: image/gif; name="map_of_Argentina.gif"
-Content-Transfer-Encoding: base64
-Content-Disposition: inline; fi1ename="map_of_Argentina.gif"
-
+BODY[2.2] {390}
 R01GOD1hJQA1AKIAAP/////78P/omn19fQAAAAAAAAAAAAAAACwAAAAAJQA1AAAD7Qi63P5w
 wEmjBCLrnQnhYCgM1wh+pkgqqeC9XrutmBm7hAK3tP31gFcAiFKVQrGFR6kscnonTe7FAAad
 GugmRu3CmiBt57fsVq3Y0VFKnpYdxPC6M7Ze4crnnHum4oN6LFJ1bn5NXTN7OF5fQkN5WYow
@@ -480,10 +470,11 @@ U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 7itICBxISKDBgwgTKjyYAAA7
 
 ----------------------------------
-BODY[2.2.MIME] {151}
-Content-Type:  image/gif; name="map_of_Argentina.gif"
-Content-Transfer-Encoding:  base64
-Content-Disposition:  inline; fi1ename="map_of_Argentina.gif"
+BODY[2.2.MIME] {150}
+Content-Type: image/gif; name="map_of_Argentina.gif"
+Content-Transfer-Encoding: base64
+Content-Disposition: inline; fi1ename="map_of_Argentina.gif"
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {125}

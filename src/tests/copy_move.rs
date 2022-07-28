@@ -8,18 +8,18 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
 
     // Copying to "All Mail" or the same mailbox should fail
-    imap.send("COPY * INBOX").await;
+    imap.send("COPY 1:* INBOX").await;
     imap.assert_read(Type::Tagged, ResponseType::No)
         .await
         .assert_response_code("CANNOT");
 
-    imap.send("COPY * \"All Mail\"").await;
+    imap.send("COPY 1:* \"All Mail\"").await;
     imap.assert_read(Type::Tagged, ResponseType::No)
         .await
         .assert_response_code("CANNOT");
 
     // Copying to a non-existent mailbox should fail
-    imap.send("COPY * \"/dev/null\"").await;
+    imap.send("COPY 1:* \"/dev/null\"").await;
     imap.assert_read(Type::Tagged, ResponseType::No)
         .await
         .assert_response_code("TRYCREATE");
@@ -51,15 +51,15 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.send("SELECT \"Scamorza Affumicata\"").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
 
-    imap.send("MOVE * \"Burrata al Tartufo\"").await;
+    imap.send("MOVE 1:* \"Burrata al Tartufo\"").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("* OK [COPYUID")
         .assert_contains("1:4")
         .assert_contains("* 1 EXPUNGE")
-        .assert_contains("* 2 EXPUNGE")
-        .assert_contains("* 3 EXPUNGE")
-        .assert_contains("* 4 EXPUNGE");
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 1 EXPUNGE");
 
     // Check status
     imap.send("LIST \"\" % RETURN (STATUS (UIDNEXT MESSAGES UNSEEN SIZE))")
@@ -74,15 +74,15 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.send("SELECT \"Burrata al Tartufo\"").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
 
-    imap.send("MOVE * \"Scamorza Affumicata\"").await;
+    imap.send("MOVE 1:* \"Scamorza Affumicata\"").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("* OK [COPYUID")
         .assert_contains("5:8")
         .assert_contains("* 1 EXPUNGE")
-        .assert_contains("* 2 EXPUNGE")
-        .assert_contains("* 3 EXPUNGE")
-        .assert_contains("* 4 EXPUNGE");
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 1 EXPUNGE")
+        .assert_contains("* 1 EXPUNGE");
 
     // Check status
     imap.send("LIST \"\" % RETURN (STATUS (UIDNEXT MESSAGES UNSEEN SIZE))")

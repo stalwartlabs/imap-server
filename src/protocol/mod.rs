@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Display};
+use std::{cmp::Ordering, collections::HashSet, fmt::Display};
 
 use jmap_client::core::set::from_timestamp;
 
@@ -87,10 +87,9 @@ impl Sequence {
         }
     }
 
-    // TODO expand properly
-    pub fn try_expand(&self) -> Option<HashSet<u32>> {
+    pub fn expand(&self, max_value: u32) -> HashSet<u32> {
         match self {
-            Sequence::Number { value } => Some(HashSet::from_iter([*value])),
+            Sequence::Number { value } => HashSet::from_iter([*value]),
             Sequence::List { items } => {
                 let mut result = HashSet::with_capacity(items.len());
                 for item in items {
@@ -98,32 +97,44 @@ impl Sequence {
                         Sequence::Number { value } => {
                             result.insert(*value);
                         }
-                        Sequence::Range {
-                            start: Some(start),
-                            end: Some(end),
-                        } if *end > *start && (*end - *start) < 1000 => {
-                            result.extend(*start..=*end);
+                        Sequence::Range { start, end } => {
+                            let start = start.unwrap_or(max_value);
+                            let end = end.unwrap_or(max_value);
+                            match start.cmp(&end) {
+                                Ordering::Equal => {
+                                    result.insert(start);
+                                }
+                                Ordering::Less => {
+                                    result.extend(start..=end);
+                                }
+                                Ordering::Greater => {
+                                    result.extend(end..=start);
+                                }
+                            }
                         }
-                        Sequence::Range {
-                            start: None,
-                            end: Some(end),
-                        } if *end < 1000 => {
-                            result.extend(0..=*end);
-                        }
-                        _ => return None,
+                        _ => (),
                     }
                 }
-                Some(result)
+                result
             }
-            Sequence::Range {
-                start: Some(start),
-                end: Some(end),
-            } if *end > *start && (*end - *start) < 1000 => Some((*start..=*end).collect()),
-            Sequence::Range {
-                start: None,
-                end: Some(end),
-            } if *end < 1000 => Some((0..=*end).collect()),
-            _ => None,
+            Sequence::Range { start, end } => {
+                let mut result = HashSet::new();
+                let start = start.unwrap_or(max_value);
+                let end = end.unwrap_or(max_value);
+                match start.cmp(&end) {
+                    Ordering::Equal => {
+                        result.insert(start);
+                    }
+                    Ordering::Less => {
+                        result.extend(start..=end);
+                    }
+                    Ordering::Greater => {
+                        result.extend(end..=start);
+                    }
+                }
+                result
+            }
+            _ => HashSet::new(),
         }
     }
 }
@@ -227,7 +238,9 @@ impl ResponseCode {
             ResponseCode::Alert => b"ALERT",
             ResponseCode::AlreadyExists => b"ALREADYEXISTS",
             ResponseCode::AppendUid { uid_validity, uids } => {
-                buf.extend_from_slice(format!("APPENDUID {} ", uid_validity).as_bytes());
+                buf.extend_from_slice(b"APPENDUID ");
+                buf.extend_from_slice(uid_validity.to_string().as_bytes());
+                buf.push(b' ');
                 serialize_sequence(buf, uids);
                 return;
             }
@@ -246,9 +259,17 @@ impl ResponseCode {
             ResponseCode::ClientBug => b"CLIENTBUG",
             ResponseCode::Closed => b"CLOSED",
             ResponseCode::ContactAdmin => b"CONTACTADMIN",
-            ResponseCode::CopyUid { uid_validity, uids } => {
-                buf.extend_from_slice(format!("COPYUID {} ", uid_validity).as_bytes());
-                serialize_sequence(buf, uids);
+            ResponseCode::CopyUid {
+                uid_validity,
+                src_uids,
+                dest_uids,
+            } => {
+                buf.extend_from_slice(b"COPYUID ");
+                buf.extend_from_slice(uid_validity.to_string().as_bytes());
+                buf.push(b' ');
+                serialize_sequence(buf, src_uids);
+                buf.push(b' ');
+                serialize_sequence(buf, dest_uids);
                 return;
             }
             ResponseCode::Corruption => b"CORRUPTION",
@@ -278,7 +299,14 @@ impl ResponseCode {
                 return;
             }
             ResponseCode::MailboxId { mailbox_id } => {
-                buf.extend_from_slice(format!("MAILBOXID ({})", mailbox_id).as_bytes());
+                buf.extend_from_slice(b"MAILBOXID (");
+                buf.extend_from_slice(mailbox_id.as_bytes());
+                buf.push(b')');
+                return;
+            }
+            ResponseCode::HighestModseq { modseq } => {
+                buf.extend_from_slice(b"HIGHESTMODSEQ ");
+                buf.extend_from_slice(modseq.to_string().as_bytes());
                 return;
             }
         });

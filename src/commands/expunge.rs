@@ -47,7 +47,7 @@ impl Session {
 
                     for (seqnum, uid) in state.imap_uids.iter().enumerate() {
                         if !new_state.imap_uids.contains(uid) {
-                            deleted_ids.push(if is_uid || self.is_qresync {
+                            deleted_ids.push(if self.is_qresync {
                                 *uid
                             } else {
                                 (seqnum + 1) as u32
@@ -59,7 +59,6 @@ impl Session {
                         if !deleted_ids.is_empty() {
                             deleted_ids.sort_unstable();
                             Response {
-                                is_uid,
                                 is_qresync: self.is_qresync,
                                 ids: deleted_ids,
                             }

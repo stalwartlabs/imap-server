@@ -86,15 +86,12 @@ Content-Disposition: inline
 --boundary-string--
 
 ----------------------------------
-BODY[MIME] {65}
-Content-Type:  multipart/alternative; boundary="boundary-string"
+BODY[MIME] {66}
+Content-Type: multipart/alternative; boundary="boundary-string"
+
 
 ----------------------------------
-BODY[1] {203}
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: quoted-printable
-Content-Disposition: inline
-
+BODY[1] {88}
 Plain text email goes here!
 This is the fallback if email client does not support HTML
 
@@ -118,17 +115,14 @@ This is the fallback if email client does not support HTML
 
 
 ----------------------------------
-BODY[1.MIME] {117}
-Content-Type:  text/plain; charset="utf-8"
-Content-Transfer-Encoding:  quoted-printable
-Content-Disposition:  inline
-
-----------------------------------
-BODY[2] {208}
-Content-Type: text/html; charset="utf-8"
+BODY[1.MIME] {116}
+Content-Type: text/plain; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 Content-Disposition: inline
 
+
+----------------------------------
+BODY[2] {94}
 <h1>This is the HTML Section!</h1>
 <p>This is what displays in most modern email clients</p>
 
@@ -152,10 +146,11 @@ BODY[2.TEXT] {94}
 
 
 ----------------------------------
-BODY[2.MIME] {116}
-Content-Type:  text/html; charset="utf-8"
-Content-Transfer-Encoding:  quoted-printable
-Content-Disposition:  inline
+BODY[2.MIME] {115}
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+Content-Disposition: inline
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {53}

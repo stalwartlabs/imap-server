@@ -11,13 +11,13 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_contains("[UIDNEXT 11]");
 
     // Set all messages to flag "Seen"
-    imap.send("UID STORE * +FLAGS.SILENT (\\Seen)").await;
+    imap.send("UID STORE 1:10 +FLAGS.SILENT (\\Seen)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_count("FLAGS", 0);
 
     // Check that the flags were set
-    imap.send("UID FETCH * (Flags)").await;
+    imap.send("UID FETCH 1:* (Flags)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_count("\\Seen", 10);
@@ -31,7 +31,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_contains("UIDNEXT 11");
 
     // Remove Seen flag from all messages
-    imap.send("UID STORE * -FLAGS (\\Seen)").await;
+    imap.send("UID STORE 1:10 -FLAGS (\\Seen)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_count("FLAGS", 10)
@@ -46,7 +46,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_count("FLAGS", 3);
 
     // Remove Answered flag
-    imap.send("UID STORE * -FLAGS (\\Answered)").await;
+    imap.send("UID STORE 1:* -FLAGS (\\Answered)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_count("FLAGS", 10)

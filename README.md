@@ -55,3 +55,15 @@
 - [RFC 5465 - IMAP NOTIFY Extension](https://datatracker.ietf.org/doc/html/rfc5465)
 - [RFC 5524 - Extended URLFETCH for Binary and Converted Parts](https://datatracker.ietf.org/doc/html/rfc5524)
 - [RFC 6785 - Support for IMAP Events in Sieve](https://datatracker.ietf.org/doc/html/rfc6785)
+
+
+## Testing
+
+Compliance tests
+
+./imaptest host=[hostname] port=[port] user=[account_name] pass=[account_secret] auth=100 test=[path_to_repo]/src/tests/resources/imap-test/
+
+Stress testing
+
+./imaptest host=[hostname] port=[port] userfile=[file_with_account_names] pass=[secret] mbox=[path_to_mbox_file] auth=100
+

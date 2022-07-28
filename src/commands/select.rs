@@ -110,6 +110,7 @@ impl Session {
                                         mailbox.clone(),
                                         true,
                                         true,
+                                        false,
                                     )
                                     .await;
                                 }

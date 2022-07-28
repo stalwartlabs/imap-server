@@ -41,7 +41,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     // Change message to Seen and expect an update
     imap.send("SELECT Provolone").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
-    imap.send("STORE * +FLAGS (\\Seen)").await;
+    imap.send("STORE 1:* +FLAGS (\\Seen)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     imap_check
         .assert_read(Type::Status, ResponseType::Ok)
@@ -52,7 +52,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
         .assert_contains("UIDNEXT 2");
 
     // Delete message and expect an update
-    imap.send("STORE * +FLAGS (\\Deleted)").await;
+    imap.send("STORE 1:* +FLAGS (\\Deleted)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     imap.send("CLOSE").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
@@ -87,12 +87,22 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
         .assert_read(Type::Status, ResponseType::Ok)
         .await
         .assert_contains("* 1 EXISTS");
+    imap_check
+        .assert_read(Type::Status, ResponseType::Ok)
+        .await
+        .assert_contains("* 1 FETCH (FLAGS () UID 1)");
 
     // Delete message and expect an update
     imap.send("SELECT Parmeggiano").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+
     imap.send("STORE 1 +FLAGS (\\Deleted)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+    imap_check
+        .assert_read(Type::Status, ResponseType::Ok)
+        .await
+        .assert_contains("* 1 FETCH (FLAGS (\\Deleted) UID 1)");
+
     imap.send("UID EXPUNGE").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await

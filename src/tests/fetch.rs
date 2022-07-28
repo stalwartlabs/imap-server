@@ -26,37 +26,37 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_contains("EMAILID (")
         .assert_contains("but then I thought, why not do both?")
         .assert_contains(concat!(
-            "ENVELOPE (\"20-Nov-2021 22:22:01 +0000\" ",
+            "ENVELOPE (\"Sat, 20 Nov 2021 22:22:01 +0000\" ",
             "\"Why not both importing AND exporting? ☺\" ",
             "((\"Art Vandelay (Vandelay Industries)\" NIL \"art\" \"vandelay.com\")) ",
-            "NIL NIL ",
-            "((NIL NIL \"Colleagues\" NIL) ",
-            "(\"James Smythe\" NIL \"james\" \"vandelay.com\") ",
-            "(NIL NIL NIL NIL) ",
-            "(NIL NIL \"Friends\" NIL) ",
-            "(NIL NIL \"jane\" \"example.com\") ",
-            "(\"John Smîth\" NIL \"john\" \"example.com\") ",
-            "(NIL NIL NIL NIL)) ",
-            "NIL NIL NIL NIL)"
+            "((\"Art Vandelay (Vandelay Industries)\" NIL \"art\" \"vandelay.com\")) ",
+            "((\"Art Vandelay (Vandelay Industries)\" NIL \"art\" \"vandelay.com\")) ",
+            "((NIL NIL \"Colleagues\" NIL)",
+            "(\"James Smythe\" NIL \"james\" \"vandelay.com\")",
+            "(NIL NIL NIL NIL)(NIL NIL \"Friends\" NIL)",
+            "(NIL NIL \"jane\" \"example.com\")",
+            "(\"John Smîth\" NIL \"john\" \"example.com\")",
+            "(NIL NIL NIL NIL)) NIL NIL NIL NIL)"
         ))
         .assert_contains(concat!(
-            "BODYSTRUCTURE ((\"TEXT\" \"html\" (\"charset\" \"us-ascii\") ",
-            "NIL NIL \"base64\" 240 4 \"bbd48b00b757cefb9bb72d53a4cdb531\" NIL NIL NIL)",
-            " (\"MESSAGE\" \"rfc822\" NIL NIL NIL NIL 724 ",
+            "BODYSTRUCTURE ((\"text\" \"html\" (\"charset\" \"us-ascii\") NIL NIL ",
+            "\"base64\" 240 4 \"bbd48b00b757cefb9bb72d53a4cdb531\" NIL NIL NIL) ",
+            "(\"message\" \"rfc822\" NIL NIL NIL NIL 724 ",
             "(NIL \"Exporting my book about coffee tables\" ",
             "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
-            "NIL NIL NIL NIL NIL NIL NIL) ",
+            "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
+            "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
+            "NIL NIL NIL NIL NIL) ",
             "(\"image\" \"gif\" (\"name\" \"Book about ☕ tables.gif\") ",
             "NIL NIL \"Base64\" 57 \"753818204af22e11ee8cefb153004fc7\" ",
-            "(\"attachment\" ()) NIL NIL) 0 ",
-            "\"fea0d696b570c4904fa45f401566fc57\" NIL NIL NIL) ",
-            "\"mixed\" (\"boundary\" \"festivus\") NIL NIL NIL)"
+            "(\"attachment\" ()) NIL NIL) 0 \"fea0d696b570c4904fa45f401566fc57\" ",
+            "NIL NIL NIL) \"mixed\" (\"boundary\" \"festivus\") NIL NIL NIL)"
         ));
 
     // Fetch bodyparts
     imap.send(concat!(
         "UID FETCH 10 (BINARY[1] BINARY.SIZE[1] BODY[1.TEXT] BODY[2.1.HEADER] ",
-        "BINARY[2.1] BODY[MIME] BODY[HEADER.FIELDS (From)]<11.19>)"
+        "BINARY[2.1] BODY[MIME] BODY[HEADER.FIELDS (From)]<10.8>)"
     ))
     .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
@@ -66,8 +66,8 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_contains("BODY[1.TEXT] {240}")
         .assert_contains("BODY[2.1.HEADER] {88}")
         .assert_contains("BINARY[2.1] {101}")
-        .assert_contains("BODY[MIME] {53}")
-        .assert_contains("BODY[HEADER.FIELDS (From)]<11> {8}")
+        .assert_contains("BODY[MIME] {54}")
+        .assert_contains("BODY[HEADER.FIELDS (FROM)]<10> {8}")
         .assert_contains("&ldquo;exporting&rdquo;")
         .assert_contains("PGh0bWw+PHA+")
         .assert_contains("Content-Transfer-Encoding: quoted-printable")

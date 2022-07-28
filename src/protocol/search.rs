@@ -140,6 +140,9 @@ impl Response {
             buf.extend_from_slice(b"* ESEARCH (TAG ");
             quoted_string(&mut buf, tag);
             buf.extend_from_slice(b")");
+            if self.is_uid {
+                buf.extend_from_slice(b" UID");
+            }
             if let Some(count) = &self.count {
                 buf.extend_from_slice(b" COUNT ");
                 buf.extend_from_slice(count.to_string().as_bytes());

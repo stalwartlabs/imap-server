@@ -78,12 +78,12 @@ It DOES end with a linebreak.
 --simple boundary--
 
 ----------------------------------
-BODY[MIME] {59}
-Content-Type:  multipart/mixed; boundary="simple boundary"
+BODY[MIME] {60}
+Content-Type: multipart/mixed; boundary="simple boundary"
+
 
 ----------------------------------
-BODY[1] {81}
-
+BODY[1] {80}
 This is implicitly typed plain US-ASCII text.
 It does NOT end with a linebreak.
 
@@ -101,12 +101,11 @@ This is implicitly typed plain US-ASCII text.
 It does NOT end with a linebreak.
 
 ----------------------------------
-BODY[1.MIME] {0}
+BODY[1.MIME] {2}
+
 
 ----------------------------------
-BODY[2] {121}
-Content-type: text/plain; charset=us-ascii
-
+BODY[2] {77}
 This is explicitly typed plain US-ASCII text.
 It DOES end with a linebreak.
 
@@ -128,8 +127,9 @@ It DOES end with a linebreak.
 
 
 ----------------------------------
-BODY[2.MIME] {44}
-Content-Type:  text/plain; charset=us-ascii
+BODY[2.MIME] {45}
+Content-Type: text/plain; charset=us-ascii
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {81}

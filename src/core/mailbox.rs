@@ -328,7 +328,7 @@ impl SessionData {
                 }
             };
             if response.total_changes() > 0 {
-                if !response.created().is_empty()
+                let reset_stats = if !response.created().is_empty()
                     || !response.destroyed().is_empty()
                     || (!response.updated().is_empty()
                         && response
@@ -338,10 +338,15 @@ impl SessionData {
                     || changes.is_some()
                 {
                     changed_account_ids.push(response.take_account_id());
+                    false
                 } else {
-                    for account in self.mailboxes.lock().iter_mut() {
-                        if account.account_id == response.account_id() {
-                            account.mailbox_state = response.take_new_state();
+                    true
+                };
+
+                for account in self.mailboxes.lock().iter_mut() {
+                    if account.account_id == response.account_id() {
+                        account.mailbox_state = response.take_new_state();
+                        if reset_stats {
                             account.mailbox_data.values_mut().for_each(|v| {
                                 v.total_deleted = None;
                                 v.total_unseen = None;
@@ -350,8 +355,8 @@ impl SessionData {
                                 v.uid_next = None;
                                 account.modseq = None;
                             });
-                            break;
                         }
+                        break;
                     }
                 }
             }
@@ -406,8 +411,10 @@ impl SessionData {
                         for (mailbox_name, mailbox_id) in new_account.mailbox_names.iter() {
                             if let Some(old_mailbox) = old_account.mailbox_data.get(mailbox_id) {
                                 if let Some(mailbox) = new_account.mailbox_data.get(mailbox_id) {
-                                    if mailbox.total_messages != old_mailbox.total_messages
-                                        || mailbox.total_unseen != old_mailbox.total_unseen
+                                    if mailbox.total_messages.unwrap_or(0)
+                                        != old_mailbox.total_messages.unwrap_or(0)
+                                        || mailbox.total_unseen.unwrap_or(0)
+                                            != old_mailbox.total_unseen.unwrap_or(0)
                                     {
                                         changes.changed.push(mailbox_name.to_string());
                                     }

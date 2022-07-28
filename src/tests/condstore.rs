@@ -126,7 +126,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 0
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[0]
     ))
     .await;
@@ -137,7 +137,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 1, UID MOVE should count as a deletion
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[1]
     ))
     .await;
@@ -149,7 +149,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 3
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[3]
     ))
     .await;
@@ -161,7 +161,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 4
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[4]
     ))
     .await;
@@ -173,7 +173,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 6
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[6]
     ))
     .await;
@@ -185,7 +185,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 7
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[7]
     ))
     .await;
@@ -197,7 +197,7 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
 
     // Fetch changes since SEQ 8
     imap.send(&format!(
-        "UID FETCH * (FLAGS) (CHANGEDSINCE {} VANISHED)",
+        "UID FETCH 1:* (FLAGS) (CHANGEDSINCE {} VANISHED)",
         modseqs[8]
     ))
     .await;
@@ -229,7 +229,8 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     .await;
     imap.assert_read(Type::Tagged, ResponseType::No)
         .await
-        .assert_contains("* 3 FETCH")
+        .assert_contains("* 1 FETCH")
+        .assert_contains("UID 3)")
         .assert_count("FETCH (", 1)
         .assert_contains("[MODIFIED 2,4:5]");
 
@@ -240,7 +241,8 @@ pub async fn test(imap: &mut ImapConnection, imap_check: &mut ImapConnection) {
     .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("* 4 FETCH")
+        .assert_contains("* 2 FETCH")
+        .assert_contains("UID 4)")
         .assert_count("FETCH (", 1)
         .assert_contains("[MODIFIED 5]");
 

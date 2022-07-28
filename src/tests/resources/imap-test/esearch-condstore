@@ -16,23 +16,23 @@ ok store 2 +flags \seen
 ok store 4 +flags \seen
 * 4 fetch (modseq ($modseq4))
 
-ok search return (min) 1:3 modseq "/flags/\\seen" all 1
-* esearch (tag $tag) min 1 modseq $modseq1
+ok search return (min) 1:3 modseq "/flags/\\seen" all $highestmodseq
+* esearch (tag $tag) min 1 modseq $modseq4
 
-ok search return (max) 1:3 modseq "/flags/\\seen" all 1
-* esearch (tag $tag) max 3 modseq $modseq3
+ok search return (max) 1:3 modseq "/flags/\\seen" all $highestmodseq
+* esearch (tag $tag) max 3 modseq $modseq4
 
-ok search return () 1:3 modseq "/flags/\\seen" all 1
-* esearch (tag $tag) all 1:3 modseq $modseq2
+ok search return () 1:3 modseq "/flags/\\seen" all $highestmodseq
+* esearch (tag $tag) all 1:3 modseq $modseq4
 
-ok search return (min max) 2:3 modseq "/flags/\\seen" all 1
-* esearch (tag $tag) min 2 max 3 modseq $modseq2
+ok search return (min max) 2:3 modseq "/flags/\\seen" all $highestmodseq
+* esearch (tag $tag) min 2 max 3 modseq $modseq4
 
-ok search return (all) 2:3 modseq "/flags/\\seen" all $modseq3
-* esearch (tag $tag) all 2:3 modseq $modseq2
+ok search return (all) 2:4 modseq "/flags/\\seen" all $modseq3
+* esearch (tag $tag) all 2,4 modseq $modseq4
 
-ok search return (all) 2:3 modseq "/flags/\\seen" all $modseq2
-* esearch (tag $tag) all 2 modseq $modseq2
+ok search return (all) 2:4 modseq "/flags/\\seen" all $modseq2
+* esearch (tag $tag) all 4 modseq $modseq4
 
-ok search return (all) 2:3 modseq "/flags/\\seen" all $modseq4
-* esearch (tag $tag)
+ok search return (all) 2:4 modseq "/flags/\\seen" all $modseq4
+* esearch (tag $tag) modseq $modseq4

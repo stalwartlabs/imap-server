@@ -59,7 +59,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     let thread_id = thread_id.expect("Missing THREADID");
 
     // 4 different threads are expected
-    imap.send("THREAD REFERENCES UTF-8 *").await;
+    imap.send("THREAD REFERENCES UTF-8 1:*").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
         .assert_contains("(1 2 3 4)")
@@ -92,7 +92,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_count("(", 1);
 
     // Delete all messages
-    imap.send("STORE * +FLAGS.SILENT (\\Deleted)").await;
+    imap.send("STORE 1:* +FLAGS.SILENT (\\Deleted)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     imap.send("EXPUNGE").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)

@@ -112,7 +112,11 @@ impl SessionData {
                 Ok(changes) => {
                     let mut modified = Vec::new();
                     let mut unchanged_ids = HashMap::with_capacity(ids.len());
-                    let mut sequence_set = arguments.sequence_set.try_expand();
+                    let mut sequence_set = arguments.sequence_set.expand(if is_uid {
+                        mailbox.state.lock().imap_uids.last().copied().unwrap_or(0)
+                    } else {
+                        mailbox.state.lock().imap_uids.len() as u32
+                    });
 
                     // Add all IDs that changed in this mailbox
                     for (jmap_id, imap_id) in ids {
@@ -123,9 +127,7 @@ impl SessionData {
                             false
                         };
                         let id = if is_uid { imap_id.uid } else { imap_id.seqnum };
-                        if let Some(sequence_set) = sequence_set.as_mut() {
-                            sequence_set.remove(&id);
-                        }
+                        sequence_set.remove(&id);
 
                         if changes.updated().contains(&jmap_id)
                             || changes.created().contains(&jmap_id)
@@ -138,11 +140,9 @@ impl SessionData {
                     }
 
                     // Add ids that were removed
-                    if let Some(sequence_set) = sequence_set {
-                        if !sequence_set.is_empty() {
-                            modified.extend(sequence_set);
-                            unchanged_failed = true;
-                        }
+                    if !sequence_set.is_empty() {
+                        modified.extend(sequence_set);
+                        unchanged_failed = true;
                     }
 
                     ids = unchanged_ids;

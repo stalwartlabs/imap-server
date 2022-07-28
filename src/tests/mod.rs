@@ -53,7 +53,6 @@ pub async fn test_server() {
     jmap.individual_create("foobar@example.com", "secret", "Bill Foobar")
         .await
         .unwrap();
-    return;
 
     // Connect to IMAP server
     let mut imap_check = ImapConnection::connect(b"_y ").await;

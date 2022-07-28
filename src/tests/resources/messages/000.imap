@@ -216,13 +216,13 @@ Content-Transfer-Encoding: Quoted-printable
 --unique-boundary-1--
 
 ----------------------------------
-BODY[MIME] {71}
-Content-Type:  multipart/mixed;
+BODY[MIME] {72}
+Content-Type: multipart/mixed;
             boundary=unique-boundary-1
 
-----------------------------------
-BODY[1] {264}
 
+----------------------------------
+BODY[1] {263}
 ... Some text appears here ...
 
 [Note that the blank between the boundary and the start
@@ -258,12 +258,11 @@ next part.]
 
 
 ----------------------------------
-BODY[1.MIME] {0}
+BODY[1.MIME] {2}
+
 
 ----------------------------------
-BODY[2] {156}
-Content-type: text/plain; charset=US-ASCII
-
+BODY[2] {112}
 This could have been part of the previous part, but
 illustrates explicit versus implicit typing of body
 parts.
@@ -288,13 +287,12 @@ parts.
 
 
 ----------------------------------
-BODY[2.MIME] {44}
-Content-Type:  text/plain; charset=US-ASCII
+BODY[2.MIME] {45}
+Content-Type: text/plain; charset=US-ASCII
+
 
 ----------------------------------
-BODY[3] {376}
-Content-Type: multipart/parallel; boundary=unique-boundary-2
-
+BODY[3] {314}
 --unique-boundary-2
 Content-Type: audio/basic
 Content-Transfer-Encoding: base64
@@ -334,14 +332,12 @@ Content-Transfer-Encoding: base64
 --unique-boundary-2--
 
 ----------------------------------
-BODY[3.MIME] {62}
-Content-Type:  multipart/parallel; boundary=unique-boundary-2
+BODY[3.MIME] {63}
+Content-Type: multipart/parallel; boundary=unique-boundary-2
+
 
 ----------------------------------
-BODY[3.1] {147}
-Content-Type: audio/basic
-Content-Transfer-Encoding: base64
-
+BODY[3.1] {86}
 ... base64-encoded 8000 Hz single-channel
     mu-law-format audio data goes here ...
 
@@ -363,14 +359,12 @@ BODY[3.1.TEXT] {86}
 
 ----------------------------------
 BODY[3.1.MIME] {62}
-Content-Type:  audio/basic
-Content-Transfer-Encoding:  base64
-
-----------------------------------
-BODY[3.2] {105}
-Content-Type: image/jpeg
+Content-Type: audio/basic
 Content-Transfer-Encoding: base64
 
+
+----------------------------------
+BODY[3.2] {45}
 ... base64-encoded image data goes here ...
 
 
@@ -390,13 +384,12 @@ BODY[3.2.TEXT] {45}
 
 ----------------------------------
 BODY[3.2.MIME] {61}
-Content-Type:  image/jpeg
-Content-Transfer-Encoding:  base64
+Content-Type: image/jpeg
+Content-Transfer-Encoding: base64
+
 
 ----------------------------------
-BODY[4] {170}
-Content-type: text/enriched
-
+BODY[4] {141}
 This is <bold><italic>enriched.</italic></bold>
 <smaller>as defined in RFC 1896</smaller>
 
@@ -427,13 +420,12 @@ Isn't it
 
 
 ----------------------------------
-BODY[4.MIME] {29}
-Content-Type:  text/enriched
+BODY[4.MIME] {30}
+Content-Type: text/enriched
+
 
 ----------------------------------
-BODY[5] {254}
-Content-Type: message/rfc822
-
+BODY[5] {224}
 From: (mailbox in US-ASCII)
 To: (address in US-ASCII)
 Subject: (subject in US-ASCII)
@@ -462,8 +454,9 @@ BODY[5.TEXT] {49}
 
 ----------------------------------
 BODY[5.MIME] {91}
-Content-Type:  Text/plain; charset=ISO-8859-1
-Content-Transfer-Encoding:  Quoted-printable
+Content-Type: Text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: Quoted-printable
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {79}

@@ -238,9 +238,11 @@ impl SessionData {
                     mailbox.synchronize_uids(new_state.jmap_ids, new_state.imap_uids, true);
                 if let Some(deletions) = deletions {
                     expunge::Response {
-                        is_uid: false,
                         is_qresync,
-                        ids: deletions.into_iter().map(|id| id.seqnum).collect(),
+                        ids: deletions
+                            .into_iter()
+                            .map(|id| if !is_qresync { id.seqnum } else { id.uid })
+                            .collect(),
                     }
                     .serialize_to(&mut buf);
                 }
@@ -266,7 +268,7 @@ impl SessionData {
                                 || response.created().contains(jmap_id)
                             {
                                 changed_ids.push(Sequence::Number {
-                                    value: (pos + 1) as u32,
+                                    value: state.imap_uids[pos],
                                 });
                             }
                         }
@@ -282,8 +284,9 @@ impl SessionData {
                                 include_vanished: false,
                             },
                             mailbox.clone(),
-                            false,
+                            true,
                             is_qresync,
+                            false,
                         )
                         .await;
                     }

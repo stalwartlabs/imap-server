@@ -142,6 +142,7 @@ impl SessionData {
             .map(|c| c.max_objects_in_set())
             .unwrap_or(500);
 
+        let mut src_uids = Vec::with_capacity(ids.len());
         let (mut copied_ids, destroyed_ids) =
             if src_mailbox.id.account_id == dest_mailbox.account_id {
                 // Mailboxes are in the same account, send a Email/set request.
@@ -180,7 +181,12 @@ impl SessionData {
                     }
 
                     if let Some(updated_ids) = response.take_updated_ids() {
-                        copied_ids.extend(updated_ids);
+                        for updated_id in updated_ids {
+                            if let Some(imap_id) = ids.get(&updated_id) {
+                                src_uids.push(imap_id.uid);
+                            }
+                            copied_ids.push(updated_id);
+                        }
                     }
                 }
                 (copied_ids, None)
@@ -214,8 +220,14 @@ impl SessionData {
                 {
                     match response.unwrap_method_response() {
                         MethodResponse::CopyEmail(mut response) => {
-                            if let Some(updated_ids) = response.take_created() {
-                                copied_ids.extend(updated_ids.into_iter().map(|mut m| m.take_id()));
+                            if let Some(updated_emails) = response.take_created() {
+                                for mut updated_email in updated_emails {
+                                    let updated_id = updated_email.take_id();
+                                    if let Some(imap_id) = ids.get(&updated_id) {
+                                        src_uids.push(imap_id.uid);
+                                    }
+                                    copied_ids.push(updated_id);
+                                }
                             }
                         }
                         MethodResponse::SetEmail(mut response) => {
@@ -241,7 +253,7 @@ impl SessionData {
         }
 
         // Map copied JMAP Ids to IMAP UIDs in the destination folder.
-        let uid_copy = if let (Ok((copied_ids_, mut uids)), Ok((uid_validity, _))) = (
+        let uid_copy = if let (Ok((copied_ids_, mut dest_uids)), Ok((uid_validity, _))) = (
             self.core
                 .jmap_to_imap(
                     dest_mailbox.clone(),
@@ -252,8 +264,13 @@ impl SessionData {
             self.core.uids(dest_mailbox).await,
         ) {
             copied_ids = copied_ids_;
-            uids.sort_unstable();
-            ResponseCode::CopyUid { uid_validity, uids }
+            src_uids.sort_unstable();
+            dest_uids.sort_unstable();
+            ResponseCode::CopyUid {
+                uid_validity,
+                src_uids,
+                dest_uids,
+            }
         } else {
             return Err(StatusResponse::database_failure().with_tag(arguments.tag));
         };
@@ -280,7 +297,7 @@ impl SessionData {
                         new_jmap_ids.push(jmap_id);
                         new_imap_uids.push(imap_uid);
                     } else {
-                        expunged_ids.push(if is_uid || is_qresync {
+                        expunged_ids.push(if is_qresync {
                             imap_uid
                         } else {
                             (pos + 1) as u32
@@ -301,14 +318,15 @@ impl SessionData {
                 .ok();
 
             response.with_tag(arguments.tag).serialize(
-                StatusResponse::ok("").with_code(uid_copy).serialize(
-                    expunge::Response {
-                        is_uid,
-                        is_qresync,
-                        ids: expunged_ids,
-                    }
-                    .serialize(),
-                ),
+                StatusResponse::ok("Copied UIDs")
+                    .with_code(uid_copy)
+                    .serialize(
+                        expunge::Response {
+                            is_qresync,
+                            ids: expunged_ids,
+                        }
+                        .serialize(),
+                    ),
             )
         } else {
             response

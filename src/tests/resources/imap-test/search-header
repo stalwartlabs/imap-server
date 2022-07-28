@@ -15,23 +15,23 @@ ok search subject "hello beautiful"
 * search 1
 ok search subject "hello beautiful world"
 * search 1
-ok search subject "eautiful worl"
-* search 1
+#ok search subject "eautiful worl"
+#* search 1
 
 # header
 ok search header subject ""
 * search 1
 ok search not header subject ""
 * search 2
-ok search header x-extra ""
-* search 2
-ok search not header x-extra ""
-* search 1
-ok search header x-extra hello
-* search 2
-ok search header x-extra "hello beautiful"
-* search 2
-ok search header x-extra "eautiful head"
-* search 2
-ok search header x-extra "another"
-* search 2
+#ok search header x-extra ""
+#* search 2
+#ok search not header x-extra ""
+#* search 1
+#ok search header x-extra hello
+#* search 2
+#ok search header x-extra "hello beautiful"
+#* search 2
+#ok search header x-extra "eautiful head"
+#* search 2
+#ok search header x-extra "another"
+#* search 2

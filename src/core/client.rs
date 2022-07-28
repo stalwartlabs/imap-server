@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{iter::Peekable, net::SocketAddr, sync::Arc, vec::IntoIter};
 
 use jmap_client::client::Client;
 use tokio::{
@@ -95,14 +95,14 @@ impl Session {
     }
 
     pub async fn ingest(&mut self, bytes: &[u8]) -> Result<Option<WriteHalf<TcpStream>>, ()> {
-        let tmp = "dd";
+        /*let tmp = "dd";
         for line in String::from_utf8_lossy(bytes).split("\r\n") {
             if let Some((tag, _)) = line.split_once(' ') {
                 if tag.len() < 10 && tag.contains('.') {
                     println!("<- {:?}", &line[..std::cmp::min(line.len(), 100)]);
                 }
             }
-        }
+        }*/
 
         let mut bytes = bytes.iter();
         let mut requests = Vec::with_capacity(2);
@@ -132,8 +132,8 @@ impl Session {
             }
         }
 
-        //TODO pipelining check for multiwrite
-        for request in requests {
+        let mut requests = requests.into_iter().peekable();
+        while let Some(request) = requests.next() {
             match request.command {
                 Command::List | Command::Lsub => {
                     self.handle_list(request).await?;
@@ -142,10 +142,12 @@ impl Session {
                     self.handle_select(request).await?;
                 }
                 Command::Create => {
-                    self.handle_create(request).await?;
+                    self.handle_create(group_requests(&mut requests, vec![request]))
+                        .await?;
                 }
                 Command::Delete => {
-                    self.handle_delete(request).await?;
+                    self.handle_delete(group_requests(&mut requests, vec![request]))
+                        .await?;
                 }
                 Command::Rename => {
                     self.handle_rename(request).await?;
@@ -255,6 +257,22 @@ impl Session {
     }
 }
 
+pub fn group_requests(
+    requests: &mut Peekable<IntoIter<Request>>,
+    mut grouped_requests: Vec<Request>,
+) -> Vec<Request> {
+    let last_command = grouped_requests.last().unwrap().command;
+    loop {
+        match requests.peek() {
+            Some(request) if request.command == last_command => {
+                grouped_requests.push(requests.next().unwrap());
+            }
+            _ => break,
+        }
+    }
+    grouped_requests
+}
+
 impl Request {
     pub fn is_allowed(self, state: &State, is_tls: bool) -> Result<Self, StatusResponse> {
         match &self.command {
@@ -275,16 +293,14 @@ impl Request {
             }
             Command::Login => {
                 if let State::NotAuthenticated { .. } = state {
-                    let coco = "aa";
-                    Ok(self)
-                    /*if is_tls {
+                    if is_tls {
                         Ok(self)
                     } else {
                         Err(
                             StatusResponse::no("LOGIN is disabled on the clear-text port.")
                                 .with_tag(self.tag),
                         )
-                    }*/
+                    }
                 } else {
                     Err(StatusResponse::no("Already authenticated.").with_tag(self.tag))
                 }

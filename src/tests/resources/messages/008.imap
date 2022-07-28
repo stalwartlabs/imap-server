@@ -152,15 +152,13 @@ YWFhYWFhYWFhYWFhYS0tDQo=
 --bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb--
 
 ----------------------------------
-BODY[MIME] {83}
-Content-Type:  multipart/mixed;
+BODY[MIME] {84}
+Content-Type: multipart/mixed;
  boundary=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
-----------------------------------
-BODY[1] {128}
-Content-Type: text/plain; charset=utf-8
-Content-Transfer-Encoding: 7bit
 
+----------------------------------
+BODY[1] {55}
 This is a message with a base64 encoded attached email
 
 BINARY[1] {54}
@@ -178,15 +176,12 @@ This is a message with a base64 encoded attached email
 
 ----------------------------------
 BODY[1.MIME] {74}
-Content-Type:  text/plain; charset=utf-8
-Content-Transfer-Encoding:  7bit
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
 
 ----------------------------------
-BODY[2] {1307}
-Content-Disposition: attachment; filename="attached_email.eml"
-Content-Type: message/rfc822
-Content-Transfer-Encoding: base64
-
+BODY[2] {1180}
 VG86ICJlbWFpbEBleGFtcGxlLmNvbSIgPGVtYWlsQGV4YW1wbGUuY29tPg0KRnJvbTogTmFtZSA8
 ZW1haWxAZXhhbXBsZS5jb20+DQpTdWJqZWN0OiBIVE1MIHRlc3QNCk1lc3NhZ2UtSUQ6IDxyYW5k
 b20tbWVzc2FnZS1pZEBleGFtcGxlLmNvbT4NCkRhdGU6IFR1ZSwgMTQgRGVjIDIwMjEgMTE6NDg6
@@ -245,15 +240,13 @@ Content-Transfer-Encoding: 7bit
 
 ----------------------------------
 BODY[2.MIME] {119}
-Content-Type:  multipart/alternative;
+Content-Type: multipart/alternative;
  boundary="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-Content-Language:  en-US
+Content-Language: en-US
+
 
 ----------------------------------
-BODY[2.1] {123}
-Content-Type: text/plain; charset=utf-8; format=flowed
-Content-Transfer-Encoding: 7bit
-
+BODY[2.1] {32}
 This is an *HTML* test message
 
 BINARY[2.1] {30}
@@ -271,14 +264,12 @@ This is an *HTML* test message
 
 ----------------------------------
 BODY[2.1.MIME] {91}
-Content-Type:  text/plain; charset=utf-8; format=flowed
-Content-Transfer-Encoding:  7bit
-
-----------------------------------
-BODY[2.2] {250}
-Content-Type: text/html; charset=utf-8
+Content-Type: text/plain; charset=utf-8; format=flowed
 Content-Transfer-Encoding: 7bit
 
+
+----------------------------------
+BODY[2.2] {175}
 <html>
   <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">
@@ -320,8 +311,9 @@ BODY[2.2.TEXT] {175}
 
 ----------------------------------
 BODY[2.2.MIME] {75}
-Content-Type:  text/html; charset=utf-8
-Content-Transfer-Encoding:  7bit
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {2}

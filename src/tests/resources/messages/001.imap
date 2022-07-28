@@ -121,16 +121,12 @@ get RFC-MIME.DOC
 
 ----------------------------------
 BODY[MIME] {94}
-Content-Type:  multipart/alternative; boundary=42
-Content-ID:  <id001@guppylake.bellcore.com>
+Content-Type: multipart/alternative; boundary=42
+Content-ID: <id001@guppylake.bellcore.com>
+
 
 ----------------------------------
-BODY[1] {310}
-Content-Type: message/external-body; name="BodyFormats.ps";
-            site="thumper.bellcore.com"; mode="image";
-            access-type=ANON-FTP; directory="pub";
-            expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
-
+BODY[1] {80}
 Content-type: application/postscript
 Content-ID: <id42@guppylake.bellcore.com>
 
@@ -153,19 +149,15 @@ Content-ID: <id42@guppylake.bellcore.com>
 
 
 ----------------------------------
-BODY[1.MIME] {230}
-Content-Type:  message/external-body; name="BodyFormats.ps";
+BODY[1.MIME] {231}
+Content-Type: message/external-body; name="BodyFormats.ps";
             site="thumper.bellcore.com"; mode="image";
             access-type=ANON-FTP; directory="pub";
             expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
 
-----------------------------------
-BODY[2] {298}
-Content-Type: message/external-body; access-type=local-file;
-            name="/u/nsb/writing/rfcs/RFC-MIME.ps";
-            site="thumper.bellcore.com";
-            expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
 
+----------------------------------
+BODY[2] {80}
 Content-type: application/postscript
 Content-ID: <id42@guppylake.bellcore.com>
 
@@ -188,19 +180,15 @@ Content-ID: <id42@guppylake.bellcore.com>
 
 
 ----------------------------------
-BODY[2.MIME] {218}
-Content-Type:  message/external-body; access-type=local-file;
+BODY[2.MIME] {219}
+Content-Type: message/external-body; access-type=local-file;
             name="/u/nsb/writing/rfcs/RFC-MIME.ps";
             site="thumper.bellcore.com";
             expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
 
-----------------------------------
-BODY[3] {279}
-Content-Type: message/external-body;
-            access-type=mail-server
-            server="listserv@bogus.bitnet";
-            expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
 
+----------------------------------
+BODY[3] {98}
 Content-type: application/postscript
 Content-ID: <id42@guppylake.bellcore.com>
 
@@ -227,11 +215,12 @@ get RFC-MIME.DOC
 
 
 ----------------------------------
-BODY[3.MIME] {181}
-Content-Type:  message/external-body;
+BODY[3.MIME] {182}
+Content-Type: message/external-body;
             access-type=mail-server
             server="listserv@bogus.bitnet";
             expiration="Fri, 14 Jun 1991 19:13:14 -0400 (EDT)"
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {29}

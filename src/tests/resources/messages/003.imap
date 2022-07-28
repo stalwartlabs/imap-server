@@ -86,13 +86,12 @@ Content-Type: application/x-whatever
 --boundary42--
 
 ----------------------------------
-BODY[MIME] {58}
-Content-Type:  multipart/alternative; boundary=boundary42
+BODY[MIME] {59}
+Content-Type: multipart/alternative; boundary=boundary42
+
 
 ----------------------------------
-BODY[1] {93}
-Content-Type: text/plain; charset=us-ascii
-
+BODY[1] {49}
 ... plain text version of message goes here ...
 
 
@@ -111,13 +110,12 @@ BODY[1.TEXT] {49}
 
 
 ----------------------------------
-BODY[1.MIME] {44}
-Content-Type:  text/plain; charset=us-ascii
+BODY[1.MIME] {45}
+Content-Type: text/plain; charset=us-ascii
+
 
 ----------------------------------
-BODY[2] {99}
-Content-Type: text/enriched
-
+BODY[2] {70}
 ... RFC 1896 text/enriched version of same message
     goes here ...
 
@@ -139,13 +137,12 @@ BODY[2.TEXT] {70}
 
 
 ----------------------------------
-BODY[2.MIME] {29}
-Content-Type:  text/enriched
+BODY[2.MIME] {30}
+Content-Type: text/enriched
+
 
 ----------------------------------
-BODY[3] {90}
-Content-Type: application/x-whatever
-
+BODY[3] {52}
 ... fanciest version of same message goes here ...
 
 
@@ -163,8 +160,9 @@ BODY[3.TEXT] {52}
 
 
 ----------------------------------
-BODY[3.MIME] {38}
-Content-Type:  application/x-whatever
+BODY[3.MIME] {39}
+Content-Type: application/x-whatever
+
 
 ----------------------------------
 BODY[HEADER.FIELDS (FROM TO)] {81}

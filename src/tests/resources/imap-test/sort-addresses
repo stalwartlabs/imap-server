@@ -2,7 +2,7 @@ capabilities: SORT
 messages: all
 
 ok sort (from) us-ascii all
-* sort 3 1 2
+* sort 3 2 1
 ok sort (to) us-ascii all
 * sort 3 1 2
 ok sort (cc) us-ascii all

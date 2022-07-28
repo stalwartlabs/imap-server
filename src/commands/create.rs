@@ -18,18 +18,28 @@ use std::borrow::Cow;
 const MAX_MAILBOX_DEPTH: usize = 10;
 
 impl Session {
-    pub async fn handle_create(&mut self, request: Request) -> Result<(), ()> {
-        match request.parse_create(self.version) {
-            Ok(arguments) => {
-                let data = self.state.session_data();
-                tokio::spawn(async move {
-                    data.write_bytes(data.create_folder(arguments).await.into_bytes())
-                        .await;
-                });
-                Ok(())
+    pub async fn handle_create(&mut self, requests: Vec<Request>) -> Result<(), ()> {
+        let mut arguments = Vec::with_capacity(requests.len());
+
+        for request in requests {
+            match request.parse_create(self.version) {
+                Ok(argument) => {
+                    arguments.push(argument);
+                }
+                Err(response) => self.write_bytes(response.into_bytes()).await?,
             }
-            Err(response) => self.write_bytes(response.into_bytes()).await,
         }
+
+        if !arguments.is_empty() {
+            let data = self.state.session_data();
+            tokio::spawn(async move {
+                for argument in arguments {
+                    data.write_bytes(data.create_folder(argument).await.into_bytes())
+                        .await;
+                }
+            });
+        }
+        Ok(())
     }
 }
 

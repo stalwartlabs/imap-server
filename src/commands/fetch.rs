@@ -27,9 +27,19 @@ impl Session {
             Ok(arguments) => {
                 let (data, mailbox) = self.state.select_data();
                 let is_qresync = self.is_qresync;
+
+                let enabled_condstore = if !self.is_condstore && arguments.changed_since.is_some()
+                    || arguments.attributes.contains(&Attribute::ModSeq)
+                {
+                    self.is_condstore = true;
+                    true
+                } else {
+                    false
+                };
+
                 tokio::spawn(async move {
                     data.write_bytes(
-                        data.fetch(arguments, mailbox, is_uid, is_qresync)
+                        data.fetch(arguments, mailbox, is_uid, is_qresync, enabled_condstore)
                             .await
                             .into_bytes(),
                     )
@@ -49,6 +59,7 @@ impl SessionData {
         mailbox: Arc<SelectedMailbox>,
         is_uid: bool,
         is_qresync: bool,
+        mut enabled_condstore: bool,
     ) -> StatusResponse {
         // Validate VANISHED parameter
         if arguments.include_vanished {
@@ -98,6 +109,25 @@ impl SessionData {
                 .account_id(&mailbox.id.account_id);
             match request.send_changes_email().await {
                 Ok(mut changes) => {
+                    // Condstore was just enabled, return higest modseq.
+                    if enabled_condstore {
+                        if let Ok(modseq) = self
+                            .core
+                            .state_to_modseq(&mailbox.id.account_id, changes.take_new_state())
+                            .await
+                        {
+                            self.write_bytes(
+                                StatusResponse::ok("Highest Modseq")
+                                    .with_code(ResponseCode::HighestModseq { modseq })
+                                    .into_bytes(),
+                            )
+                            .await;
+                            enabled_condstore = false;
+                        } else {
+                            return StatusResponse::database_failure().with_tag(arguments.tag);
+                        }
+                    }
+
                     // Send vanished UIDs
                     if arguments.include_vanished {
                         // Add to vanished all known destroyed Ids
@@ -247,6 +277,7 @@ impl SessionData {
             .core_capabilities()
             .map(|c| c.max_objects_in_get())
             .unwrap_or(500);
+        let mut modseq = u32::MAX;
 
         let mut set_seen_ids = Vec::new();
         let ids_vec = ids.keys().collect::<Vec<_>>();
@@ -265,14 +296,13 @@ impl SessionData {
             };
 
             // Obtain modseq
-            let modseq = if needs_modseq {
-                self.core
+            if needs_modseq && modseq == u32::MAX {
+                modseq = self
+                    .core
                     .state_to_modseq(&mailbox.id.account_id, response.take_state())
                     .await
                     .unwrap_or(u32::MAX)
-            } else {
-                u32::MAX
-            };
+            }
 
             // Process each message
             for mut email in response.take_list() {
@@ -590,9 +620,23 @@ impl SessionData {
             match request.send().await {
                 Ok(responses) => {
                     for response in responses.unwrap_method_responses() {
-                        if let Err(err) = response.unwrap_set_email() {
-                            debug!("Failed to set Seen flags: {}", err);
-                            return err.into_status_response().with_tag(arguments.tag);
+                        match response.unwrap_set_email() {
+                            Ok(mut response) => {
+                                if enabled_condstore {
+                                    modseq = self
+                                        .core
+                                        .state_to_modseq(
+                                            &mailbox.id.account_id,
+                                            response.take_new_state(),
+                                        )
+                                        .await
+                                        .unwrap_or(u32::MAX)
+                                }
+                            }
+                            Err(err) => {
+                                debug!("Failed to set Seen flags: {}", err);
+                                return err.into_status_response().with_tag(arguments.tag);
+                            }
                         }
                     }
                 }
@@ -600,6 +644,23 @@ impl SessionData {
                     debug!("Failed to set Seen flags: {}", err);
                     return err.into_status_response().with_tag(arguments.tag);
                 }
+            }
+        }
+
+        // Condstore was enabled with this command
+        if enabled_condstore {
+            if modseq == u32::MAX {
+                if let Ok(modseq_) = self.synchronize_state(&mailbox.id.account_id).await {
+                    modseq = modseq_;
+                }
+            }
+            if modseq != u32::MAX {
+                self.write_bytes(
+                    StatusResponse::ok("Highest Modseq")
+                        .with_code(ResponseCode::HighestModseq { modseq })
+                        .into_bytes(),
+                )
+                .await;
             }
         }
 
@@ -855,8 +916,16 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         partial: Option<(u32, u32)>,
         depth: usize,
     ) -> Option<Cow<'x, str>> {
-        let mut message = self;
         let mut part = self.get_root_part();
+        if sections.is_empty() {
+            return String::from_utf8_lossy(get_partial_bytes(
+                raw_message.get(part.offset_header..part.offset_end)?,
+                partial,
+            ))
+            .into();
+        }
+
+        let mut message = self;
         let mut sections_iter = sections.iter().peekable();
 
         while let Some(section) = sections_iter.next() {
@@ -939,12 +1008,13 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                     for (header, offset) in &part.headers_raw {
                         if header.is_mime_header() {
                             headers.extend_from_slice(header.as_str().as_bytes());
-                            headers.extend_from_slice(b": ");
+                            headers.extend_from_slice(b":");
                             headers.extend_from_slice(
                                 raw_message.get(offset.start..offset.end).unwrap_or(b""),
                             );
                         }
                     }
+                    headers.extend_from_slice(b"\r\n");
                     return Some(if partial.is_none() {
                         String::from_utf8(headers).map_or_else(
                             |err| String::from_utf8_lossy(err.as_bytes()).into_owned().into(),
@@ -959,11 +1029,20 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
             }
         }
 
+        // BODY[x] should return both headers and body, but most clients
+        // expect BODY[x] to return only the body, just like BOXY[x.TEXT] does.
+
         String::from_utf8_lossy(get_partial_bytes(
-            raw_message.get(part.offset_header..part.offset_end)?,
+            raw_message.get(part.offset_body..part.offset_end)?,
             partial,
         ))
         .into()
+
+        /*String::from_utf8_lossy(get_partial_bytes(
+            raw_message.get(part.offset_header..part.offset_end)?,
+            partial,
+        ))
+        .into()*/
     }
 
     fn binary(
