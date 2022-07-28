@@ -3,19 +3,21 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::{io::AsyncWriteExt, net::TcpListener, sync::watch};
 use tracing::{debug, error};
 
-use crate::core::{
-    client::Session,
-    connection::{handle_conn, handle_conn_tls},
+use crate::{
+    core::{
+        client::Session,
+        connection::{handle_conn, handle_conn_tls},
+    },
+    protocol::capability::Capability,
 };
 
-use super::Core;
+use super::{Core, ResponseCode, StatusResponse};
 
-static SERVER_GREETING: &[u8] = concat!(
-    "* OK Stalwart IMAP4rev2 v",
+static SERVER_GREETING: &str = concat!(
+    "Stalwart IMAP4rev2 v",
     env!("CARGO_PKG_VERSION"),
-    " at your service.\r\n"
-)
-.as_bytes();
+    " at your service."
+);
 
 pub async fn spawn_listener(
     bind_addr: SocketAddr,
@@ -29,6 +31,21 @@ pub async fn spawn_listener(
     });
 
     tokio::spawn(async move {
+        let greeting = Arc::new(
+            StatusResponse::ok(SERVER_GREETING)
+                .with_code(ResponseCode::Capability {
+                    capabilities: Capability::all_capabilities(false, false),
+                })
+                .into_bytes(),
+        );
+        let greeting_tls = Arc::new(
+            StatusResponse::ok(SERVER_GREETING)
+                .with_code(ResponseCode::Capability {
+                    capabilities: Capability::all_capabilities(false, true),
+                })
+                .into_bytes(),
+        );
+
         loop {
             tokio::select! {
                 stream = listener.accept() => {
@@ -36,6 +53,9 @@ pub async fn spawn_listener(
                         Ok((mut stream, _)) => {
                             let shutdown_rx = shutdown_rx.clone();
                             let core = core.clone();
+                            let greeting = greeting.clone();
+                            let greeting_tls = greeting_tls.clone();
+
                             tokio::spawn(async move {
                                 let peer_addr = stream.peer_addr().unwrap();
 
@@ -49,7 +69,7 @@ pub async fn spawn_listener(
                                     };
 
                                     // Send greeting
-                                    if let Err(err) = stream.write_all(SERVER_GREETING).await {
+                                    if let Err(err) = stream.write_all(&greeting).await {
                                         debug!("Failed to send greeting to {}: {}", peer_addr, err);
                                         return;
                                     }
@@ -61,7 +81,7 @@ pub async fn spawn_listener(
                                     ).await;
                                 } else {
                                     // Send greeting
-                                    if let Err(err) = stream.write_all(SERVER_GREETING).await {
+                                    if let Err(err) = stream.write_all(&greeting_tls).await {
                                         debug!("Failed to send greeting to {}: {}", peer_addr, err);
                                         return;
                                     }

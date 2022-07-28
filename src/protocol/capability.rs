@@ -86,6 +86,57 @@ impl Capability {
             Capability::Move => b"MOVE",
         });
     }
+
+    pub fn all_capabilities(is_authenticated: bool, is_tls: bool) -> Vec<Capability> {
+        let mut capabilties = vec![
+            Capability::IMAP4rev2,
+            Capability::IMAP4rev1,
+            Capability::Enable,
+            Capability::SASLIR,
+            Capability::LiteralPlus,
+            Capability::Id,
+        ];
+
+        if is_authenticated {
+            capabilties.extend([
+                Capability::Idle,
+                Capability::Namespace,
+                Capability::Children,
+                Capability::MultiAppend,
+                Capability::Binary,
+                Capability::Unselect,
+                Capability::ACL,
+                Capability::UIDPlus,
+                Capability::ESearch,
+                Capability::Within,
+                Capability::SearchRes,
+                Capability::Sort,
+                Capability::Thread,
+                Capability::ListExtended,
+                Capability::ESort,
+                Capability::SortDisplay,
+                Capability::SpecialUse,
+                Capability::CreateSpecialUse,
+                Capability::Move,
+                Capability::CondStore,
+                Capability::QResync,
+                Capability::UnAuthenticate,
+                Capability::StatusSize,
+                Capability::ObjectId,
+                Capability::Preview,
+            ]);
+        } else {
+            capabilties.extend([
+                Capability::Auth(Mechanism::OAuthBearer),
+                Capability::Auth(Mechanism::Plain),
+            ]);
+        }
+        if !is_tls {
+            capabilties.push(Capability::StartTLS);
+        }
+
+        capabilties
+    }
 }
 
 impl ImapResponse for Response {

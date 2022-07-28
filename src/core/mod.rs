@@ -16,6 +16,8 @@ use jmap_client::core::{
     set::SetErrorType,
 };
 
+use crate::protocol::capability::Capability;
+
 pub struct Core {
     pub tls_acceptor: tokio_rustls::TlsAcceptor,
     pub db: Arc<sled::Db>,
@@ -132,7 +134,7 @@ pub enum ResponseCode {
     AuthorizationFailed,
     BadCharset,
     Cannot,
-    Capability,
+    Capability { capabilities: Vec<Capability> },
     ClientBug,
     Closed,
     ContactAdmin,

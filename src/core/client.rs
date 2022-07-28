@@ -132,6 +132,7 @@ impl Session {
             }
         }
 
+        //TODO pipelining check for multiwrite
         for request in requests {
             match request.command {
                 Command::List | Command::Lsub => {
@@ -385,6 +386,10 @@ impl State {
             State::Selected { data, mailbox } => (data.clone(), mailbox.clone()),
             _ => unreachable!(),
         }
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        matches!(self, State::Authenticated { .. } | State::Selected { .. })
     }
 
     pub fn is_mailbox_selected(&self) -> bool {

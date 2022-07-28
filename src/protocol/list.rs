@@ -20,11 +20,6 @@ pub enum Arguments {
         selection_options: Vec<SelectionOption>,
         return_options: Vec<ReturnOption>,
     },
-    Lsub {
-        tag: String,
-        reference_name: String,
-        mailbox_name: String,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,11 +92,6 @@ impl Arguments {
                 mailbox_name,
                 reference_name,
                 ..
-            }
-            | Arguments::Lsub {
-                mailbox_name,
-                reference_name,
-                ..
             } => mailbox_name.is_empty() && reference_name.is_empty(),
             Arguments::Extended {
                 mailbox_name,
@@ -115,7 +105,6 @@ impl Arguments {
         match self {
             Arguments::Basic { tag, .. } => tag,
             Arguments::Extended { tag, .. } => tag,
-            Arguments::Lsub { tag, .. } => tag,
         }
     }
 }

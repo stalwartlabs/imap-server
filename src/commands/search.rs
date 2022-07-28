@@ -400,7 +400,7 @@ impl SessionData {
                     }
 
                     search::Filter::Larger(size) => {
-                        jmap_filters.push(email::query::Filter::min_size(size).into());
+                        jmap_filters.push(email::query::Filter::min_size(size + 1).into());
                     }
                     search::Filter::Smaller(size) => {
                         jmap_filters.push(email::query::Filter::max_size(size).into());

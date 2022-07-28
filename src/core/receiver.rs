@@ -490,7 +490,7 @@ impl From<(String, &'static str)> for StatusResponse {
             tag: Some(tag),
             code: None,
             message: message.into(),
-            rtype: ResponseType::No,
+            rtype: ResponseType::Bad,
         }
     }
 }
@@ -501,7 +501,7 @@ impl From<(&str, &'static str)> for StatusResponse {
             tag: Some(tag.to_string()),
             code: None,
             message: message.into(),
-            rtype: ResponseType::No,
+            rtype: ResponseType::Bad,
         }
     }
 }
@@ -512,7 +512,7 @@ impl From<(String, String)> for StatusResponse {
             tag: Some(tag),
             code: None,
             message: message.into(),
-            rtype: ResponseType::No,
+            rtype: ResponseType::Bad,
         }
     }
 }
@@ -523,7 +523,7 @@ impl From<(String, Cow<'static, str>)> for StatusResponse {
             tag: Some(tag),
             code: None,
             message,
-            rtype: ResponseType::No,
+            rtype: ResponseType::Bad,
         }
     }
 }
@@ -534,7 +534,7 @@ impl From<(&str, Cow<'static, str>)> for StatusResponse {
             tag: Some(tag.to_string()),
             code: None,
             message,
-            rtype: ResponseType::No,
+            rtype: ResponseType::Bad,
         }
     }
 }

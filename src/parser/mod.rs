@@ -322,10 +322,11 @@ pub fn parse_sequence_set(value: &[u8]) -> Result<Sequence> {
                     pos += 1;
                 }
                 if is_wildcard {
-                    return Ok(Sequence::Range {
+                    sequence_set.push(Sequence::Range {
                         start: None,
                         end: None,
                     });
+                    is_wildcard = false;
                 } else if is_saved_search {
                     sequence_set.push(Sequence::SavedSearch);
                     is_saved_search = false;

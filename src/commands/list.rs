@@ -18,7 +18,8 @@ use crate::{
 impl Session {
     pub async fn handle_list(&mut self, request: Request) -> Result<(), ()> {
         let command = request.command;
-        match if request.command == Command::List {
+        let is_lsub = command == Command::Lsub;
+        match if !is_lsub {
             request.parse_list(self.version)
         } else {
             request.parse_lsub()
@@ -28,7 +29,7 @@ impl Session {
                     let data = self.state.session_data();
                     let version = self.version;
                     tokio::spawn(async move {
-                        data.list(arguments, version).await;
+                        data.list(arguments, is_lsub, version).await;
                     });
                     Ok(())
                 } else {
@@ -38,7 +39,7 @@ impl Session {
                             .serialize(
                                 list::Response {
                                     is_rev2: self.version.is_rev2(),
-                                    is_lsub: command == Command::Lsub,
+                                    is_lsub,
                                     list_items: vec![ListItem {
                                         mailbox_name: String::new(),
                                         attributes: vec![Attribute::NoSelect],
@@ -58,48 +59,34 @@ impl Session {
 }
 
 impl SessionData {
-    pub async fn list(&self, arguments: Arguments, version: ProtocolVersion) {
-        let (tag, is_lsub, reference_name, mut patterns, selection_options, return_options) =
-            match arguments {
-                Arguments::Basic {
-                    tag,
-                    reference_name,
-                    mailbox_name,
-                } => (
-                    tag,
-                    false,
-                    reference_name,
-                    vec![mailbox_name],
-                    Vec::new(),
-                    Vec::new(),
-                ),
-                Arguments::Extended {
-                    tag,
-                    reference_name,
-                    mailbox_name,
-                    selection_options,
-                    return_options,
-                } => (
-                    tag,
-                    false,
-                    reference_name,
-                    mailbox_name,
-                    selection_options,
-                    return_options,
-                ),
-                Arguments::Lsub {
-                    tag,
-                    reference_name,
-                    mailbox_name,
-                } => (
-                    tag,
-                    true,
-                    reference_name,
-                    vec![mailbox_name],
-                    vec![SelectionOption::Subscribed],
-                    Vec::new(),
-                ),
-            };
+    pub async fn list(&self, arguments: Arguments, is_lsub: bool, version: ProtocolVersion) {
+        let (tag, reference_name, mut patterns, selection_options, return_options) = match arguments
+        {
+            Arguments::Basic {
+                tag,
+                reference_name,
+                mailbox_name,
+            } => (
+                tag,
+                reference_name,
+                vec![mailbox_name],
+                Vec::new(),
+                Vec::new(),
+            ),
+            Arguments::Extended {
+                tag,
+                reference_name,
+                mailbox_name,
+                selection_options,
+                return_options,
+            } => (
+                tag,
+                reference_name,
+                mailbox_name,
+                selection_options,
+                return_options,
+            ),
+        };
 
         // Refresh mailboxes
         let force_refresh;
@@ -313,39 +300,147 @@ impl SessionData {
     }
 }
 
+#[allow(clippy::while_let_on_iterator)]
 fn matches_pattern(patterns: &[String], mailbox_name: &str) -> bool {
     if patterns.is_empty() {
         return true;
     }
 
-    for pattern in patterns {
-        if pattern == "*" {
-            return true;
-        } else if pattern == "%" {
-            return !mailbox_name.contains('/');
-        } else if let Some((prefix, suffix)) = pattern.split_once('*') {
-            if (prefix.is_empty() || mailbox_name.starts_with(prefix))
-                && (suffix.is_empty() || mailbox_name.ends_with(suffix))
-            {
-                return true;
-            }
-        } else if let Some((prefix, suffix)) = pattern.split_once('%') {
-            if !prefix.is_empty() {
-                if let Some(end) = mailbox_name.strip_prefix(prefix) {
-                    if end.contains('/') {
-                        continue;
+    'outer: for pattern in patterns {
+        let mut pattern_bytes = pattern.as_bytes().iter().enumerate().peekable();
+        let mut mailbox_name = mailbox_name.as_bytes().iter().peekable();
+
+        'inner: while let Some((pos, &ch)) = pattern_bytes.next() {
+            if ch == b'%' || ch == b'*' {
+                let mut end_pos = pos;
+                while let Some((_, &next_ch)) = pattern_bytes.peek() {
+                    if next_ch == b'%' || next_ch == b'*' {
+                        break;
+                    } else {
+                        end_pos = pattern_bytes.next().unwrap().0;
                     }
+                }
+                if end_pos > pos {
+                    let match_bytes = &pattern.as_bytes()[pos + 1..end_pos + 1];
+                    let mut match_count = 0;
+                    let pattern_eof = end_pos == pattern.len() - 1;
+
+                    loop {
+                        match mailbox_name.next() {
+                            Some(&ch) => {
+                                if match_bytes[match_count] == ch {
+                                    match_count += 1;
+                                    if match_count == match_bytes.len() {
+                                        if !pattern_eof {
+                                            continue 'inner;
+                                        } else if mailbox_name.peek().is_none() {
+                                            return true;
+                                        } else {
+                                            // Match needs to be at the end of the string,
+                                            // reset counter.
+                                            match_count = 0;
+                                        }
+                                    }
+                                } else if match_count > 0 {
+                                    match_count = 0;
+                                }
+                            }
+                            None => continue 'outer,
+                        }
+                    }
+                } else if ch == b'*' || !mailbox_name.any(|&ch| ch == b'/') {
+                    return true;
                 } else {
-                    continue;
+                    continue 'outer;
+                }
+            } else {
+                match mailbox_name.next() {
+                    Some(&mch) if mch == ch => (),
+                    _ => continue 'outer,
                 }
             }
-            if suffix.is_empty() || mailbox_name.ends_with(suffix) {
-                return true;
-            }
-        } else if pattern == mailbox_name {
+        }
+
+        if mailbox_name.next().is_none() {
             return true;
         }
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn matches_pattern() {
+        let mailboxes = [
+            "imaptest",
+            "imaptest/test",
+            "imaptest/test2",
+            "imaptest/test3",
+            "imaptest/test3/test4",
+            "imaptest/test3/test4/test5",
+            "foobar/test",
+            "foobar/test/test",
+            "foobar/test1/test1",
+        ];
+
+        for (pattern, expected_match) in [
+            (
+                "imaptest/%",
+                vec!["imaptest/test", "imaptest/test2", "imaptest/test3"],
+            ),
+            ("imaptest/%/%", vec!["imaptest/test3/test4"]),
+            (
+                "imaptest/*",
+                vec![
+                    "imaptest/test",
+                    "imaptest/test2",
+                    "imaptest/test3",
+                    "imaptest/test3/test4",
+                    "imaptest/test3/test4/test5",
+                ],
+            ),
+            ("imaptest/*test4", vec!["imaptest/test3/test4"]),
+            (
+                "imaptest/*test*",
+                vec![
+                    "imaptest/test",
+                    "imaptest/test2",
+                    "imaptest/test3",
+                    "imaptest/test3/test4",
+                    "imaptest/test3/test4/test5",
+                ],
+            ),
+            ("imaptest/%3/%", vec!["imaptest/test3/test4"]),
+            ("imaptest/%3/%4", vec!["imaptest/test3/test4"]),
+            ("imaptest/%t*4", vec!["imaptest/test3/test4"]),
+            ("*st/%3/%4/%5", vec!["imaptest/test3/test4/test5"]),
+            (
+                "*%*%*%",
+                vec![
+                    "imaptest",
+                    "imaptest/test",
+                    "imaptest/test2",
+                    "imaptest/test3",
+                    "imaptest/test3/test4",
+                    "imaptest/test3/test4/test5",
+                    "foobar/test",
+                    "foobar/test/test",
+                    "foobar/test1/test1",
+                ],
+            ),
+            ("foobar*test", vec!["foobar/test", "foobar/test/test"]),
+        ] {
+            let patterns = vec![pattern.to_string()];
+            let mut matched_mailboxes = Vec::new();
+            for mailbox in mailboxes {
+                if super::matches_pattern(&patterns, mailbox) {
+                    matched_mailboxes.push(mailbox);
+                }
+            }
+            assert_eq!(matched_mailboxes, expected_match, "for pattern {}", pattern);
+        }
+    }
 }

@@ -65,7 +65,7 @@ impl Sequence {
                 (Some(range), None) | (None, Some(range)) => {
                     value >= *range && value <= max_value || value >= max_value && value <= *range
                 }
-                (None, None) => true,
+                (None, None) => value == max_value,
             },
             Sequence::List { items } => {
                 for item in items {
@@ -87,6 +87,7 @@ impl Sequence {
         }
     }
 
+    // TODO expand properly
     pub fn try_expand(&self) -> Option<HashSet<u32>> {
         match self {
             Sequence::Number { value } => Some(HashSet::from_iter([*value])),
@@ -234,7 +235,14 @@ impl ResponseCode {
             ResponseCode::AuthorizationFailed => b"AUTHORIZATIONFAILED",
             ResponseCode::BadCharset => b"BADCHARSET",
             ResponseCode::Cannot => b"CANNOT",
-            ResponseCode::Capability => b"CAPABILITY",
+            ResponseCode::Capability { capabilities } => {
+                buf.extend_from_slice(b"CAPABILITY");
+                for capability in capabilities {
+                    buf.push(b' ');
+                    capability.serialize(buf);
+                }
+                return;
+            }
             ResponseCode::ClientBug => b"CLIENTBUG",
             ResponseCode::Closed => b"CLOSED",
             ResponseCode::ContactAdmin => b"CONTACTADMIN",

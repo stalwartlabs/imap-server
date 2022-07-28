@@ -9,7 +9,7 @@ use crate::{
         receiver::{self, Request},
         Command, ResponseCode, StatusResponse,
     },
-    protocol::authenticate::Mechanism,
+    protocol::{authenticate::Mechanism, capability::Capability},
 };
 
 impl Session {
@@ -109,6 +109,9 @@ impl Session {
                 };
                 self.write_bytes(
                     StatusResponse::ok("Authentication successful")
+                        .with_code(ResponseCode::Capability {
+                            capabilities: Capability::all_capabilities(true, self.is_tls),
+                        })
                         .with_tag(tag)
                         .into_bytes(),
                 )
