@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use jmap_client::email::{self, Header, Property};
-use mail_parser::{Message, MessageAttachment, PartType, RfcHeader};
+use mail_parser::{GetHeader, Message, MessageAttachment, PartType, RfcHeader};
 use tracing::debug;
 
 use crate::{
@@ -752,15 +752,15 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
 
     fn as_body_part(&self, raw_message: &[u8], part_id: usize, is_extended: bool) -> BodyPart {
         let part = &self.parts[part_id];
-        let headers = &part.headers_rfc();
         let body = raw_message.get(part.offset_body..part.offset_end);
         let (is_multipart, is_text) = match &part.body {
             PartType::Text(_) | PartType::Html(_) => (false, true),
             PartType::Multipart(_) => (true, false),
             _ => (false, false),
         };
-        let content_type = headers
-            .get(&RfcHeader::ContentType)
+        let content_type = part
+            .headers
+            .get_rfc(&RfcHeader::ContentType)
             .and_then(|ct| ct.as_content_type_ref());
 
         let mut body_md5 = None;
@@ -770,11 +770,12 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         if !is_multipart || is_extended {
             fields.body_parameters = content_type.as_ref().and_then(|ct| {
                 ct.attributes.as_ref().map(|at| {
-                    #[cfg(not(test))]
+                    at.iter()
+                        .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
+                        .collect::<Vec<_>>()
+
+                    /* #[cfg(not(test))]
                     {
-                        at.iter()
-                            .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
-                            .collect::<Vec<_>>()
                     }
 
                     #[cfg(test)]
@@ -784,7 +785,7 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                             .into_iter()
                             .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
                             .collect::<Vec<_>>()
-                    }
+                    }*/
                 })
             })
         }
@@ -794,16 +795,19 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 .as_ref()
                 .and_then(|ct| ct.c_subtype.as_ref().map(|cs| cs.as_ref().into()));
 
-            fields.body_id = headers
-                .get(&RfcHeader::ContentId)
+            fields.body_id = part
+                .headers
+                .get_rfc(&RfcHeader::ContentId)
                 .and_then(|id| id.as_text_ref().map(|id| format!("<{}>", id).into()));
 
-            fields.body_description = headers
-                .get(&RfcHeader::ContentDescription)
+            fields.body_description = part
+                .headers
+                .get_rfc(&RfcHeader::ContentDescription)
                 .and_then(|ct| ct.as_text_ref().map(|ct| ct.into()));
 
-            fields.body_encoding = headers
-                .get(&RfcHeader::ContentTransferEncoding)
+            fields.body_encoding = part
+                .headers
+                .get_rfc(&RfcHeader::ContentTransferEncoding)
                 .and_then(|ct| ct.as_text_ref().map(|ct| ct.into()));
 
             fields.body_size_octets = body.as_ref().map(|b| b.len()).unwrap_or(0);
@@ -828,41 +832,49 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                     .map(|b| format!("{:x}", md5::compute(b)).into());
             }
 
-            extension.body_disposition = headers.get(&RfcHeader::ContentDisposition).map(|cd| {
-                let cd = cd.get_content_type();
+            extension.body_disposition =
+                part.headers
+                    .get_rfc(&RfcHeader::ContentDisposition)
+                    .map(|cd| {
+                        let cd = cd.get_content_type();
 
-                (
-                    cd.c_type.as_ref().into(),
-                    cd.attributes
-                        .as_ref()
-                        .map(|at| {
-                            #[cfg(not(test))]
-                            {
-                                at.iter()
-                                    .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
-                                    .collect::<Vec<_>>()
-                            }
+                        (
+                            cd.c_type.as_ref().into(),
+                            cd.attributes
+                                .as_ref()
+                                .map(|at| {
+                                    at.iter()
+                                        .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
+                                        .collect::<Vec<_>>()
 
-                            #[cfg(test)]
-                            {
-                                at.iter()
-                                    .collect::<std::collections::BTreeMap<_, _>>()
-                                    .into_iter()
-                                    .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
-                                    .collect::<Vec<_>>()
-                            }
-                        })
-                        .unwrap_or_default(),
-                )
-            });
+                                    /*#[cfg(not(test))]
+                                    {
+                                    }
 
-            extension.body_language = headers.get(&RfcHeader::ContentLanguage).and_then(|hv| {
-                hv.as_text_list()
-                    .map(|list| list.into_iter().map(|item| item.into()).collect())
-            });
+                                    #[cfg(test)]
+                                    {
+                                        at.iter()
+                                            .collect::<std::collections::BTreeMap<_, _>>()
+                                            .into_iter()
+                                            .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
+                                            .collect::<Vec<_>>()
+                                    }*/
+                                })
+                                .unwrap_or_default(),
+                        )
+                    });
 
-            extension.body_location = headers
-                .get(&RfcHeader::ContentLocation)
+            extension.body_language =
+                part.headers
+                    .get_rfc(&RfcHeader::ContentLanguage)
+                    .and_then(|hv| {
+                        hv.as_text_list()
+                            .map(|list| list.into_iter().map(|item| item.into()).collect())
+                    });
+
+            extension.body_location = part
+                .headers
+                .get_rfc(&RfcHeader::ContentLocation)
                 .and_then(|ct| ct.as_text_ref().map(|ct| ct.into()));
         }
 
@@ -971,13 +983,15 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 Section::HeaderFields { not, fields } => {
                     let mut headers =
                         Vec::with_capacity(part.offset_body.saturating_sub(part.offset_header));
-                    for (header, offset) in &part.headers_raw {
-                        let header = header.as_str();
-                        if fields.iter().any(|f| header.eq_ignore_ascii_case(f)) != *not {
-                            headers.extend_from_slice(header.as_bytes());
+                    for header in &part.headers {
+                        let header_name = header.name.as_str();
+                        if fields.iter().any(|f| header_name.eq_ignore_ascii_case(f)) != *not {
+                            headers.extend_from_slice(header_name.as_bytes());
                             headers.push(b':');
                             headers.extend_from_slice(
-                                raw_message.get(offset.start..offset.end).unwrap_or(b""),
+                                raw_message
+                                    .get(header.offset_start..header.offset_end)
+                                    .unwrap_or(b""),
                             );
                         }
                     }
@@ -1005,12 +1019,14 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 Section::Mime => {
                     let mut headers =
                         Vec::with_capacity(part.offset_body.saturating_sub(part.offset_header));
-                    for (header, offset) in &part.headers_raw {
-                        if header.is_mime_header() {
-                            headers.extend_from_slice(header.as_str().as_bytes());
+                    for header in &part.headers {
+                        if header.name.is_mime_header() {
+                            headers.extend_from_slice(header.name.as_str().as_bytes());
                             headers.extend_from_slice(b":");
                             headers.extend_from_slice(
-                                raw_message.get(offset.start..offset.end).unwrap_or(b""),
+                                raw_message
+                                    .get(header.offset_start..header.offset_end)
+                                    .unwrap_or(b""),
                             );
                         }
                     }
@@ -1160,12 +1176,30 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         Envelope {
             date: self.get_date().map(|dt| dt.to_timestamp()),
             subject: self.get_subject().map(|s| s.into()),
-            from: self.get_from().as_imap_address(),
-            sender: self.get_sender().as_imap_address(),
-            reply_to: self.get_reply_to().as_imap_address(),
-            to: self.get_to().as_imap_address(),
-            cc: self.get_cc().as_imap_address(),
-            bcc: self.get_bcc().as_imap_address(),
+            from: self
+                .get_header_values(RfcHeader::From)
+                .flat_map(|a| a.as_imap_address())
+                .collect(),
+            sender: self
+                .get_header_values(RfcHeader::Sender)
+                .flat_map(|a| a.as_imap_address())
+                .collect(),
+            reply_to: self
+                .get_header_values(RfcHeader::ReplyTo)
+                .flat_map(|a| a.as_imap_address())
+                .collect(),
+            to: self
+                .get_header_values(RfcHeader::To)
+                .flat_map(|a| a.as_imap_address())
+                .collect(),
+            cc: self
+                .get_header_values(RfcHeader::Cc)
+                .flat_map(|a| a.as_imap_address())
+                .collect(),
+            bcc: self
+                .get_header_values(RfcHeader::Bcc)
+                .flat_map(|a| a.as_imap_address())
+                .collect(),
             in_reply_to: self.get_in_reply_to().as_text_list().map(|list| {
                 let mut irt = String::with_capacity(list.len() * 10);
                 for (pos, l) in list.iter().enumerate() {
@@ -1263,9 +1297,10 @@ impl AsImapAddress for email::HeaderValue {
     }
 }
 
-impl<'x> AsImapAddress for mail_parser::HeaderValue<'x> {
+impl AsImapAddress for mail_parser::HeaderValue<'_> {
     fn as_imap_address(&self) -> Vec<fetch::Address> {
         let mut addresses = Vec::new();
+
         match self {
             mail_parser::HeaderValue::Address(addr) => {
                 if let Some(email) = &addr.address {
@@ -1319,13 +1354,9 @@ impl<'x> AsImapAddress for mail_parser::HeaderValue<'x> {
                     }));
                 }
             }
-            mail_parser::HeaderValue::Collection(col) => {
-                for addr in col.iter() {
-                    addresses.extend(addr.as_imap_address());
-                }
-            }
             _ => (),
         }
+
         addresses
     }
 }
