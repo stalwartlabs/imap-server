@@ -2,9 +2,9 @@ BODY (
    (
       "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL "7bit" 62 6
+      ) NIL NIL "7bit" 61 5
    ) (
-      "message" "rfc822" NIL NIL NIL "7bit" 1980 (
+      "message" "rfc822" NIL NIL NIL "7bit" 1979 (
          "Thu, 13 Aug 1998 07:42:41 +0000" "Map of Argentina with Description" (
             (
                "Bill Clinton" NIL "president" "whitehouse.gov"
@@ -25,7 +25,7 @@ BODY (
       ) (
          "image" "gif" (
             "name" "map_of_Argentina.gif"
-         ) NIL NIL "base64" 390
+         ) NIL NIL "base64" 389
       ) 0
    ) "mixed"
 )
@@ -34,9 +34,9 @@ BODYSTRUCTURE (
    (
       "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL "7bit" 62 6 "60268be6f44d0a55b25e2d89861a4d24" NIL NIL NIL
+      ) NIL NIL "7bit" 61 5 "63aa55d7eacd3e7d4af551d3d7f8fe46" NIL NIL NIL
    ) (
-      "message" "rfc822" NIL NIL NIL "7bit" 1980 (
+      "message" "rfc822" NIL NIL NIL "7bit" 1979 (
          "Thu, 13 Aug 1998 07:42:41 +0000" "Map of Argentina with Description" (
             (
                "Bill Clinton" NIL "president" "whitehouse.gov"
@@ -57,12 +57,12 @@ BODYSTRUCTURE (
       ) (
          "image" "gif" (
             "name" "map_of_Argentina.gif"
-         ) NIL NIL "base64" 390 "4f98fefe45219831dd01d5ee4ca3dad7" (
+         ) NIL NIL "base64" 389 "5359a63540c1a8eae06a27e8760e1501" (
             "inline" (
                "fi1ename" "map_of_Argentina.gif"
             )
          ) NIL NIL
-      ) 0 "d0099e824550091d469dd65763438b98" (
+      ) 0 "1522079b4114146b37ea1af171484a1a" (
          "inline" (
             
          )
@@ -72,7 +72,7 @@ BODYSTRUCTURE (
    ) NIL NIL NIL
 )
 
-BODY[] {2651}
+BODY[] {2652}
 From:  Al Gore <vice-president@whitehouse.gov>
 To:  White House Transportation Coordinator
      <transport@whitehouse.gov>
@@ -145,6 +145,7 @@ U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 --DC8------------DC8638F443D87A7F0726DEF7--
 
 --D7F------------D7FD5A0B8AB9C65CCDBFA872--
+
 
 BINARY.SIZE[] 0
 ----------------------------------
@@ -158,7 +159,7 @@ Content-Type: multipart/mixed;
 
 
 ----------------------------------
-BODY[TEXT] {2381}
+BODY[TEXT] {2382}
 This is a multi-part message in MIME format.
 --D7F------------D7FD5A0B8AB9C65CCDBFA872
 Content-Type: text/plain; charset=us-ascii
@@ -225,6 +226,7 @@ U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 
 --D7F------------D7FD5A0B8AB9C65CCDBFA872--
 
+
 ----------------------------------
 BODY[MIME] {98}
 Content-Type: multipart/mixed;
@@ -232,14 +234,13 @@ Content-Type: multipart/mixed;
 
 
 ----------------------------------
-BODY[1] {62}
+BODY[1] {61}
 Fred,
 
 Fire up Air Force One!  We're going South!
 
 Thanks,
 Al
-
 BINARY[1] {61}
 Fred,
 
@@ -255,14 +256,13 @@ Content-Transfer-Encoding: 7bit
 
 
 ----------------------------------
-BODY[1.TEXT] {62}
+BODY[1.TEXT] {61}
 Fred,
 
 Fire up Air Force One!  We're going South!
 
 Thanks,
 Al
-
 ----------------------------------
 BODY[1.MIME] {77}
 Content-Type: text/plain; charset=us-ascii
@@ -270,7 +270,7 @@ Content-Transfer-Encoding: 7bit
 
 
 ----------------------------------
-BODY[2] {1980}
+BODY[2] {1979}
 Return-Path: <president@whitehouse.gov>
 Received: from mailhost.whitehouse.gov ([192.168.51.200])
         by heartbeat.whitehouse.gov (8.8.8/8.8.8) with ESMTP id SAA22453
@@ -319,10 +319,9 @@ U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 7itICBxISKDBgwgTKjyYAAA7
 --DC8------------DC8638F443D87A7F0726DEF7--
 
-
 BINARY[2] {16}
 [binary content]
-BINARY.SIZE[2] 1980
+BINARY.SIZE[2] 1979
 ----------------------------------
 BODY[2.HEADER] {835}
 Return-Path: <president@whitehouse.gov>
@@ -383,7 +382,7 @@ Content-Type: multipart/mixed;
 
 
 ----------------------------------
-BODY[2.1] {356}
+BODY[2.1] {355}
 Hi A1,
 
 I finally figured out this MIME thing.  Pretty cool.  I'll send you
@@ -397,7 +396,6 @@ Argentina.  Try this for a much better map:
 Then again, shouldn't the CIA have something like that?
 
 Bill
-
 BINARY[2.1] {355}
 Hi A1,
 
@@ -420,7 +418,7 @@ Content-Transfer-Encoding: 7bit
 
 
 ----------------------------------
-BODY[2.1.TEXT] {356}
+BODY[2.1.TEXT] {355}
 Hi A1,
 
 I finally figured out this MIME thing.  Pretty cool.  I'll send you
@@ -434,7 +432,6 @@ Argentina.  Try this for a much better map:
 Then again, shouldn't the CIA have something like that?
 
 Bill
-
 ----------------------------------
 BODY[2.1.MIME] {77}
 Content-Type: text/plain; charset=us-ascii
@@ -442,14 +439,13 @@ Content-Transfer-Encoding: 7bit
 
 
 ----------------------------------
-BODY[2.2] {390}
+BODY[2.2] {389}
 R01GOD1hJQA1AKIAAP/////78P/omn19fQAAAAAAAAAAAAAAACwAAAAAJQA1AAAD7Qi63P5w
 wEmjBCLrnQnhYCgM1wh+pkgqqeC9XrutmBm7hAK3tP31gFcAiFKVQrGFR6kscnonTe7FAAad
 GugmRu3CmiBt57fsVq3Y0VFKnpYdxPC6M7Ze4crnnHum4oN6LFJ1bn5NXTN7OF5fQkN5WYow
 BEN2dkGQGWJtSzqGTICJgnQuTJN/WJsojad9qXMuhIWdjXKjY4tenjo6tjVssk2gaWq3uGNX
 U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 7itICBxISKDBgwgTKjyYAAA7
-
 BINARY[2.2] {16}
 [binary content]
 BINARY.SIZE[2.2] 288
@@ -461,14 +457,13 @@ Content-Disposition: inline; fi1ename="map_of_Argentina.gif"
 
 
 ----------------------------------
-BODY[2.2.TEXT] {390}
+BODY[2.2.TEXT] {389}
 R01GOD1hJQA1AKIAAP/////78P/omn19fQAAAAAAAAAAAAAAACwAAAAAJQA1AAAD7Qi63P5w
 wEmjBCLrnQnhYCgM1wh+pkgqqeC9XrutmBm7hAK3tP31gFcAiFKVQrGFR6kscnonTe7FAAad
 GugmRu3CmiBt57fsVq3Y0VFKnpYdxPC6M7Ze4crnnHum4oN6LFJ1bn5NXTN7OF5fQkN5WYow
 BEN2dkGQGWJtSzqGTICJgnQuTJN/WJsojad9qXMuhIWdjXKjY4tenjo6tjVssk2gaWq3uGNX
 U6ZGxseyk8SasGw3J9GRzdTQky1iHNvcPNNI4TLeKdfMvy0vMqLrItvuxfDW8ubjueDtJufz
 7itICBxISKDBgwgTKjyYAAA7
-
 ----------------------------------
 BODY[2.2.MIME] {150}
 Content-Type: image/gif; name="map_of_Argentina.gif"

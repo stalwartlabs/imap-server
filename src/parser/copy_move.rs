@@ -39,8 +39,12 @@ mod tests {
     fn parse_copy() {
         let mut receiver = Receiver::new();
 
-        for (command, arguments) in [(
-            "A003 COPY 2:4 MEETING\r\n",
+        assert_eq!(
+            receiver
+                .parse(&mut "A003 COPY 2:4 MEETING\r\n".as_bytes().iter())
+                .unwrap()
+                .parse_copy_move()
+                .unwrap(),
             copy_move::Arguments {
                 sequence_set: Sequence::Range {
                     start: 2.into(),
@@ -48,16 +52,7 @@ mod tests {
                 },
                 mailbox_name: "MEETING".to_string(),
                 tag: "A003".to_string(),
-            },
-        )] {
-            assert_eq!(
-                receiver
-                    .parse(&mut command.as_bytes().iter())
-                    .unwrap()
-                    .parse_copy_move()
-                    .unwrap(),
-                arguments
-            );
-        }
+            }
+        );
     }
 }

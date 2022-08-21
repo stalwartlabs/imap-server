@@ -1,5 +1,6 @@
-use std::{cmp::Ordering, collections::HashSet, fmt::Display};
+use std::{cmp::Ordering, fmt::Display};
 
+use ahash::AHashSet;
 use jmap_client::core::set::from_timestamp;
 
 use crate::core::{Command, Flag, ResponseCode, ResponseType, StatusResponse};
@@ -87,11 +88,11 @@ impl Sequence {
         }
     }
 
-    pub fn expand(&self, max_value: u32) -> HashSet<u32> {
+    pub fn expand(&self, max_value: u32) -> AHashSet<u32> {
         match self {
-            Sequence::Number { value } => HashSet::from_iter([*value]),
+            Sequence::Number { value } => AHashSet::from_iter([*value]),
             Sequence::List { items } => {
-                let mut result = HashSet::with_capacity(items.len());
+                let mut result = AHashSet::with_capacity(items.len());
                 for item in items {
                     match item {
                         Sequence::Number { value } => {
@@ -118,7 +119,7 @@ impl Sequence {
                 result
             }
             Sequence::Range { start, end } => {
-                let mut result = HashSet::new();
+                let mut result = AHashSet::new();
                 let start = start.unwrap_or(max_value);
                 let end = end.unwrap_or(max_value);
                 match start.cmp(&end) {
@@ -134,7 +135,7 @@ impl Sequence {
                 }
                 result
             }
-            _ => HashSet::new(),
+            _ => AHashSet::new(),
         }
     }
 }

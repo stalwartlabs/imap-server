@@ -1,4 +1,4 @@
-use crate::core::config::load_config;
+use crate::core::config::{load_config, UnwrapFailure};
 use crate::core::listener::spawn_listener;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
@@ -7,7 +7,7 @@ use futures::stream::StreamExt;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
 use tokio::sync::watch;
-use tracing::info;
+use tracing::{info, Level};
 
 use crate::core::env_settings::EnvSettings;
 
@@ -22,7 +22,13 @@ const IMAP4_PORT: u16 = 143;
 const IMAP4_PORT_TLS: u16 = 993;
 
 async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
-    tracing_subscriber::fmt::init();
+    // Enable logging
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_max_level(settings.parse("log-level").unwrap_or(Level::ERROR))
+            .finish(),
+    )
+    .failed_to("set default subscriber.");
 
     // Read configuration parameters
     let bind_addr = SocketAddr::from((

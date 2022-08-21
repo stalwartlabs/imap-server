@@ -82,9 +82,8 @@ impl Session {
                 .await
             }
             Err(response) => {
-                return self
-                    .write_bytes(response.with_tag(request.tag).into_bytes())
-                    .await;
+                self.write_bytes(response.with_tag(request.tag).into_bytes())
+                    .await
             }
         }
     }
@@ -109,7 +108,11 @@ impl SessionData {
 
                 if let Some(sequence) = sequence {
                     filters.push(Filter::id(
-                        mailbox.sequence_to_jmap(&sequence, true).await?.into_keys(),
+                        mailbox
+                            .sequence_to_jmap(&sequence, true)
+                            .await?
+                            .into_iter()
+                            .map(|(k, _)| k),
                     ));
                 }
 

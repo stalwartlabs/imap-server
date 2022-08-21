@@ -6,7 +6,7 @@ use tracing::warn;
 
 use super::{env_settings::EnvSettings, Core};
 
-pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1/.well-known/jmap";
+pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1";
 
 pub fn load_config(settings: &EnvSettings) -> Core {
     Core {
@@ -14,9 +14,9 @@ pub fn load_config(settings: &EnvSettings) -> Core {
             sled::open(
                 settings
                     .get("cache-dir")
-                    .expect("Missing cache-dir parameter."),
+                    .failed_to("start server: Missing cache-dir parameter."),
             )
-            .expect("Failed to open database"),
+            .failed_to("open database"),
         ),
         worker_pool: rayon::ThreadPoolBuilder::new()
             .num_threads(
@@ -56,36 +56,75 @@ pub fn load_tls_config(settings: &EnvSettings) -> rustls::ServerConfig {
     {
         (cert_path, key_path)
     } else {
-        panic!("Missing TLS 'cert-path' and/or 'key-path' parameters.");
+        failed_to("load TLS config: Missing 'cert-path' and/or 'key-path' parameters.");
     };
 
     let certificates: Vec<Certificate> = certs(&mut BufReader::new(
-        File::open(&cert_path).expect("Failed to open certificate path"),
+        File::open(&cert_path).failed_to("open certificate path"),
     ))
-    .expect("Invalid certificate file")
+    .failed_to("load TLS config: Invalid certificate file")
     .into_iter()
     .map(Certificate)
     .collect();
 
     let mut private_keys: Vec<PrivateKey> = pkcs8_private_keys(&mut BufReader::new(
-        File::open(&key_path).expect("Failed to open private key path"),
+        File::open(&key_path).failed_to("open private key path"),
     ))
-    .expect("Invalid private key file")
+    .failed_to("load TLS config: Invalid private key file")
     .into_iter()
     .map(PrivateKey)
     .collect();
 
     if certificates.is_empty() {
-        panic!("No certificates found in file {}", &cert_path);
+        failed_to(&format!(
+            "load TLS config: No certificates found in file {}",
+            &cert_path
+        ));
     }
 
     if private_keys.is_empty() {
-        panic!("No private keys found in file {}", &key_path);
+        failed_to(&format!(
+            "load TLS config: No private keys found in file {}",
+            &key_path
+        ));
     }
 
     rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(certificates, private_keys.remove(0))
-        .expect("Failed to load TLS configuration")
+        .failed_to("load TLS configuration")
+}
+
+pub trait UnwrapFailure<T> {
+    fn failed_to(self, action: &str) -> T;
+}
+
+impl<T> UnwrapFailure<T> for Option<T> {
+    fn failed_to(self, message: &str) -> T {
+        match self {
+            Some(result) => result,
+            None => {
+                println!("Failed to {}", message);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl<T, E: std::fmt::Display> UnwrapFailure<T> for Result<T, E> {
+    fn failed_to(self, message: &str) -> T {
+        match self {
+            Ok(result) => result,
+            Err(err) => {
+                println!("Failed to {}: {}", message, err);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+pub fn failed_to(action: &str) -> ! {
+    println!("Failed to {}", action);
+    std::process::exit(1);
 }

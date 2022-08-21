@@ -2,14 +2,14 @@ BODY (
    (
       "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL "7bit" 46 2
+      ) NIL NIL "7bit" 45 1
    ) (
       (
-         "message" "rfc822" NIL NIL NIL NIL 101 (
+         "message" NIL NIL NIL NIL NIL 100 (
             "Fri, 26 Mar 1993 09:13:32 +0000" "my opinion" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0
       ) (
-         "message" "rfc822" NIL NIL NIL NIL 126 (
+         "message" NIL NIL NIL NIL NIL 125 (
             "Fri, 26 Mar 1993 15:07:13 +0000" "my different opinion" NIL NIL NIL NIL NIL NIL NIL NIL
          ) NIL 0
       ) "digest"
@@ -20,16 +20,16 @@ BODYSTRUCTURE (
    (
       "text" "plain" (
          "charset" "us-ascii"
-      ) NIL NIL "7bit" 46 2 "a4660602a5b6f1a77c4b0f611a30973c" NIL NIL NIL
+      ) NIL NIL "7bit" 45 1 "f7f7e917e54763330bc648984459b38e" NIL NIL NIL
    ) (
       (
-         "message" "rfc822" NIL NIL NIL NIL 101 (
+         "message" NIL NIL NIL NIL NIL 100 (
             "Fri, 26 Mar 1993 09:13:32 +0000" "my opinion" NIL NIL NIL NIL NIL NIL NIL NIL
-         ) NIL 0 "99227c358833cb35bb29ed071a7ec7e0" NIL NIL NIL
+         ) NIL 0 "ef1527984c599523c90fb184a8fdfd61" NIL NIL NIL
       ) (
-         "message" "rfc822" NIL NIL NIL NIL 126 (
+         "message" NIL NIL NIL NIL NIL 125 (
             "Fri, 26 Mar 1993 15:07:13 +0000" "my different opinion" NIL NIL NIL NIL NIL NIL NIL NIL
-         ) NIL 0 "ea613f80b181d7ffb2e8ad38820a48e5" NIL NIL NIL
+         ) NIL 0 "9609bccef55fba1208046885cdcc9db8" NIL NIL NIL
       ) "digest" (
          "boundary" "---- next message ----"
       ) NIL NIL NIL
@@ -38,7 +38,7 @@ BODYSTRUCTURE (
    ) NIL NIL NIL
 )
 
-BODY[] {727}
+BODY[] {728}
 From: Moderator-Address
 To: Recipient-List
 Date: Mon, 22 Mar 1994 13:34:51 +0000
@@ -74,6 +74,7 @@ Subject: my different opinion
 ------ next message ------
 
 ------ main boundary ------
+
 
 BINARY.SIZE[] 0
 ----------------------------------
@@ -88,7 +89,7 @@ Content-Type: multipart/mixed;
 
 
 ----------------------------------
-BODY[TEXT] {513}
+BODY[TEXT] {514}
 ------ main boundary ----
 
 ...Introductory text or table of contents...
@@ -117,6 +118,7 @@ Subject: my different opinion
 
 ------ main boundary ------
 
+
 ----------------------------------
 BODY[MIME] {80}
 Content-Type: multipart/mixed;
@@ -124,9 +126,8 @@ Content-Type: multipart/mixed;
 
 
 ----------------------------------
-BODY[1] {46}
+BODY[1] {45}
 ...Introductory text or table of contents...
-
 
 BINARY[1] {45}
 ...Introductory text or table of contents...
@@ -137,9 +138,8 @@ BODY[1.HEADER] {1}
 
 
 ----------------------------------
-BODY[1.TEXT] {46}
+BODY[1.TEXT] {45}
 ...Introductory text or table of contents...
-
 
 ----------------------------------
 BODY[1.MIME] {2}
@@ -199,17 +199,16 @@ Content-Type: multipart/digest;
 
 
 ----------------------------------
-BODY[2.1] {101}
+BODY[2.1] {100}
 From: someone-else
 Date: Fri, 26 Mar 1993 11:13:32 +0200
 Subject: my opinion
 
 ...body goes here ...
 
-
 BINARY[2.1] {16}
 [binary content]
-BINARY.SIZE[2.1] 101
+BINARY.SIZE[2.1] 100
 ----------------------------------
 BODY[2.1.HEADER] {78}
 From: someone-else
@@ -218,26 +217,24 @@ Subject: my opinion
 
 
 ----------------------------------
-BODY[2.1.TEXT] {23}
+BODY[2.1.TEXT] {22}
 ...body goes here ...
-
 
 ----------------------------------
 BODY[2.1.MIME] {2}
 
 
 ----------------------------------
-BODY[2.2] {126}
+BODY[2.2] {125}
 From: someone-else-again
 Date: Fri, 26 Mar 1993 10:07:13 -0500
 Subject: my different opinion
 
 ... another body goes here ...
 
-
 BINARY[2.2] {16}
 [binary content]
-BINARY.SIZE[2.2] 126
+BINARY.SIZE[2.2] 125
 ----------------------------------
 BODY[2.2.HEADER] {94}
 From: someone-else-again
@@ -246,9 +243,8 @@ Subject: my different opinion
 
 
 ----------------------------------
-BODY[2.2.TEXT] {32}
+BODY[2.2.TEXT] {31}
 ... another body goes here ...
-
 
 ----------------------------------
 BODY[2.2.MIME] {2}

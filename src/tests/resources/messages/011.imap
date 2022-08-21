@@ -1,0 +1,211 @@
+BODY (
+   "message" "rfc822" NIL NIL NIL NIL 271 NIL NIL 0
+)
+
+BODYSTRUCTURE (
+   "message" "rfc822" NIL NIL NIL NIL 271 NIL NIL 0 "4935800d6cfad87d931093820097206a" NIL NIL NIL
+)
+
+BODY[] {379}
+From: user@domain.org
+Date: Sat, 24 Mar 2007 23:00:00 +0200
+Mime-Version: 1.0
+Content-Type: message/rfc822
+
+From: sub@domain.org
+Date: Sun, 12 Aug 2012 12:34:56 +0300
+Subject: submsg
+Content-Type: multipart/digest; boundary="foo"
+
+prologue
+
+--foo 
+
+From: m1@example.com
+Subject: m1
+
+m1 body
+
+--foo 
+X-Mime: m2 header
+
+From: m2@example.com
+Subject: m2
+
+m2 body
+
+--foo--
+
+epilogue
+
+BINARY[] {16}
+[binary content]
+BINARY.SIZE[] 260
+----------------------------------
+BODY[HEADER] {108}
+From: user@domain.org
+Date: Sat, 24 Mar 2007 23:00:00 +0200
+Mime-Version: 1.0
+Content-Type: message/rfc822
+
+
+----------------------------------
+BODY[TEXT] {271}
+From: sub@domain.org
+Date: Sun, 12 Aug 2012 12:34:56 +0300
+Subject: submsg
+Content-Type: multipart/digest; boundary="foo"
+
+prologue
+
+--foo 
+
+From: m1@example.com
+Subject: m1
+
+m1 body
+
+--foo 
+X-Mime: m2 header
+
+From: m2@example.com
+Subject: m2
+
+m2 body
+
+--foo--
+
+epilogue
+
+----------------------------------
+BODY[MIME] {31}
+Content-Type: message/rfc822
+
+
+----------------------------------
+BODY[1] {271}
+From: sub@domain.org
+Date: Sun, 12 Aug 2012 12:34:56 +0300
+Subject: submsg
+Content-Type: multipart/digest; boundary="foo"
+
+prologue
+
+--foo 
+
+From: m1@example.com
+Subject: m1
+
+m1 body
+
+--foo 
+X-Mime: m2 header
+
+From: m2@example.com
+Subject: m2
+
+m2 body
+
+--foo--
+
+epilogue
+
+----------------------------------
+BODY[1.HEADER] {123}
+From: sub@domain.org
+Date: Sun, 12 Aug 2012 12:34:56 +0300
+Subject: submsg
+Content-Type: multipart/digest; boundary="foo"
+
+
+----------------------------------
+BODY[1.TEXT] {138}
+prologue
+
+--foo 
+
+From: m1@example.com
+Subject: m1
+
+m1 body
+
+--foo 
+X-Mime: m2 header
+
+From: m2@example.com
+Subject: m2
+
+m2 body
+
+--foo--
+
+----------------------------------
+BODY[1.MIME] {49}
+Content-Type: multipart/digest; boundary="foo"
+
+
+----------------------------------
+BODY[1.1] {42}
+From: m1@example.com
+Subject: m1
+
+m1 body
+
+----------------------------------
+BODY[1.1.HEADER] {34}
+From: m1@example.com
+Subject: m1
+
+
+----------------------------------
+BODY[1.1.TEXT] {8}
+m1 body
+
+----------------------------------
+BODY[1.1.MIME] {2}
+
+
+----------------------------------
+BODY[1.2] {42}
+From: m2@example.com
+Subject: m2
+
+m2 body
+
+----------------------------------
+BODY[1.2.HEADER] {34}
+From: m2@example.com
+Subject: m2
+
+
+----------------------------------
+BODY[1.2.TEXT] {8}
+m2 body
+
+----------------------------------
+BODY[1.2.MIME] {2}
+
+
+----------------------------------
+BODY[HEADER.FIELDS (FROM TO)] {24}
+From: user@domain.org
+
+
+----------------------------------
+BODY[HEADER.FIELDS (FROM TO)]<10> {14}
+@domain.org
+
+
+----------------------------------
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)] {109}
+From: user@domain.org
+Date: Sat, 24 Mar 2007 23:00:00 +0200
+MIME-Version: 1.0
+Content-Type: message/rfc822
+
+
+----------------------------------
+BODY[HEADER.FIELDS.NOT (SUBJECT CC)]<10> {25}
+@domain.org
+Date: Sat, 24
+----------------------------------

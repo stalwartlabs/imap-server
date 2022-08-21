@@ -7,8 +7,9 @@ resolver = "2"
 [dependencies]
 jmap-client = { path = "/home/vagrant/code/jmap-client", features = ["websockets"] } #TODO: remove local path
 mail-parser = { path = "/home/vagrant/code/mail-parser" } #TODO: remove local path
+ahash = "0.8.0"
 chrono = { version = "0.4"}
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3.15"
 tracing = "0.1"
 rustls = "0.20"
 rustls-pemfile = "1.0"

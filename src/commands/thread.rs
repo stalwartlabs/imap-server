@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
+use ahash::AHashMap;
 use jmap_client::{core::response::MethodResponse, email::Property};
 use tracing::debug;
 
@@ -60,7 +61,7 @@ impl SessionData {
             .unwrap_or(500);
         let mut position = 0;
         let mut jmap_ids = Vec::new();
-        let mut threads = HashMap::new();
+        let mut threads = AHashMap::new();
         loop {
             let mut total = 0;
             let mut request = self.client.build();

@@ -1,9 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::SystemTime,
-};
+use std::{sync::Arc, time::SystemTime};
 
+use ahash::{AHashMap, AHashSet};
 use jmap_client::email::query::Filter;
 use tokio::sync::oneshot;
 use tracing::{debug, error};
@@ -137,7 +134,7 @@ impl Core {
                 .iter()
                 .enumerate()
                 .map(|(pos, id)| (id.as_bytes(), pos))
-                .collect::<HashMap<_, _>>();
+                .collect::<AHashMap<_, _>>();
             let mut imap_uids = Vec::with_capacity(update_jmap_ids.len());
             let mut jmap_ids = Vec::with_capacity(update_jmap_ids.len());
             let mut found_ids = vec![0u8; update_jmap_ids.len()];
@@ -448,7 +445,7 @@ impl Core {
             .mailbox_data
             .keys()
             .map(|id| id.as_bytes().to_vec())
-            .collect::<HashSet<_>>();
+            .collect::<AHashSet<_>>();
 
         let db = self.db.clone();
         self.spawn_worker(move || {
@@ -501,9 +498,9 @@ impl SelectedMailbox {
         &self,
         sequence: &Sequence,
         is_uid: bool,
-    ) -> crate::core::Result<HashMap<String, ImapId>> {
+    ) -> crate::core::Result<AHashMap<String, ImapId>> {
         if !sequence.is_saved_search() {
-            let mut ids = HashMap::new();
+            let mut ids = AHashMap::new();
             let state = self.state.lock();
             if state.imap_uids.is_empty() {
                 return Ok(ids);
@@ -534,7 +531,7 @@ impl SelectedMailbox {
                 .get_saved_search()
                 .await
                 .ok_or_else(|| StatusResponse::no("No saved search found."))?;
-            let mut ids = HashMap::with_capacity(saved_ids.len());
+            let mut ids = AHashMap::with_capacity(saved_ids.len());
             let state = self.state.lock();
 
             for imap_id in saved_ids.iter() {
@@ -828,10 +825,9 @@ pub fn increment_uid(old: Option<&[u8]>) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{BTreeMap, HashMap},
-        sync::Arc,
-    };
+    use std::{collections::BTreeMap, sync::Arc};
+
+    use ahash::AHashMap;
 
     use crate::{
         core::{
@@ -1030,7 +1026,7 @@ mod tests {
             account_id: "john".to_string(),
             prefix: None,
             mailbox_names: BTreeMap::new(),
-            mailbox_data: HashMap::from_iter([("folder_id".to_string(), Mailbox::default())]),
+            mailbox_data: AHashMap::from_iter([("folder_id".to_string(), Mailbox::default())]),
             mailbox_state: String::new(),
             modseq: None,
         })

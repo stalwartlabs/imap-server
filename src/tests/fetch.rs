@@ -18,7 +18,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     .await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("FLAGS (Flag_009)")
+        .assert_contains("FLAGS (flag_009)")
         .assert_contains("RFC822.SIZE 1457")
         .assert_contains("UID 10")
         .assert_contains("INTERNALDATE")
@@ -40,7 +40,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         ))
         .assert_contains(concat!(
             "BODYSTRUCTURE ((\"text\" \"html\" (\"charset\" \"us-ascii\") NIL NIL ",
-            "\"base64\" 240 4 \"bbd48b00b757cefb9bb72d53a4cdb531\" NIL NIL NIL) ",
+            "\"base64\" 239 3 \"07aab44e51c5f1833a5d19f2e1804c4b\" NIL NIL NIL) ",
             "(\"message\" \"rfc822\" NIL NIL NIL NIL 724 ",
             "(NIL \"Exporting my book about coffee tables\" ",
             "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
@@ -48,7 +48,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
             "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
             "NIL NIL NIL NIL NIL) ",
             "(\"image\" \"gif\" (\"name\" \"Book about ☕ tables.gif\") ",
-            "NIL NIL \"Base64\" 57 \"753818204af22e11ee8cefb153004fc7\" ",
+            "NIL NIL \"Base64\" 56 \"d40fa7f401e9dc2df56cbb740d65ff52\" ",
             "(\"attachment\" ()) NIL NIL) 0 \"fea0d696b570c4904fa45f401566fc57\" ",
             "NIL NIL NIL) \"mixed\" (\"boundary\" \"festivus\") NIL NIL NIL)"
         ));
@@ -63,7 +63,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .await
         .assert_contains("BINARY[1] {175}")
         .assert_contains("BINARY.SIZE[1] 175")
-        .assert_contains("BODY[1.TEXT] {240}")
+        .assert_contains("BODY[1.TEXT] {239}")
         .assert_contains("BODY[2.1.HEADER] {88}")
         .assert_contains("BINARY[2.1] {101}")
         .assert_contains("BODY[MIME] {54}")
@@ -78,7 +78,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     imap.send("UID FETCH 10 (FLAGS)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("FLAGS (Flag_009)");
+        .assert_contains("FLAGS (flag_009)");
 
     // Switch to SELECT mode
     imap.send("SELECT INBOX").await;
@@ -91,13 +91,13 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .await
         .assert_contains("BINARY[1] {175}")
         .assert_contains("BINARY.SIZE[1] 175")
-        .assert_contains("BODY[1.TEXT] {240}");
+        .assert_contains("BODY[1.TEXT] {239}");
 
     // PEEK was used, \Seen should not be set
     imap.send("UID FETCH 10 (FLAGS)").await;
     imap.assert_read(Type::Tagged, ResponseType::Ok)
         .await
-        .assert_contains("FLAGS (Flag_009)");
+        .assert_contains("FLAGS (flag_009)");
 
     // Fetching a body section should set the \Seen flag
     imap.send("UID FETCH 10 (BODY[1.TEXT])").await;

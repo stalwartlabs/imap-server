@@ -102,22 +102,21 @@ mod tests {
     fn parse_status() {
         let mut receiver = Receiver::new();
 
-        for (command, arguments) in [(
-            "A042 STATUS blurdybloop (UIDNEXT MESSAGES)\r\n",
+        assert_eq!(
+            receiver
+                .parse(
+                    &mut "A042 STATUS blurdybloop (UIDNEXT MESSAGES)\r\n"
+                        .as_bytes()
+                        .iter()
+                )
+                .unwrap()
+                .parse_status(ProtocolVersion::Rev2)
+                .unwrap(),
             status::Arguments {
                 tag: "A042".to_string(),
                 mailbox_name: "blurdybloop".to_string(),
                 items: vec![status::Status::UidNext, status::Status::Messages],
-            },
-        )] {
-            assert_eq!(
-                receiver
-                    .parse(&mut command.as_bytes().iter())
-                    .unwrap()
-                    .parse_status(ProtocolVersion::Rev2)
-                    .unwrap(),
-                arguments
-            );
-        }
+            }
+        );
     }
 }

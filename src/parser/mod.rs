@@ -79,7 +79,7 @@ impl Flag {
     pub fn parse_imap(value: Vec<u8>) -> Result<Self> {
         Ok(
             match value
-                .get(0)
+                .first()
                 .ok_or_else(|| Cow::from("Null flags are not allowed."))?
             {
                 b'\\' => {

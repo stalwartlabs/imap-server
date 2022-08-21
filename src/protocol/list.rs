@@ -312,56 +312,53 @@ mod tests {
 
     #[test]
     fn serialize_list() {
-        for (mut response, _tag, expected_v2, expected_v1) in [(
-            super::Response {
-                list_items: vec![
-                    ListItem {
-                        mailbox_name: "INBOX".to_string(),
-                        attributes: vec![Attribute::Subscribed],
-                        tags: vec![],
-                    },
-                    ListItem {
-                        mailbox_name: "foo".to_string(),
-                        attributes: vec![],
-                        tags: vec![Tag::ChildInfo(vec![ChildInfo::Subscribed])],
-                    },
-                ],
-                status_items: vec![
-                    StatusItem {
-                        mailbox_name: "INBOX".to_string(),
-                        items: vec![(Status::Messages, StatusItemType::Number(17))],
-                    },
-                    StatusItem {
-                        mailbox_name: "foo".to_string(),
-                        items: vec![
-                            (Status::Messages, StatusItemType::Number(30)),
-                            (Status::Unseen, StatusItemType::Number(29)),
-                        ],
-                    },
-                ],
-                is_lsub: false,
-                is_rev2: true,
-            },
-            "A01",
-            concat!(
-                "* LIST (\\Subscribed) \"/\" \"INBOX\"\r\n",
-                "* LIST () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
-                "* STATUS \"INBOX\" (MESSAGES 17)\r\n",
-                "* STATUS \"foo\" (MESSAGES 30 UNSEEN 29)\r\n",
-            ),
-            concat!(
-                "* LSUB (\\Subscribed) \"/\" \"INBOX\"\r\n",
-                "* LSUB () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
-            ),
-        )] {
-            let response_v2 = String::from_utf8(response.clone().serialize()).unwrap();
-            response.is_rev2 = false;
-            response.is_lsub = true;
-            response.status_items.clear();
-            let response_v1 = String::from_utf8(response.serialize()).unwrap();
+        let mut response = super::Response {
+            list_items: vec![
+                ListItem {
+                    mailbox_name: "INBOX".to_string(),
+                    attributes: vec![Attribute::Subscribed],
+                    tags: vec![],
+                },
+                ListItem {
+                    mailbox_name: "foo".to_string(),
+                    attributes: vec![],
+                    tags: vec![Tag::ChildInfo(vec![ChildInfo::Subscribed])],
+                },
+            ],
+            status_items: vec![
+                StatusItem {
+                    mailbox_name: "INBOX".to_string(),
+                    items: vec![(Status::Messages, StatusItemType::Number(17))],
+                },
+                StatusItem {
+                    mailbox_name: "foo".to_string(),
+                    items: vec![
+                        (Status::Messages, StatusItemType::Number(30)),
+                        (Status::Unseen, StatusItemType::Number(29)),
+                    ],
+                },
+            ],
+            is_lsub: false,
+            is_rev2: true,
+        };
+        let expected_v2 = concat!(
+            "* LIST (\\Subscribed) \"/\" \"INBOX\"\r\n",
+            "* LIST () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
+            "* STATUS \"INBOX\" (MESSAGES 17)\r\n",
+            "* STATUS \"foo\" (MESSAGES 30 UNSEEN 29)\r\n",
+        );
+        let expected_v1 = concat!(
+            "* LSUB (\\Subscribed) \"/\" \"INBOX\"\r\n",
+            "* LSUB () \"/\" \"foo\" (\"CHILDINFO\" (\"SUBSCRIBED\"))\r\n",
+        );
 
-            assert_eq!(response_v2, expected_v2);
-            assert_eq!(response_v1, expected_v1);
-        }
+        let response_v2 = String::from_utf8(response.clone().serialize()).unwrap();
+        response.is_rev2 = false;
+        response.is_lsub = true;
+        response.status_items.clear();
+        let response_v1 = String::from_utf8(response.serialize()).unwrap();
+
+        assert_eq!(response_v2, expected_v2);
+        assert_eq!(response_v1, expected_v1);
     }
 }

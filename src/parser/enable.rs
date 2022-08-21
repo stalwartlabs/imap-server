@@ -57,21 +57,16 @@ mod tests {
     fn parse_enable() {
         let mut receiver = Receiver::new();
 
-        for (command, arguments) in [(
-            "t2 ENABLE IMAP4rev2 CONDSTORE\r\n",
+        assert_eq!(
+            receiver
+                .parse(&mut "t2 ENABLE IMAP4rev2 CONDSTORE\r\n".as_bytes().iter())
+                .unwrap()
+                .parse_enable()
+                .unwrap(),
             enable::Arguments {
                 tag: "t2".to_string(),
                 capabilities: vec![Capability::IMAP4rev2, Capability::CondStore],
-            },
-        )] {
-            assert_eq!(
-                receiver
-                    .parse(&mut command.as_bytes().iter())
-                    .unwrap()
-                    .parse_enable()
-                    .unwrap(),
-                arguments
-            );
-        }
+            }
+        );
     }
 }

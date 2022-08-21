@@ -73,7 +73,11 @@ impl Session {
     }
 
     pub async fn authenticate(&mut self, credentials: Credentials, tag: String) -> Result<(), ()> {
-        match Client::connect(&self.core.jmap_url, credentials).await {
+        match Client::new()
+            .credentials(credentials)
+            .connect(&self.core.jmap_url)
+            .await
+        {
             Ok(client) => {
                 // Fetch mailboxes
                 let mailboxes = self

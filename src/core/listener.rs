@@ -11,7 +11,7 @@ use crate::{
     protocol::capability::Capability,
 };
 
-use super::{Core, ResponseCode, StatusResponse};
+use super::{config::failed_to, Core, ResponseCode, StatusResponse};
 
 static SERVER_GREETING: &str = concat!(
     "Stalwart IMAP4rev2 v",
@@ -27,7 +27,7 @@ pub async fn spawn_listener(
 ) {
     // Start listening for IMAP connections.
     let listener = TcpListener::bind(bind_addr).await.unwrap_or_else(|e| {
-        panic!("Failed to bind to {}: {}", bind_addr, e);
+        failed_to(&format!("bind to {}: {}", bind_addr, e));
     });
 
     tokio::spawn(async move {

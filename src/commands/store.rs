@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
+use ahash::AHashMap;
 use jmap_client::{core::response::MethodResponse, email::Property};
 use tracing::debug;
 
@@ -111,7 +112,7 @@ impl SessionData {
             match request.send_changes_email().await {
                 Ok(changes) => {
                     let mut modified = Vec::new();
-                    let mut unchanged_ids = HashMap::with_capacity(ids.len());
+                    let mut unchanged_ids = AHashMap::with_capacity(ids.len());
                     let mut sequence_set = arguments.sequence_set.expand(if is_uid {
                         mailbox.state.lock().imap_uids.last().copied().unwrap_or(0)
                     } else {

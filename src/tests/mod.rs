@@ -10,8 +10,9 @@ pub mod search;
 pub mod store;
 pub mod thread;
 
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
+use ahash::AHashMap;
 use jmap_client::client::Client;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf},
@@ -24,7 +25,8 @@ use crate::{
 };
 
 #[tokio::test]
-pub async fn test_server() {
+#[ignore]
+pub async fn imap_tests() {
     // Prepare settings
     let (settings, temp_dir) = init_settings(true);
 
@@ -35,12 +37,11 @@ pub async fn test_server() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Tests expect Stalwart JMAP server to be running on http://127.0.0.1:8080
-    let jmap = Client::connect(
-        "http://127.0.0.1:8080/.well-known/jmap",
-        ("admin", "changeme"),
-    )
-    .await
-    .unwrap();
+    let jmap = Client::new()
+        .credentials(("admin", "changeme"))
+        .connect("http://127.0.0.1:8080")
+        .await
+        .unwrap();
 
     // Create test acounts
     jmap.domain_create("example.com").await.unwrap();
@@ -382,7 +383,7 @@ pub fn init_settings(delete_if_exists: bool) -> (EnvSettings, PathBuf) {
 
     (
         EnvSettings {
-            args: HashMap::from_iter(
+            args: AHashMap::from_iter(
                 vec![
                     (
                         "cache-dir".to_string(),
@@ -396,13 +397,11 @@ pub fn init_settings(delete_if_exists: bool) -> (EnvSettings, PathBuf) {
                         "cert-path".to_string(),
                         cert_path.to_str().unwrap().to_string(),
                     ),
-                    (
-                        "jmap-url".to_string(),
-                        "http://127.0.0.1:8080/.well-known/jmap".to_string(),
-                    ),
+                    ("jmap-url".to_string(), "http://127.0.0.1:8080".to_string()),
                     ("bind-addr".to_string(), "127.0.0.1".to_string()),
                     ("bind-port".to_string(), "9991".to_string()),
                     ("bind-port-tls".to_string(), "9992".to_string()),
+                    ("log-level".to_string(), "error".to_string()),
                 ]
                 .into_iter(),
             ),

@@ -6,11 +6,12 @@ use super::{
     },
     Core,
 };
+use ahash::AHashMap;
 use jmap_client::{
     client::Client,
     mailbox::{Property, Role},
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use tracing::{debug, error};
 
 #[derive(Debug, Default)]
@@ -32,7 +33,7 @@ pub struct Account {
     pub prefix: Option<String>,
     pub mailbox_state: String,
     pub mailbox_names: BTreeMap<String, String>,
-    pub mailbox_data: HashMap<String, Mailbox>,
+    pub mailbox_data: AHashMap<String, Mailbox>,
     pub modseq: Option<u32>,
 }
 
@@ -171,7 +172,7 @@ impl Core {
             account_id,
             prefix: mailbox_prefix,
             mailbox_names: BTreeMap::new(),
-            mailbox_data: HashMap::with_capacity(result.len()),
+            mailbox_data: AHashMap::with_capacity(result.len()),
             mailbox_state,
             modseq: None,
         };

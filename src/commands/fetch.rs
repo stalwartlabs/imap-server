@@ -1,5 +1,6 @@
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
+use ahash::AHashMap;
 use jmap_client::email::{self, Header, Property};
 use mail_parser::{GetHeader, Message, MessageAttachment, PartType, RfcHeader};
 use tracing::debug;
@@ -167,7 +168,7 @@ impl SessionData {
                             .with_tag(arguments.tag);
                     }
                     let mut changed_ids =
-                        HashMap::with_capacity(changes.created().len() + changes.updated().len());
+                        AHashMap::with_capacity(changes.created().len() + changes.updated().len());
                     for jmap_id in changes
                         .take_created()
                         .into_iter()
@@ -943,11 +944,22 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         while let Some(section) = sections_iter.next() {
             match section {
                 Section::Part { num } => {
-                    part = message.parts.get(
-                        *part
-                            .get_sub_parts()?
-                            .get((*num).saturating_sub(1) as usize)?,
-                    )?;
+                    part = part
+                        .get_sub_parts()
+                        .and_then(|sub_part_ids| {
+                            sub_part_ids
+                                .get((*num).saturating_sub(1) as usize)
+                                .and_then(|pos| message.parts.get(*pos))
+                        })
+                        .or_else(|| {
+                            // Special case when rfc/822 is the only part
+                            if *num == 1 && part.is_message() {
+                                Some(part)
+                            } else {
+                                None
+                            }
+                        })?;
+
                     if let (PartType::Message(nested_message), Some(_)) =
                         (&part.body, sections_iter.peek())
                     {
@@ -1386,6 +1398,7 @@ mod tests {
             if file_name.extension().map_or(true, |e| e != "txt") {
                 continue;
             }
+
             let raw_message = fs::read(&file_name).unwrap();
             let message = Message::parse(&raw_message).unwrap();
             let mut buf = Vec::new();
