@@ -87,7 +87,7 @@ impl Receiver {
             message,
         );
         self.buf = Vec::with_capacity(10);
-        self.state = State::Tag;
+        self.state = State::Start;
         self.current_request_size = 0;
         err
     }

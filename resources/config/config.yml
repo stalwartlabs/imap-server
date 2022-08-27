@@ -1,0 +1,42 @@
+######################################################
+#                                                    #
+#               Stalwart IMAP config                 #
+#                                                    #
+######################################################
+
+bind-addr: 0.0.0.0
+bind-port: 143
+bind-port-tls: 993
+log-level: info
+
+jmap-url: http://localhost:8080
+#jmap-trusted-hosts: jmap1.example.org;jmap2.example.org
+
+
+# ----------------------------------------
+#  IMAP-to-JMAP Id Cache configuration
+# ----------------------------------------
+
+cache-dir: /var/lib/stalwart-imap
+cache-purge-every: 0 3 *
+cache-removed-id-ttl: 2592000 # secs
+
+# ----------------------------------------
+#  TLS certificates
+# ----------------------------------------
+
+cert-path: /etc/stalwart-imap/certs/imap.crt
+key-path: /etc/stalwart-imap/private/imap.key
+
+# ----------------------------------------
+#  Default folder names
+# ----------------------------------------
+name-shared: Shared Folders
+name-all: All Mail
+
+# ----------------------------------------
+#  Limits
+# ----------------------------------------
+
+max-request-size: 52428800
+#worker-pool-size: 8

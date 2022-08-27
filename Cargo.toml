@@ -5,8 +5,8 @@ edition = "2021"
 resolver = "2"
 
 [dependencies]
-jmap-client = { path = "/home/vagrant/code/jmap-client", features = ["websockets"] } #TODO: remove local path
-mail-parser = { path = "/home/vagrant/code/mail-parser" } #TODO: remove local path
+jmap-client = { git = "https://github.com/stalwartlabs/jmap-client", features = ["websockets"] }
+mail-parser = { git = "https://github.com/stalwartlabs/mail-parser" }
 ahash = "0.8.0"
 chrono = { version = "0.4"}
 tracing-subscriber = "0.3.15"
@@ -49,10 +49,7 @@ panic = 'unwind'
 debug-assertions = false
 overflow-checks = false
 rpath = false
-
-#[profile.release.package.server]
-#opt-level = 1
-#codegen-units = 4
+#strip = true
 
 [profile.test]
 opt-level = 0
@@ -73,3 +70,20 @@ incremental = false
 debug-assertions = false
 overflow-checks = false
 rpath = false
+
+[package.metadata.deb]
+name = "stalwart-imap"
+maintainer = "Stalwart Labs Ltd. <hello@stalw.art>"
+copyright = "2022, Stalwart Labs Ltd. <hello@stalw.art>"
+depends = "$auto"
+section = "mail"
+license-file = ["LICENSE"]
+maintainer-scripts = "resources/scripts-deb"
+assets = [
+    ["target/release/imap-server", "usr/bin/stalwart-imap", "755"],
+    ["resources/config/config.yml", "etc/stalwart-imap/", "600"],
+    ["resources/systemd/stalwart-imap.service", "lib/systemd/system/", "644"],
+]
+conf-files = [
+    "/etc/stalwart-imap/config.yml"
+]

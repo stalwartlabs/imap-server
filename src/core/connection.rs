@@ -86,6 +86,7 @@ pub async fn handle_conn(
                 }
             },
             _ = shutdown_rx.changed() => {
+                session.write_bytes(b"* BYE Server shutting down.\r\n".to_vec()).await.ok();
                 debug!("IMAP connection with peer {} shutting down.", session.peer_addr);
                 return;
             }
@@ -149,6 +150,7 @@ pub async fn handle_conn_tls(
                 }
             },
             _ = shutdown_rx.changed() => {
+                session.write_bytes(b"* BYE Server shutting down.\r\n".to_vec()).await.ok();
                 debug!("IMAP connection with peer {} shutting down.", session.peer_addr);
                 return;
             }

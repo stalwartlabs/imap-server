@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Add user
+useradd stalwart-imap -s /sbin/nologin -M
+
+# Create default data and config directories
+mkdir -p /var/lib/stalwart-imap
+mkdir -p /etc/stalwart-imap/certs
+mkdir -p /etc/stalwart-imap/private
+
+# Set permissions
+chown -R stalwart-imap:stalwart-imap /var/lib/stalwart-imap
+chmod -R 770 /var/lib/stalwart-imap

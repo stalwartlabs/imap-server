@@ -74,6 +74,8 @@ impl Session {
 
     pub async fn authenticate(&mut self, credentials: Credentials, tag: String) -> Result<(), ()> {
         match Client::new()
+            .follow_redirects(&self.core.trusted_hosts)
+            .forwarded_for(self.peer_addr.ip())
             .credentials(credentials)
             .connect(&self.core.jmap_url)
             .await

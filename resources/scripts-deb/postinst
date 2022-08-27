@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Generate self-signed certificates
+if [ ! -f /etc/stalwart-imap/certs/imap.crt ]; then
+    openssl req -x509 -nodes -days 1825 -newkey rsa:4096 -subj '/CN=localhost' -keyout /etc/stalwart-imap/private/imap.key -out /etc/stalwart-imap/certs/imap.crt
+fi
+
+# Set permissions
+chown -R stalwart-imap:stalwart-imap /etc/stalwart-imap
+chmod -R 770 /etc/stalwart-imap
+
+# Install service
+/bin/systemctl enable stalwart-imap
+/bin/systemctl restart stalwart-imap
+
+echo
+echo "************************************************************"
+echo "***                                                      ***"
+echo "***       Stalwart IMAP successfully installed           ***"
+echo "***                                                      ***"
+echo "***              Please configure                        ***"
+echo "***         '/etc/stalwart-imap/config.yml'              ***"
+echo "***                                                      ***"
+echo "************************************************************"
+echo

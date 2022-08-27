@@ -6,9 +6,9 @@ use tracing::warn;
 
 use super::{env_settings::EnvSettings, Core};
 
-pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1";
+pub const DEFAULT_JMAP_URL: &str = "http://127.0.0.1:8080";
 
-pub fn load_config(settings: &EnvSettings) -> Core {
+pub fn build_core(settings: &EnvSettings) -> Core {
     Core {
         db: Arc::new(
             sled::open(
@@ -47,6 +47,15 @@ pub fn load_config(settings: &EnvSettings) -> Core {
         max_request_size: settings
             .parse("max-request-size")
             .unwrap_or(50 * 1024 * 1024),
+        trusted_hosts: if let Some(folder_shared) = settings.get("jmap-trusted-hosts") {
+            folder_shared
+                .split(';')
+                .into_iter()
+                .map(|host| host.to_string())
+                .collect()
+        } else {
+            vec!["127.0.0.1".to_string()]
+        },
     }
 }
 

@@ -2,6 +2,7 @@ pub mod client;
 pub mod config;
 pub mod connection;
 pub mod env_settings;
+pub mod housekeeper;
 pub mod listener;
 pub mod mailbox;
 pub mod message;
@@ -23,6 +24,7 @@ pub struct Core {
     pub db: Arc<sled::Db>,
     pub worker_pool: rayon::ThreadPool,
     pub jmap_url: String,
+    pub trusted_hosts: Vec<String>,
     pub folder_shared: String,
     pub folder_all: String,
     pub max_request_size: usize,

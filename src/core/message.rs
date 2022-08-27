@@ -182,8 +182,6 @@ impl Core {
                             jmap_id,
                         )));
 
-                        //TODO: Delete old deleted IDs after X days
-
                         has_deletions = true;
                     }
                 }
@@ -197,11 +195,6 @@ impl Core {
 
             // Add to the db any new ids.
             if !jmap_ids_map.is_empty() {
-                /*#[cfg(test)]
-                let jmap_ids_map = jmap_ids_map
-                    .into_iter()
-                    .collect::<std::collections::BTreeSet<_>>();*/
-
                 let uid_next_key = serialize_uid_next_key(&mailbox);
 
                 for (pos, found) in found_ids.into_iter().enumerate() {
@@ -472,6 +465,49 @@ impl Core {
             }
 
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn purge_deleted_ids(&self, ttl: u64) -> Result<usize, ()> {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .map_err(|err| {
+                error!("Failed to obtain current time: {}", err);
+            })?;
+
+        let db = self.db.clone();
+        self.spawn_worker(move || {
+            let mut num_deletions = 0;
+            let mut batch = sled::Batch::default();
+
+            for kv_result in db.scan_prefix(&[]) {
+                let (key, value) = kv_result.map_err(|err| {
+                    error!("Failed to scan db: {}", err);
+                })?;
+                if value.len() == std::mem::size_of::<u32>() + std::mem::size_of::<u64>() {
+                    let insert_time = u64::from_be_bytes(
+                        (&value[std::mem::size_of::<u32>()..])
+                            .try_into()
+                            .map_err(|_| {
+                                error!("Failed to convert bytes to u32.");
+                            })?,
+                    );
+                    if insert_time < now && (now - insert_time) >= ttl {
+                        batch.remove(key);
+                        num_deletions += 1;
+                    }
+                }
+            }
+
+            if num_deletions > 0 {
+                db.apply_batch(batch).map_err(|err| {
+                    error!("Failed to delete batch: {}", err);
+                })?;
+            }
+
+            Ok(num_deletions)
         })
         .await
     }
@@ -825,13 +861,13 @@ pub fn increment_uid(old: Option<&[u8]>) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
     use ahash::AHashMap;
 
     use crate::{
         core::{
-            config::load_config,
+            config::build_core,
             mailbox::{Account, Mailbox},
             message::MappingOptions,
         },
@@ -843,7 +879,7 @@ mod tests {
     #[tokio::test]
     async fn synchronize_messages() {
         let (settings, temp_dir) = init_settings(true);
-        let core = load_config(&settings);
+        let core = build_core(&settings);
 
         // Initial test data
         let mailbox = Arc::new(MailboxId {
@@ -997,6 +1033,11 @@ mod tests {
                 .0,
             vec!["x01".to_string(), "y02".to_string(),]
         );
+
+        // Test deleted ids purge
+        assert_eq!(core.purge_deleted_ids(1).await.unwrap(), 0);
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        assert_eq!(core.purge_deleted_ids(1).await.unwrap(), 14);
 
         // Test mailbox purge
         let mailbox_2 = Arc::new(MailboxId {

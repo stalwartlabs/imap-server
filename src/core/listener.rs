@@ -69,7 +69,7 @@ pub async fn spawn_listener(
                                     };
 
                                     // Send greeting
-                                    if let Err(err) = stream.write_all(&greeting).await {
+                                    if let Err(err) = stream.write_all(&greeting_tls).await {
                                         debug!("Failed to send greeting to {}: {}", peer_addr, err);
                                         return;
                                     }
@@ -81,7 +81,7 @@ pub async fn spawn_listener(
                                     ).await;
                                 } else {
                                     // Send greeting
-                                    if let Err(err) = stream.write_all(&greeting_tls).await {
+                                    if let Err(err) = stream.write_all(&greeting).await {
                                         debug!("Failed to send greeting to {}: {}", peer_addr, err);
                                         return;
                                     }
