@@ -9,7 +9,7 @@ bind-port: 143
 bind-port-tls: 993
 log-level: info
 
-jmap-url: http://localhost:8080
+jmap-url: https://localhost:8080
 #jmap-trusted-hosts: jmap1.example.org;jmap2.example.org
 
 
