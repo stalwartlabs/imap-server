@@ -34,13 +34,11 @@ RUN cargo build --release
 
 FROM debian:buster-slim AS runtime
 
-COPY --from=builder /app/target/release/imap-server /usr/bin/stalwart-imap
+COPY --from=builder /app/target/release/stalwart-imap /usr/local/bin/stalwart-imap
 RUN useradd stalwart-imap -s /sbin/nologin -M
-RUN mkdir -p /var/lib/stalwart-imap
-RUN mkdir -p /etc/stalwart-imap
-RUN chown stalwart-imap:stalwart-imap /var/lib/stalwart-imap
-RUN chown stalwart-imap:stalwart-imap /etc/stalwart-imap
+RUN mkdir -p /usr/local/stalwart-imap
+RUN chown stalwart-imap:stalwart-imap /usr/local/stalwart-imap
 
 USER stalwart-imap
 
-ENTRYPOINT ["/usr/bin/stalwart-imap"]
+ENTRYPOINT ["/usr/local/bin/stalwart-imap"]

@@ -17,7 +17,7 @@ jmap-url: https://localhost:8080
 #  IMAP-to-JMAP Id Cache configuration
 # ----------------------------------------
 
-cache-dir: /usr/local/stalwart-imap/data
+cache-dir: C:\Program Files\Stalwart IMAP\data
 cache-purge-every: 0 3 *
 cache-removed-id-ttl: 2592000 # secs
 
@@ -25,8 +25,8 @@ cache-removed-id-ttl: 2592000 # secs
 #  TLS certificates
 # ----------------------------------------
 
-cert-path: /usr/local/stalwart-imap/etc/imap.crt
-key-path: /usr/local/stalwart-imap/etc/imap.key
+cert-path: C:\Program Files\Stalwart IMAP\etc\imap.crt
+key-path: C:\Program Files\Stalwart IMAP\etc\imap.key
 
 # ----------------------------------------
 #  Default folder names

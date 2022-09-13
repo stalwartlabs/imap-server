@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>stalwart.imap</string>
+        <key>ServiceDescription</key>
+        <string>Stalwart IMAP Server</string>
+        <key>ProgramArguments</key>
+        <array>             
+            <string>/usr/local/stalwart-imap/bin/stalwart-imap --config=/usr/local/stalwart-imap/etc/config.yml</string>
+        </array>
+        <key>UserName</key>
+        <string>_stalwart-imap</string>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>KeepAlive</key>
+        <true/>
+    </dict>
+</plist>

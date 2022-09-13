@@ -1,11 +1,11 @@
 [package]
-name = "imap-server"
+name = "stalwart-imap"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"
 
 [dependencies]
-jmap-client = { git = "https://github.com/stalwartlabs/jmap-client", features = ["websockets"] }
+jmap-client = { git = "https://github.com/stalwartlabs/jmap-client", features = ["websockets", "follow-trusted"] }
 mail-parser = { git = "https://github.com/stalwartlabs/mail-parser" }
 ahash = "0.8.0"
 chrono = { version = "0.4"}

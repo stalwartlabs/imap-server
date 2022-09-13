@@ -505,31 +505,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "imap-server"
-version = "0.1.0"
-dependencies = [
- "ahash",
- "base64",
- "chrono",
- "futures",
- "jmap-client",
- "mail-parser",
- "md5",
- "num_cpus",
- "parking_lot 0.12.1",
- "rayon",
- "rustls",
- "rustls-pemfile",
- "signal-hook",
- "signal-hook-tokio",
- "sled",
- "tokio",
- "tokio-rustls",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -563,7 +538,7 @@ checksum = "6c8af84674fe1f223a982c933a0ee1086ac4d4052aa0fb8060c12c6ad838e754"
 [[package]]
 name = "jmap-client"
 version = "0.1.0"
-source = "git+https://github.com/stalwartlabs/jmap-client#5e9c4f825ef2367aea2755ff5efefb3b0a3f16a9"
+source = "git+https://github.com/stalwartlabs/jmap-client#24c5e61cf3a4b9ec0d3e706dd84c66c77902f3a0"
 dependencies = [
  "ahash",
  "async-stream",
@@ -620,8 +595,8 @@ dependencies = [
 
 [[package]]
 name = "mail-parser"
-version = "0.6.0"
-source = "git+https://github.com/stalwartlabs/mail-parser#f16aca7ee0e3885e31c658a903d486f548d42274"
+version = "0.6.1"
+source = "git+https://github.com/stalwartlabs/mail-parser#c886cab1a2224bf2bd77b9781624bc4a438ea069"
 dependencies = [
  "encoding_rs",
  "serde",
@@ -857,7 +832,7 @@ dependencies = [
 [[package]]
 name = "reqwest"
 version = "0.11.11"
-source = "git+https://github.com/stalwartlabs/reqwest.git#e0f7787a2eb0cdf40a7d437021461397bcce0e73"
+source = "git+https://github.com/stalwartlabs/reqwest.git?rev=e0f7787#e0f7787a2eb0cdf40a7d437021461397bcce0e73"
 dependencies = [
  "base64",
  "bytes",
@@ -1091,6 +1066,31 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "stalwart-imap"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "base64",
+ "chrono",
+ "futures",
+ "jmap-client",
+ "mail-parser",
+ "md5",
+ "num_cpus",
+ "parking_lot 0.12.1",
+ "rayon",
+ "rustls",
+ "rustls-pemfile",
+ "signal-hook",
+ "signal-hook-tokio",
+ "sled",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "syn"

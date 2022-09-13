@@ -1,22 +1,19 @@
 [Unit]
 Description=Stalwart IMAP
-ConditionPathExists=/usr/bin/stalwart-imap
+ConditionPathExists=/usr/local/stalwart-imap/bin/stalwart-imap
 After=network-online.target
  
 [Service]
 Type=simple
-User=stalwart-imap
-Group=stalwart-imap
+#User=stalwart-imap
+#Group=stalwart-imap
 LimitNOFILE=65536
 KillMode=process
 KillSignal=SIGINT
 Restart=on-failure
 RestartSec=5
-ExecStart=/usr/bin/stalwart-imap --config=/etc/stalwart-imap/config.yml
+ExecStart=/usr/bin/stalwart-imap --config=/usr/local/stalwart-imap/etc/config.yml
 PermissionsStartOnly=true
-ExecStartPre=/bin/mkdir -p /var/log/stalwart-imap
-ExecStartPre=/bin/chown syslog:adm /var/log/stalwart-imap
-ExecStartPre=/bin/chmod 755 /var/log/stalwart-imap
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=stalwart-imap
