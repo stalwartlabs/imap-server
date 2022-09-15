@@ -11,12 +11,10 @@ readonly BIN_PATH="${BASE_PATH}/bin"
 readonly DB_PATH="${BASE_PATH}/data"
 readonly CFG_PATH="${BASE_PATH}/etc"
 
-#readonly BASE_URL="https://github.com/stalwartlabs/imap-server/releases/latest/download"
-readonly BASE_URL="https://github.com/mdecimus/ci-test/releases/latest/download"
-
-readonly CONFIG_URL="https://raw.githubusercontent.com/mdecimus/ci-test/main/config.yml"
-readonly SYSTEMD_SVC_URL="https://raw.githubusercontent.com/mdecimus/ci-test/main/stalwart-imap.service"
-readonly LAUNCHCTL_SVC_URL="https://raw.githubusercontent.com/mdecimus/ci-test/main/stalwart.imap.plist"
+readonly BASE_URL="https://github.com/stalwartlabs/imap-server/releases/latest/download"
+readonly CONFIG_URL="https://raw.githubusercontent.com/stalwartlabs/imap-server/main/resources/config/config.yml"
+readonly SYSTEMD_SVC_URL="https://raw.githubusercontent.com/stalwartlabs/imap-server/main/resources/systemd/stalwart-imap.service"
+readonly LAUNCHCTL_SVC_URL="https://raw.githubusercontent.com/stalwartlabs/imap-server/main/resources/systemd/stalwart.imap.plist"
 
 main() {
     downloader --check

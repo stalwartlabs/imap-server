@@ -1,50 +1,72 @@
+# Stalwart IMAP Server
 
-## Conformed RFCs
+[![Test](https://github.com/stalwartlabs/imap-server/actions/workflows/test.yml/badge.svg)](https://github.com/stalwartlabs/imap-server/actions/workflows/test.yml)
+[![Build](https://github.com/stalwartlabs/imap-server/actions/workflows/build.yml/badge.svg)](https://github.com/stalwartlabs/imap-server/actions/workflows/build.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![](https://img.shields.io/discord/923615863037390889?label=Chat)](https://discord.gg/jVAuShSdNZ)
+[![](https://img.shields.io/twitter/follow/stalwartlabs?style=flat)](https://twitter.com/stalwartlabs)
 
-### IMAP
+Stalwart IMAP is an open-source Internet Message Access Protocol server designed to be secure, fast, robust and scalable.
+A JSON Meta Application Protocol (JMAP) backend such as [Stalwart JMAP](/jmap/) is required to use Stalwart IMAP (in other words, Stalwart
+IMAP is an imap4-to-jmap proxy).
 
-- [RFC 9051 - Internet Message Access Protocol (IMAP) - Version 4rev2](https://datatracker.ietf.org/doc/html/rfc9051)
-- [RFC 3501 - Internet Message Access Protocol (IMAP) - Version 4rev1](https://datatracker.ietf.org/doc/html/rfc3501)
-- [RFC 2180 - Multi-Accessed Mailbox Practice](https://datatracker.ietf.org/doc/html/rfc2180)
-- [RFC 2683 - Implementation Recommendations](https://datatracker.ietf.org/doc/html/rfc2683)
-- [RFC 8314 - Use of Transport Layer Security (TLS) for Email Submission and Access](https://datatracker.ietf.org/doc/html/rfc8314)
+Key features:
 
-### Extensions
+- **IMAP4** full compliance and support for multiple extensions:
+  - IMAP4rev2 ([RFC 9051](https://datatracker.ietf.org/doc/html/rfc9051))
+  - IMAP4rev1 ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) 
+  - Access Control Lists (ACL) ([RFC 4314](https://datatracker.ietf.org/doc/html/rfc4314))
+  - Conditional Store and Quick Resynchronization ([RFC 7162](https://datatracker.ietf.org/doc/html/rfc7162))
+  - SORT and THREAD ([RFC 5256](https://datatracker.ietf.org/doc/html/rfc5256))
+  - Message Preview Generation ([RFC 8970](https://datatracker.ietf.org/doc/html/rfc8970))
+  - And [many other extensions](https://stalw.art/imap/development/rfc/#imap4-extensions)...
+- **JMAP** backend:
+  - Proxies IMAP4 requests to JMAP requests.
+  - High-availability and fault-tolerance support when using a [Stalwart JMAP](/jmap/) backend.
+  - Full compliance with [JMAP Core](https://datatracker.ietf.org/doc/html/rfc8620) and [JMAP Mail](https://datatracker.ietf.org/doc/html/rfc8621).
+- **Secure**:
+  - OAuth 2.0 [authorization code](https://www.rfc-editor.org/rfc/rfc8628) and [device authorization](https://www.rfc-editor.org/rfc/rfc8628) flows.
+  - Rate limiting.
+  - Memory safe (thanks to Rust).
 
-- [RFC 2177 - IDLE command](https://datatracker.ietf.org/doc/html/rfc2177)
-- [RFC 2342 - Namespace](https://datatracker.ietf.org/doc/html/rfc2342)
-- [RFC 2971 - ID extension](https://datatracker.ietf.org/doc/html/rfc2971)
-- [RFC 3348 - Child Mailbox Extension](https://datatracker.ietf.org/doc/html/rfc3348)
-- [RFC 3502 - MULTIAPPEND Extension](https://datatracker.ietf.org/doc/html/rfc3502)
-- [RFC 3516 - Binary Content Extension](https://datatracker.ietf.org/doc/html/rfc3516)
-- [RFC 3691 - UNSELECT command](https://datatracker.ietf.org/doc/html/rfc3691)
-- [RFC 4314 - Access Control List (ACL) Extension](https://datatracker.ietf.org/doc/html/rfc4314)
-- [RFC 4315 - UIDPLUS extension](https://datatracker.ietf.org/doc/html/rfc4315)
-- [RFC 4466 - Collected Extensions to IMAP4 ABNF](https://datatracker.ietf.org/doc/html/rfc4466)
-- [RFC 4731 - SEARCH Command for Controlling What Kind of Information Is Returned](https://datatracker.ietf.org/doc/html/rfc4731)
-- [RFC 4959 - Simple Authentication and Security Layer (SASL) Initial Client Response](https://datatracker.ietf.org/doc/html/rfc4959)
-- [RFC 5032 - WITHIN Search Extension to the IMAP Protocol](https://datatracker.ietf.org/doc/html/rfc5032)
-- [RFC 5161 - ENABLE Extension](https://datatracker.ietf.org/doc/html/rfc5161)
-- [RFC 5182 - Extension for Referencing the Last SEARCH Result](https://datatracker.ietf.org/doc/html/rfc5182)
-- [RFC 5256 - SORT and THREAD Extensions](https://datatracker.ietf.org/doc/html/rfc5256)
-- [RFC 5258 - LIST Command Extensions](https://datatracker.ietf.org/doc/html/rfc5258)
-- [RFC 5267 - Contexts for IMAP4 (ESORT and CONTEXT)](https://datatracker.ietf.org/doc/html/rfc5267)
-- [RFC 5530 - Response Codes](https://datatracker.ietf.org/doc/html/rfc5530)
-- [RFC 5819 - STATUS Information in Extended LIST](https://datatracker.ietf.org/doc/html/rfc5819)
-- [RFC 5957 - Display-Based Address Sorting for the IMAP4 SORT Extension](https://datatracker.ietf.org/doc/html/rfc5957)
-- [RFC 6154 - LIST Extension for Special-Use Mailboxes](https://datatracker.ietf.org/doc/html/rfc6154)
-- [RFC 6851 - MOVE Extension](https://datatracker.ietf.org/doc/html/rfc6851)
-- [RFC 6855 - Support for UTF-8](https://datatracker.ietf.org/doc/html/rfc6855.html)
-- [RFC 7162 - Quick Flag Changes Resynchronization (CONDSTORE) and Quick Mailbox Resynchronization (QRESYNC)](https://datatracker.ietf.org/doc/html/rfc7162)
-- [RFC 7628 - SASL Mechanisms for OAuth](https://datatracker.ietf.org/doc/html/rfc7628)
-- [RFC 7888 - Non-synchronizing Literals](https://datatracker.ietf.org/doc/html/rfc7888)
-- [RFC 8437 - UNAUTHENTICATE Extension for Connection Reuse](https://datatracker.ietf.org/doc/html/rfc8437)
-- [RFC 8438 - Extension for STATUS=SIZE](https://datatracker.ietf.org/doc/html/rfc8438)
-- [RFC 8457 - "$Important" Keyword and "\Important" Special-Use Attribute](https://datatracker.ietf.org/doc/html/rfc8457)
-- [RFC 8474 - Extension for Object Identifiers](https://datatracker.ietf.org/doc/html/rfc8474)
-- [RFC 8970 - Message Preview Generation](https://datatracker.ietf.org/doc/html/rfc8970)
+## Get Started
 
-### Planned Extensions
+Install Stalwart IMAP on your server by following the instructions for your platform:
+
+- [Linux / MacOS](https://stalw.art/imap/get-started/linux/)
+- [Windows](https://stalw.art/imap/get-started/windows/)
+- [Docker](https://stalw.art/imap/get-started/docker/)
+
+You may also [compile Stalwart IMAP from from the source](https://stalw.art/imap/development/compile/).
+
+## Support
+
+If you are having problems running Stalwart IMAP, you found a bug or just have a question,
+do not hesitate to reach us on [Github Discussions](https://github.com/stalwartlabs/imap-server/discussions) or [Discord](https://discord.gg/jVAuShSdNZ).
+Additionally you may become a sponsor to obtain priority support from Stalwart Labs Ltd.
+
+## Documentation
+
+Table of Contents
+
+- Get Started
+  - [Linux / MacOS](https://stalw.art/imap/get-started/linux/)
+  - [Windows](https://stalw.art/imap/get-started/windows/)
+  - [Docker](https://stalw.art/imap/get-started/docker/)
+- Configuration
+  - [Overview](https://stalw.art/imap/configure/overview/)
+  - [IMAP Server](https://stalw.art/imap/configure/imap/)
+  - [JMAP Proxy](https://stalw.art/imap/configure/proxy/)
+  - [Cache](https://stalw.art/imap/configure/cache/)
+- Development
+  - [Compiling](https://stalw.art/imap/development/compile/)
+  - [Tests](https://stalw.art/imap/development/test/)
+  - [RFCs conformed](https://stalw.art/imap/development/rfc/)
+
+
+## Roadmap
+
+Support for the following IMAP extensions is planned for Stalwart IMAP:
 
 - [RFC 2087 - IMAP4 QUOTA extension](https://datatracker.ietf.org/doc/html/rfc2087)
 - [RFC 2192 - IMAP URL Scheme](https://datatracker.ietf.org/doc/html/rfc2192)
@@ -56,14 +78,81 @@
 - [RFC 5524 - Extended URLFETCH for Binary and Converted Parts](https://datatracker.ietf.org/doc/html/rfc5524)
 - [RFC 6785 - Support for IMAP Events in Sieve](https://datatracker.ietf.org/doc/html/rfc6785)
 
-
 ## Testing
 
-Compliance tests
+### Base tests
 
-./imaptest host=[hostname] port=[port] user=[account_name] pass=[account_secret] auth=100 test=[path_to_repo]/src/tests/resources/imap-test/
+The base tests perform protocol compliance tests as well as basic functionality testing on 
+different functions across the Stalwart IMAP code base. 
+To run the base test suite execute:
 
-Stress testing
+```bash
+cargo test
+```
 
-./imaptest host=[hostname] port=[port] userfile=[file_with_account_names] pass=[secret] mbox=[path_to_mbox_file] auth=100
+### IMAP4 tests
+
+The IMAP test suite performs a full server functionaly test including compliance to the IMAP4rev2/rev1
+protocols and its extensions. To run these tests a blank Stalwart JMAP installation is required to be running at
+``http://127.0.0.1:8080``.
+
+To run the IMAP test suite execute:
+
+```bash
+cargo test imap_tests -- --ignored
+```
+
+### Third-party tests
+
+Stalwart IMAP's protocol compliance may be also tested with Dovecot's ImapTest:
+
+- Download [ImapTest](https://www.imapwiki.org/ImapTest/Installation).
+- Start a blank Stalwart JMAP instance on ``http://127.0.0.1:8080``.
+- Create a test account.
+- Run the compliance tests as follows:
+    ```
+    ./imaptest host=<IMAP_HOSTNAME> port=<IMAP_PORT> \
+            user=<JMAP_ACCOUNT> pass=<JMAP_ACCOUNT_SECRET> auth=100 \
+            test=<PATH_TO_REPO>/src/tests/resources/imap-test/
+    ```
+
+Note: The tests distributed with ImapTest were slightly modified to support the
+IMAP4rev2 specification.
+
+### Stress tests
+
+Stress testing Stalwart IMAP can be done with Dovecot's ImapTest:
+
+- Download [ImapTest](https://www.imapwiki.org/ImapTest/Installation).
+- Start a blank Stalwart JMAP instance on ``http://127.0.0.1:8080``.
+- Create at least 3 test accounts, all using the same password. Store the account names in a file, one account per line.
+- Run the stress tests as follows:
+    ```
+    ./imaptest host=<IMAP_HOSTNAME> port=<IMAP_PORT> \
+            userfile=<PATH_TO_ACCOUNT_NAMES_FILE> \
+            pass=<JMAP_ACCOUNT_SECRET> \
+            mbox=<PATH_TO_TEST_MBOX> \
+            auth=100
+    ```
+
+### Fuzz
+
+To fuzz Stalwart IMAP server with `cargo-fuzz` execute:
+
+```bash
+ $ cargo +nightly fuzz run imap_server
+```
+
+## License
+
+Licensed under the terms of the [GNU Affero General Public License](https://www.gnu.org/licenses/agpl-3.0.en.html) as published by
+the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+See [LICENSE](LICENSE) for more details.
+
+You can be released from the requirements of the AGPLv3 license by purchasing
+a commercial license. Please contact licensing@stalw.art for more details.
+  
+## Copyright
+
+Copyright (C) 2020-2022, Stalwart Labs Ltd.
 

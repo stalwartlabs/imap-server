@@ -1,3 +1,26 @@
+/*
+ * Copyright (c) 2020-2022, Stalwart Labs Ltd.
+ *
+ * This file is part of the Stalwart IMAP Server.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ * in the LICENSE file at the top-level directory of this distribution.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * You can be released from the requirements of the AGPLv3 license by
+ * purchasing a commercial license. Please contact licensing@stalw.art
+ * for more details.
+*/
+
 pub mod commands;
 pub mod core;
 pub mod parser;
@@ -12,12 +35,8 @@ use crate::core::{
 };
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use futures::stream::StreamExt;
-
-use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-use signal_hook_tokio::Signals;
 use tokio::sync::watch;
-use tracing::{info, Level};
+use tracing::{debug, info, Level};
 
 use crate::core::listener::spawn_listener;
 
@@ -52,7 +71,8 @@ pub async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
                     .unwrap_or(if is_tls { IMAP4_PORT_TLS } else { IMAP4_PORT }),
             ));
             info!(
-                "Starting Stalwart IMAP4rev2 server at {}{}...",
+                "Starting Stalwart IMAP server v{} at {}{}...",
+                env!("CARGO_PKG_VERSION"),
                 socket_addr,
                 if is_tls { " (TLS)" } else { "" }
             );
@@ -64,23 +84,36 @@ pub async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
     spawn_housekeeper(core, &settings, shutdown_rx);
 
     // Wait for shutdown signal
-    let mut signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    #[cfg(not(target_env = "msvc"))]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
 
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGHUP => {
-                // Reload configuration
+        let mut h_term = signal(SignalKind::terminate()).failed_to("start signal handler");
+        let mut h_int = signal(SignalKind::interrupt()).failed_to("start signal handler");
+
+        tokio::select! {
+            _ = h_term.recv() => debug!("Received SIGTERM."),
+            _ = h_int.recv() => debug!("Received SIGINT."),
+        };
+    }
+
+    #[cfg(target_env = "msvc")]
+    {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(err) => {
+                eprintln!("Unable to listen for shutdown signal: {}", err);
             }
-            SIGTERM | SIGINT | SIGQUIT => {
-                // Shutdown the system;
-                info!("Shutting down Stalwart IMAP4rev2 server...");
-                shutdown_tx.send(true).unwrap();
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                break;
-            }
-            _ => unreachable!(),
         }
     }
+
+    // Shutdown the system;
+    info!(
+        "Shutting down Stalwart IMAP server v{}...",
+        env!("CARGO_PKG_VERSION")
+    );
+    shutdown_tx.send(true).unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     Ok(())
 }
