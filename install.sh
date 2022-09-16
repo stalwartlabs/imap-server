@@ -132,7 +132,8 @@ main() {
     elif [ -d /Library/LaunchDaemons ]; then
         say "💡  Starting Stalwart IMAP launchctl service..."
         ignore launchctl load /Library/LaunchDaemons/stalwart.imap.plist
-        ignore launchctl start stalwart.imap
+        ignore launchctl enable system/stalwart.imap
+        ignore launchctl start system/stalwart.imap
     fi
 
     say "🎉 Installed Stalwart IMAP! To complete the installation edit"

@@ -12,7 +12,7 @@ KillMode=process
 KillSignal=SIGINT
 Restart=on-failure
 RestartSec=5
-ExecStart=/usr/bin/stalwart-imap --config=/usr/local/stalwart-imap/etc/config.yml
+ExecStart=/usr/local/stalwart-imap/bin/stalwart-imap --config=/usr/local/stalwart-imap/etc/config.yml
 PermissionsStartOnly=true
 StandardOutput=syslog
 StandardError=syslog

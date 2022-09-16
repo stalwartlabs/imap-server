@@ -8,8 +8,9 @@
         <key>ServiceDescription</key>
         <string>Stalwart IMAP Server</string>
         <key>ProgramArguments</key>
-        <array>             
-            <string>/usr/local/stalwart-imap/bin/stalwart-imap --config=/usr/local/stalwart-imap/etc/config.yml</string>
+        <array>
+            <string>/usr/local/stalwart-imap/bin/stalwart-imap</string>
+            <string>--config=/usr/local/stalwart-imap/etc/config.yml</string>
         </array>
         <key>UserName</key>
         <string>_stalwart-imap</string>
