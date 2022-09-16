@@ -22,8 +22,8 @@
 */
 
 #![no_main]
-use imap_server::core::receiver::{Receiver, State};
 use libfuzzer_sys::fuzz_target;
+use stalwart_imap::core::receiver::{Receiver, State};
 
 static IMAP_ALPHABET: &[u8] = b"()[]<>{}+-.:=\"NIL012345ABCDEF ";
 
