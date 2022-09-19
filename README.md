@@ -7,7 +7,7 @@
 [![](https://img.shields.io/twitter/follow/stalwartlabs?style=flat)](https://twitter.com/stalwartlabs)
 
 Stalwart IMAP is an open-source Internet Message Access Protocol server designed to be secure, fast, robust and scalable.
-A JSON Meta Application Protocol (JMAP) backend such as [Stalwart JMAP](/jmap/) is required to use Stalwart IMAP (in other words, Stalwart
+A JSON Meta Application Protocol (JMAP) backend such as [Stalwart JMAP](https://github.com/stalwartlabs/jmap-server) is required to use Stalwart IMAP (in other words, Stalwart
 IMAP is an imap4-to-jmap proxy).
 
 Key features:
@@ -22,7 +22,7 @@ Key features:
   - And [many other extensions](https://stalw.art/imap/development/rfc/#imap4-extensions)...
 - **JMAP** backend:
   - Proxies IMAP4 requests to JMAP requests.
-  - High-availability and fault-tolerance support when using a [Stalwart JMAP](/jmap/) backend.
+  - High-availability and fault-tolerance support when using a [Stalwart JMAP](https://github.com/stalwartlabs/jmap-server) backend.
   - Full compliance with [JMAP Core](https://datatracker.ietf.org/doc/html/rfc8620) and [JMAP Mail](https://datatracker.ietf.org/doc/html/rfc8621).
 - **Secure**:
   - OAuth 2.0 [authorization code](https://www.rfc-editor.org/rfc/rfc8628) and [device authorization](https://www.rfc-editor.org/rfc/rfc8628) flows.
@@ -42,7 +42,8 @@ You may also [compile Stalwart IMAP from the source](https://stalw.art/imap/deve
 ## Support
 
 If you are having problems running Stalwart IMAP, you found a bug or just have a question,
-do not hesitate to reach us on [Github Discussions](https://github.com/stalwartlabs/imap-server/discussions) or [Discord](https://discord.gg/jVAuShSdNZ).
+do not hesitate to reach us on [Github Discussions](https://github.com/stalwartlabs/imap-server/discussions),
+[Reddit](https://www.reddit.com/r/stalwartlabs) or [Discord](https://discord.gg/jVAuShSdNZ).
 Additionally you may become a sponsor to obtain priority support from Stalwart Labs Ltd.
 
 ## Documentation
