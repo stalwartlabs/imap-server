@@ -23,9 +23,15 @@ BODY (
             )
          ) NIL NIL NIL "<199804130742.RAA20366@mai1host.whitehouse.gov>"
       ) (
-         "image" "gif" (
-            "name" "map_of_Argentina.gif"
-         ) NIL NIL "base64" 389
+         (
+            "text" "plain" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 355 12
+         ) (
+            "image" "gif" (
+               "name" "map_of_Argentina.gif"
+            ) NIL NIL "base64" 389
+         ) "mixed"
       ) 0
    ) "mixed"
 )
@@ -55,13 +61,21 @@ BODYSTRUCTURE (
             )
          ) NIL NIL NIL "<199804130742.RAA20366@mai1host.whitehouse.gov>"
       ) (
-         "image" "gif" (
-            "name" "map_of_Argentina.gif"
-         ) NIL NIL "base64" 389 "5359a63540c1a8eae06a27e8760e1501" (
-            "inline" (
-               "fi1ename" "map_of_Argentina.gif"
-            )
-         ) NIL NIL
+         (
+            "text" "plain" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 355 12 "47027313db254547987c7eb4be377593" NIL NIL NIL
+         ) (
+            "image" "gif" (
+               "name" "map_of_Argentina.gif"
+            ) NIL NIL "base64" 389 "5359a63540c1a8eae06a27e8760e1501" (
+               "inline" (
+                  "fi1ename" "map_of_Argentina.gif"
+               )
+            ) NIL NIL
+         ) "mixed" (
+            "boundary" "DC8------------DC8638F443D87A7F0726DEF7"
+         ) NIL NIL NIL
       ) 0 "1522079b4114146b37ea1af171484a1a" (
          "inline" (
             

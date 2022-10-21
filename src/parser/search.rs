@@ -278,7 +278,7 @@ pub fn parse_filters(
                             )
                             .into());
                         }
-                        let flag = Flag::parse_imap((&param[7..]).to_vec())?;
+                        let flag = Flag::parse_imap((param[7..]).to_vec())?;
                         let mod_seq_entry = match tokens.next() {
                             Some(Token::Argument(value)) if value.eq_ignore_ascii_case(b"all") => {
                                 ModSeqEntry::All(flag)

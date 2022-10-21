@@ -19,9 +19,15 @@ BODY (
             )
          ) NIL NIL NIL NIL NIL
       ) (
-         "text" "plain" (
-            "charset" "us-ascii"
-         ) NIL NIL "7bit" 20 1
+         (
+            "text" "html" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 19 1
+         ) (
+            "text" "plain" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 20 1
+         ) "alternative"
       ) 0
    ) "mixed"
 )
@@ -47,9 +53,17 @@ BODYSTRUCTURE (
             )
          ) NIL NIL NIL NIL NIL
       ) (
-         "text" "plain" (
-            "charset" "us-ascii"
-         ) NIL NIL "7bit" 20 1 "deeff770fadb17c664d431b97bcd05c5" NIL NIL NIL
+         (
+            "text" "html" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 19 1 "35c5b687e359e8ce7be1f1ecafd9b475" NIL NIL NIL
+         ) (
+            "text" "plain" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 20 1 "deeff770fadb17c664d431b97bcd05c5" NIL NIL NIL
+         ) "alternative" (
+            "boundary" "sub1"
+         ) NIL NIL NIL
       ) 0 "735ed696bc05fdf6840de404781d5d77" NIL NIL NIL
    ) "mixed" (
       "boundary" "foo bar"
@@ -200,7 +214,7 @@ Content-Type: multipart/alternative; boundary="sub1"
 
 
 ----------------------------------
-BODY[2.TEXT] {133}
+BODY[2.TEXT] {151}
 Sub MIME prologue
 --sub1
 Content-Type: text/html
@@ -213,6 +227,7 @@ Content-Type: text/plain
 Hello another world
 
 --sub1--
+Sub MIME epilogue
 
 ----------------------------------
 BODY[2.MIME] {55}

@@ -77,6 +77,7 @@ Support for the following IMAP extensions is planned for Stalwart IMAP:
 - [RFC 5255 - IMAP Internationalization](https://datatracker.ietf.org/doc/html/rfc5255)
 - [RFC 5465 - IMAP NOTIFY Extension](https://datatracker.ietf.org/doc/html/rfc5465)
 - [RFC 5524 - Extended URLFETCH for Binary and Converted Parts](https://datatracker.ietf.org/doc/html/rfc5524)
+- [RFC 6237 - IMAP4 Multimailbox SEARCH Extension](https://www.rfc-editor.org/rfc/rfc6237)
 - [RFC 6785 - Support for IMAP Events in Sieve](https://datatracker.ietf.org/doc/html/rfc6785)
 
 ## Testing

@@ -25,7 +25,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use ahash::AHashMap;
 use jmap_client::email::{self, Header, Property};
-use mail_parser::{GetHeader, Message, MessageAttachment, PartType, RfcHeader};
+use mail_parser::{GetHeader, Message, PartType, RfcHeader};
 use tracing::debug;
 
 use crate::{
@@ -504,31 +504,20 @@ impl SessionData {
                         }
                         Attribute::Body => {
                             items.push(DataItem::Body {
-                                part: message.as_ref().unwrap().body_structure(
-                                    raw_message.as_ref().unwrap(),
-                                    false,
-                                    0,
-                                ),
+                                part: message.as_ref().unwrap().body_structure(false),
                             });
                         }
                         Attribute::BodyStructure => {
                             items.push(DataItem::BodyStructure {
-                                part: message.as_ref().unwrap().body_structure(
-                                    raw_message.as_ref().unwrap(),
-                                    true,
-                                    0,
-                                ),
+                                part: message.as_ref().unwrap().body_structure(true),
                             });
                         }
                         Attribute::BodySection {
                             sections, partial, ..
                         } => {
-                            if let Some(contents) = message.as_ref().unwrap().body_section(
-                                raw_message.as_ref().unwrap(),
-                                sections,
-                                *partial,
-                                0,
-                            ) {
+                            if let Some(contents) =
+                                message.as_ref().unwrap().body_section(sections, *partial)
+                            {
                                 items.push(DataItem::BodySection {
                                     sections: sections.to_vec(),
                                     origin_octet: partial.map(|(start, _)| start),
@@ -539,7 +528,7 @@ impl SessionData {
 
                         Attribute::Binary {
                             sections, partial, ..
-                        } => match message.as_ref().unwrap().binary(sections, *partial, 0) {
+                        } => match message.as_ref().unwrap().binary(sections, *partial) {
                             Ok(Some(contents)) => {
                                 items.push(DataItem::Binary {
                                     sections: sections.to_vec(),
@@ -567,7 +556,7 @@ impl SessionData {
                             _ => (),
                         },
                         Attribute::BinarySize { sections } => {
-                            if let Some(size) = message.as_ref().unwrap().binary_size(sections, 0) {
+                            if let Some(size) = message.as_ref().unwrap().binary_size(sections) {
                                 items.push(DataItem::BinarySize {
                                     sections: sections.to_vec(),
                                     size,
@@ -693,90 +682,79 @@ impl SessionData {
 }
 
 trait AsImapDataItem<'x> {
-    fn body_structure(&self, raw_message: &[u8], is_extended: bool, depth: usize) -> BodyPart;
-    fn body_section(
-        &self,
-        raw_message: &'x [u8],
+    fn body_structure(&self, is_extended: bool) -> BodyPart;
+    fn body_section<'z: 'x>(
+        &'z self,
         sections: &[Section],
         partial: Option<(u32, u32)>,
-        depth: usize,
     ) -> Option<Cow<'x, str>>;
     fn binary(
         &self,
         sections: &[u32],
         partial: Option<(u32, u32)>,
-        depth: usize,
     ) -> Result<Option<BodyContents>, ()>;
-    fn binary_size(&self, sections: &[u32], depth: usize) -> Option<usize>;
-    fn as_body_part(&self, raw_message: &[u8], part_id: usize, is_extended: bool) -> BodyPart;
+    fn binary_size(&self, sections: &[u32]) -> Option<usize>;
+    fn as_body_part(&self, part_id: usize, is_extended: bool) -> BodyPart;
     fn envelope(&self) -> Envelope;
 }
 
 impl<'x> AsImapDataItem<'x> for Message<'x> {
-    fn body_structure(&self, raw_message: &[u8], is_extended: bool, depth: usize) -> BodyPart {
+    fn body_structure(&self, is_extended: bool) -> BodyPart {
         let mut stack = Vec::new();
-        let mut root_part = self.as_body_part(raw_message, 0, is_extended);
+        let mut parts = [0].iter();
+        let mut message = self;
+        let mut root_part = None;
 
-        if let Some(parts) = self.get_root_part().get_sub_parts() {
-            let mut message = self;
-            let mut parts = parts.iter();
+        loop {
+            while let Some(part_id) = parts.next() {
+                let mut part = message.as_body_part(*part_id, is_extended);
 
-            'outer: loop {
-                while let Some(part_id) = parts.next() {
-                    let mut part = message.as_body_part(raw_message, *part_id, is_extended);
-                    match &message.parts[*part_id].body {
-                        PartType::Message(attachment) if depth < 10 => match attachment {
-                            MessageAttachment::Parsed(nested_message) => {
-                                part.set_envelope(nested_message.envelope());
-                                stack.push((root_part, parts, message.into()));
-                                root_part = part;
-                                parts = nested_message
-                                    .get_root_part()
-                                    .get_sub_parts()
-                                    .map_or_else(|| (&[][..]).iter(), |p| p.iter());
-                                message = nested_message.as_ref();
-                                continue 'outer;
-                            }
-                            MessageAttachment::Raw(raw_message_) => {
-                                if let Some(message) = Message::parse(raw_message_) {
-                                    part.add_part(
-                                        message
-                                            .body_structure(raw_message, is_extended, depth + 1)
-                                            .into_owned(),
-                                    );
-                                    part.set_envelope(message.envelope().into_owned());
-                                }
-                            }
-                        },
-                        PartType::Multipart(subparts) => {
-                            stack.push((root_part, parts, None));
-                            root_part = part;
-                            parts = subparts.iter();
-                            continue;
+                match &message.parts[*part_id].body {
+                    PartType::Message(nested_message) => {
+                        part.set_envelope(nested_message.envelope());
+                        if let Some(root_part) = root_part {
+                            stack.push((root_part, parts, message.into()));
                         }
-                        _ => (),
+                        root_part = part.into();
+                        parts = [0].iter();
+                        message = nested_message;
+                        continue;
                     }
+                    PartType::Multipart(subparts) => {
+                        if let Some(root_part) = root_part {
+                            stack.push((root_part, parts, None));
+                        }
+                        root_part = part.into();
+                        parts = subparts.iter();
+                        continue;
+                    }
+                    _ => (),
+                }
+                if let Some(root_part) = &mut root_part {
                     root_part.add_part(part);
-                }
-                if let Some((mut prev_root_part, prev_parts, prev_message)) = stack.pop() {
-                    if let Some(prev_message) = prev_message {
-                        message = prev_message;
-                    }
-                    prev_root_part.add_part(root_part);
-                    parts = prev_parts;
-                    root_part = prev_root_part;
                 } else {
-                    break;
+                    return part;
                 }
+            }
+            if let Some((mut prev_root_part, prev_parts, prev_message)) = stack.pop() {
+                if let Some(prev_message) = prev_message {
+                    message = prev_message;
+                }
+
+                prev_root_part.add_part(root_part.unwrap());
+                parts = prev_parts;
+                root_part = prev_root_part.into();
+            } else {
+                break;
             }
         }
 
-        root_part
+        root_part.unwrap()
     }
 
-    fn as_body_part(&self, raw_message: &[u8], part_id: usize, is_extended: bool) -> BodyPart {
+    fn as_body_part(&self, part_id: usize, is_extended: bool) -> BodyPart {
         let part = &self.parts[part_id];
-        let body = raw_message.get(part.offset_body..part.offset_end);
+        let body = self.raw_message.get(part.offset_body..part.offset_end);
         let (is_multipart, is_text) = match &part.body {
             PartType::Text(_) | PartType::Html(_) => (false, true),
             PartType::Multipart(_) => (true, false),
@@ -797,19 +775,6 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                     at.iter()
                         .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
                         .collect::<Vec<_>>()
-
-                    /* #[cfg(not(test))]
-                    {
-                    }
-
-                    #[cfg(test)]
-                    {
-                        at.iter()
-                            .collect::<std::collections::BTreeMap<_, _>>()
-                            .into_iter()
-                            .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
-                            .collect::<Vec<_>>()
-                    }*/
                 })
             })
         }
@@ -870,19 +835,6 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                                     at.iter()
                                         .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
                                         .collect::<Vec<_>>()
-
-                                    /*#[cfg(not(test))]
-                                    {
-                                    }
-
-                                    #[cfg(test)]
-                                    {
-                                        at.iter()
-                                            .collect::<std::collections::BTreeMap<_, _>>()
-                                            .into_iter()
-                                            .map(|(h, v)| (h.as_ref().into(), v.as_ref().into()))
-                                            .collect::<Vec<_>>()
-                                    }*/
                                 })
                                 .unwrap_or_default(),
                         )
@@ -945,17 +897,15 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         }
     }
 
-    fn body_section(
-        &self,
-        raw_message: &'x [u8],
+    fn body_section<'z: 'x>(
+        &'z self,
         sections: &[Section],
         partial: Option<(u32, u32)>,
-        depth: usize,
     ) -> Option<Cow<'x, str>> {
         let mut part = self.get_root_part();
         if sections.is_empty() {
             return String::from_utf8_lossy(get_partial_bytes(
-                raw_message.get(part.offset_header..part.offset_end)?,
+                self.raw_message.get(part.offset_header..part.offset_end)?,
                 partial,
             ))
             .into();
@@ -986,31 +936,15 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                     if let (PartType::Message(nested_message), Some(_)) =
                         (&part.body, sections_iter.peek())
                     {
-                        match nested_message {
-                            MessageAttachment::Parsed(nested_message) => {
-                                message = nested_message;
-                                part = message.get_root_part();
-                            }
-                            MessageAttachment::Raw(raw_message) => {
-                                if depth < 10 {
-                                    return Message::parse(raw_message)?
-                                        .body_section(
-                                            raw_message,
-                                            &sections_iter.cloned().collect::<Vec<_>>(),
-                                            partial,
-                                            depth + 1,
-                                        )
-                                        .map(|bytes| bytes.into_owned().into());
-                                } else {
-                                    return None;
-                                }
-                            }
-                        }
+                        message = nested_message;
+                        part = message.get_root_part();
                     }
                 }
                 Section::Header => {
                     return String::from_utf8_lossy(get_partial_bytes(
-                        raw_message.get(part.offset_header..part.offset_body)?,
+                        message
+                            .raw_message
+                            .get(part.offset_header..part.offset_body)?,
                         partial,
                     ))
                     .into();
@@ -1024,7 +958,8 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                             headers.extend_from_slice(header_name.as_bytes());
                             headers.push(b':');
                             headers.extend_from_slice(
-                                raw_message
+                                message
+                                    .raw_message
                                     .get(header.offset_start..header.offset_end)
                                     .unwrap_or(b""),
                             );
@@ -1046,7 +981,7 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                 }
                 Section::Text => {
                     return String::from_utf8_lossy(get_partial_bytes(
-                        raw_message.get(part.offset_body..part.offset_end)?,
+                        message.raw_message.get(part.offset_body..part.offset_end)?,
                         partial,
                     ))
                     .into();
@@ -1059,7 +994,8 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
                             headers.extend_from_slice(header.name.as_str().as_bytes());
                             headers.extend_from_slice(b":");
                             headers.extend_from_slice(
-                                raw_message
+                                message
+                                    .raw_message
                                     .get(header.offset_start..header.offset_end)
                                     .unwrap_or(b""),
                             );
@@ -1084,7 +1020,7 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         // expect BODY[x] to return only the body, just like BOXY[x.TEXT] does.
 
         String::from_utf8_lossy(get_partial_bytes(
-            raw_message.get(part.offset_body..part.offset_end)?,
+            message.raw_message.get(part.offset_body..part.offset_end)?,
             partial,
         ))
         .into()
@@ -1100,7 +1036,6 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         &self,
         sections: &[u32],
         partial: Option<(u32, u32)>,
-        depth: usize,
     ) -> Result<Option<BodyContents>, ()> {
         let mut message = self;
         let mut part = self.get_root_part();
@@ -1118,45 +1053,34 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
             };
             if let (PartType::Message(nested_message), Some(_)) = (&part.body, sections_iter.peek())
             {
-                match nested_message {
-                    MessageAttachment::Parsed(nested_message) => {
-                        message = nested_message;
-                        part = message.get_root_part();
-                    }
-                    MessageAttachment::Raw(raw_message) => {
-                        if depth < 10 {
-                            return if let Some(message) = Message::parse(raw_message) {
-                                message
-                                    .binary(
-                                        &sections_iter.cloned().collect::<Vec<_>>(),
-                                        partial,
-                                        depth + 1,
-                                    )
-                                    .map(|result| result.map(|bytes| bytes.into_owned()))
-                            } else {
-                                Ok(None)
-                            };
-                        } else {
-                            return Ok(None);
-                        }
-                    }
-                }
+                message = nested_message;
+                part = message.get_root_part();
             }
         }
 
         if !part.is_encoding_problem {
             Ok(match &part.body {
-                PartType::Text(text) | PartType::Html(text) => {
-                    BodyContents::Text(text.as_ref().into()).into()
+                PartType::Text(text) | PartType::Html(text) => BodyContents::Text(
+                    String::from_utf8_lossy(get_partial_bytes(text.as_bytes(), partial)),
+                )
+                .into(),
+                PartType::Binary(bytes) | PartType::InlineBinary(bytes) => {
+                    BodyContents::Bytes(get_partial_bytes(bytes.as_ref(), partial).into()).into()
                 }
-                PartType::Binary(bytes)
-                | PartType::InlineBinary(bytes)
-                | PartType::Message(MessageAttachment::Raw(bytes)) => {
-                    BodyContents::Bytes(bytes.as_ref().into()).into()
-                }
-                PartType::Message(MessageAttachment::Parsed(message)) => {
-                    BodyContents::Bytes(message.raw_message.as_ref().into()).into()
-                }
+                PartType::Message(message) => BodyContents::Bytes(
+                    get_partial_bytes(
+                        message
+                            .raw_message
+                            .get(
+                                message.get_root_part().raw_header_offset()
+                                    ..message.get_root_part().raw_end_offset(),
+                            )
+                            .unwrap_or(&b""[..]),
+                        partial,
+                    )
+                    .into(),
+                )
+                .into(),
                 PartType::Multipart(_) => None,
             })
         } else {
@@ -1164,7 +1088,7 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         }
     }
 
-    fn binary_size(&self, sections: &[u32], depth: usize) -> Option<usize> {
+    fn binary_size(&self, sections: &[u32]) -> Option<usize> {
         let mut message = self;
         let mut part = self.get_root_part();
         let mut sections_iter = sections.iter().peekable();
@@ -1177,31 +1101,15 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
             )?;
             if let (PartType::Message(nested_message), Some(_)) = (&part.body, sections_iter.peek())
             {
-                match nested_message {
-                    MessageAttachment::Parsed(nested_message) => {
-                        message = nested_message;
-                        part = message.get_root_part();
-                    }
-                    MessageAttachment::Raw(raw_message) => {
-                        if depth < 10 {
-                            return Message::parse(raw_message)?.binary_size(
-                                &sections_iter.cloned().collect::<Vec<_>>(),
-                                depth + 1,
-                            );
-                        } else {
-                            return None;
-                        }
-                    }
-                }
+                message = nested_message;
+                part = message.get_root_part();
             }
         }
 
         match &part.body {
             PartType::Text(text) | PartType::Html(text) => text.len(),
-            PartType::Binary(bytes)
-            | PartType::InlineBinary(bytes)
-            | PartType::Message(MessageAttachment::Raw(bytes)) => bytes.len(),
-            PartType::Message(MessageAttachment::Parsed(message)) => message.raw_message.len(),
+            PartType::Binary(bytes) | PartType::InlineBinary(bytes) => bytes.len(),
+            PartType::Message(message) => message.get_root_part().raw_len(),
             PartType::Multipart(_) => 0,
         }
         .into()
@@ -1430,7 +1338,7 @@ mod tests {
             for is_extended in [false, true] {
                 let mut buf_ = Vec::new();
                 message
-                    .body_structure(&raw_message, is_extended, 0)
+                    .body_structure(is_extended)
                     .serialize(&mut buf_, is_extended);
                 if is_extended {
                     buf.extend_from_slice(b"BODYSTRUCTURE ");
@@ -1489,9 +1397,7 @@ mod tests {
                                 true
                             };
 
-                            if let Some(contents) =
-                                message.body_section(&raw_message, &body_sections, None, 0)
-                            {
+                            if let Some(contents) = message.body_section(&body_sections, None) {
                                 DataItem::BodySection {
                                     sections: body_sections,
                                     origin_octet: None,
@@ -1500,7 +1406,7 @@ mod tests {
                                 .serialize(&mut buf);
 
                                 if is_first {
-                                    match message.binary(&sections, None, 0) {
+                                    match message.binary(&sections, None) {
                                         Ok(Some(contents)) => {
                                             buf.push(b'\n');
                                             DataItem::Binary {
@@ -1534,7 +1440,7 @@ mod tests {
                                         }
                                     }
 
-                                    if let Some(size) = message.binary_size(&sections, 0) {
+                                    if let Some(size) = message.binary_size(&sections) {
                                         buf.push(b'\n');
                                         DataItem::BinarySize {
                                             sections: sections.clone(),
@@ -1574,18 +1480,14 @@ mod tests {
                 }],
             ] {
                 DataItem::BodySection {
-                    contents: message
-                        .body_section(&raw_message, &sections, None, 0)
-                        .unwrap(),
+                    contents: message.body_section(&sections, None).unwrap(),
                     sections: sections.clone(),
                     origin_octet: None,
                 }
                 .serialize(&mut buf);
                 buf.extend_from_slice(b"\n----------------------------------\n");
                 DataItem::BodySection {
-                    contents: message
-                        .body_section(&raw_message, &sections, (10, 25).into(), 0)
-                        .unwrap(),
+                    contents: message.body_section(&sections, (10, 25).into()).unwrap(),
                     sections,
                     origin_octet: 10.into(),
                 }

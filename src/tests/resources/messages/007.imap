@@ -33,7 +33,11 @@ BODY (
       ) (
          "message" "rfc822" NIL NIL NIL NIL 13 (
             NIL "J" NIL NIL NIL NIL NIL NIL NIL NIL
-         ) NIL 0
+         ) (
+            "text" "plain" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 1 0
+         ) 0
       ) "mixed"
    ) (
       "text" "plain" (
@@ -103,7 +107,11 @@ BODYSTRUCTURE (
       ) (
          "message" "rfc822" NIL NIL NIL NIL 13 (
             NIL "J" NIL NIL NIL NIL NIL NIL NIL NIL
-         ) NIL 0 "9c9888d1b2c167dd33f7542df5a65aa7" NIL NIL NIL
+         ) (
+            "text" "plain" (
+               "charset" "us-ascii"
+            ) NIL NIL "7bit" 1 0 "ff44570aca8241914870afbc310cdb85" NIL NIL NIL
+         ) 0 "9c9888d1b2c167dd33f7542df5a65aa7" NIL NIL NIL
       ) "mixed" (
          "boundary" "2"
       ) NIL NIL NIL

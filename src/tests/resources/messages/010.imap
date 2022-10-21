@@ -1,9 +1,45 @@
 BODY (
-   "message" "rfc822" NIL NIL NIL NIL 88 NIL NIL 0
+   "message" "rfc822" NIL NIL NIL NIL 88 (
+      "Sun, 12 Aug 2012 09:34:56 +0000" "submsg" (
+         (
+            NIL NIL "sub" "domain.org"
+         )
+      ) (
+         (
+            NIL NIL "sub" "domain.org"
+         )
+      ) (
+         (
+            NIL NIL "sub" "domain.org"
+         )
+      ) NIL NIL NIL NIL NIL
+   ) (
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 12 1
+   ) 0
 )
 
 BODYSTRUCTURE (
-   "message" "rfc822" NIL NIL NIL NIL 88 NIL NIL 0 "dfea5a78f321b331e6d7983a1f9cc6b7" NIL NIL NIL
+   "message" "rfc822" NIL NIL NIL NIL 88 (
+      "Sun, 12 Aug 2012 09:34:56 +0000" "submsg" (
+         (
+            NIL NIL "sub" "domain.org"
+         )
+      ) (
+         (
+            NIL NIL "sub" "domain.org"
+         )
+      ) (
+         (
+            NIL NIL "sub" "domain.org"
+         )
+      ) NIL NIL NIL NIL NIL
+   ) (
+      "text" "plain" (
+         "charset" "us-ascii"
+      ) NIL NIL "7bit" 12 1 "f0ef7081e1539ac00ef5b761b4fb01b3" NIL NIL NIL
+   ) 0 "dfea5a78f321b331e6d7983a1f9cc6b7" NIL NIL NIL
 )
 
 BODY[] {196}

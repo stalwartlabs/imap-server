@@ -19,9 +19,15 @@ BODY (
             )
          ) NIL NIL NIL NIL NIL
       ) (
-         "image" "gif" (
-            "name" "Book about ☕ tables.gif"
-         ) NIL NIL "Base64" 56
+         (
+            "text" "plain" (
+               "charset" "utf-16"
+            ) NIL NIL "quoted-printable" 228 3
+         ) (
+            "image" "gif" (
+               "name" "Book about ☕ tables.gif"
+            ) NIL NIL "Base64" 56
+         ) "mixed"
       ) 0
    ) "mixed"
 )
@@ -47,13 +53,21 @@ BODYSTRUCTURE (
             )
          ) NIL NIL NIL NIL NIL
       ) (
-         "image" "gif" (
-            "name" "Book about ☕ tables.gif"
-         ) NIL NIL "Base64" 56 "d40fa7f401e9dc2df56cbb740d65ff52" (
-            "attachment" (
-               
-            )
-         ) NIL NIL
+         (
+            "text" "plain" (
+               "charset" "utf-16"
+            ) NIL NIL "quoted-printable" 228 3 "3a942a99cdd8a099ae107d3867ec20fb" NIL NIL NIL
+         ) (
+            "image" "gif" (
+               "name" "Book about ☕ tables.gif"
+            ) NIL NIL "Base64" 56 "d40fa7f401e9dc2df56cbb740d65ff52" (
+               "attachment" (
+                  
+               )
+            ) NIL NIL
+         ) "mixed" (
+            "boundary" "giddyup"
+         ) NIL NIL NIL
       ) 0 "cdb0382a03a15601fb1b3c7422521620" NIL NIL NIL
    ) "mixed" (
       "boundary" "festivus"
@@ -212,7 +226,7 @@ Content-Type: multipart/mixed; boundary="giddyup";
 
 
 ----------------------------------
-BODY[2.TEXT] {581}
+BODY[2.TEXT] {580}
 --giddyup
 Content-Type: text/plain; charset="utf-16"
 Content-Transfer-Encoding: quoted-printable
@@ -229,7 +243,6 @@ Content-Disposition: attachment
 
 R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7
 --giddyup--
-
 ----------------------------------
 BODY[2.MIME] {53}
 Content-Type: multipart/mixed; boundary="giddyup";
