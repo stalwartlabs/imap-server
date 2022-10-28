@@ -43,7 +43,7 @@ use super::PushUnique;
 
 */
 
-impl Request {
+impl Request<Command> {
     pub fn parse_acl(self) -> crate::core::Result<acl::Arguments> {
         let (has_identifier, has_mod_rights) = match self.command {
             Command::SetAcl => (true, true),

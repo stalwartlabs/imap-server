@@ -56,7 +56,7 @@ pub enum SavedSearch {
 impl Session {
     pub async fn handle_search(
         &mut self,
-        request: Request,
+        request: Request<Command>,
         is_sort: bool,
         is_uid: bool,
     ) -> Result<(), ()> {

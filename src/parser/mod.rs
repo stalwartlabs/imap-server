@@ -46,14 +46,14 @@ use std::{borrow::Cow, str::FromStr};
 use chrono::{DateTime, NaiveDate};
 
 use crate::{
-    core::{Command, Flag},
+    core::{receiver::CommandParser, Command, Flag},
     protocol::Sequence,
 };
 
 pub type Result<T> = std::result::Result<T, Cow<'static, str>>;
 
-impl Command {
-    pub fn parse(value: &[u8], uid: bool) -> Option<Self> {
+impl CommandParser for Command {
+    fn parse(value: &[u8], uid: bool) -> Option<Self> {
         match value {
             b"CAPABILITY" => Some(Command::Capability),
             b"NOOP" => Some(Command::Noop),
@@ -95,6 +95,17 @@ impl Command {
             b"ID" => Some(Command::Id),
             _ => None,
         }
+    }
+
+    #[inline(always)]
+    fn tokenize_brackets(&self) -> bool {
+        matches!(self, Command::Fetch(_))
+    }
+}
+
+impl Default for Command {
+    fn default() -> Self {
+        Command::Noop
     }
 }
 

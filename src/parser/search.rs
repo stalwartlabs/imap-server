@@ -30,14 +30,14 @@ use mail_parser::decoders::charsets::map::get_charset_decoder;
 use mail_parser::decoders::charsets::DecoderFnc;
 
 use crate::core::receiver::{Request, Token};
-use crate::core::Flag;
+use crate::core::{Command, Flag};
 use crate::protocol::search::{self, Filter};
 use crate::protocol::search::{ModSeqEntry, ResultOption};
 use crate::protocol::ProtocolVersion;
 
 use super::{parse_date, parse_number, parse_sequence_set};
 
-impl Request {
+impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
     pub fn parse_search(self, version: ProtocolVersion) -> crate::core::Result<search::Arguments> {
         if self.tokens.is_empty() {

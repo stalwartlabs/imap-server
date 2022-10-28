@@ -22,11 +22,11 @@
 */
 
 use crate::{
-    core::{receiver::Request, utf7::utf7_maybe_decode},
+    core::{receiver::Request, utf7::utf7_maybe_decode, Command},
     protocol::{delete, ProtocolVersion},
 };
 
-impl Request {
+impl Request<Command> {
     pub fn parse_delete(self, version: ProtocolVersion) -> crate::core::Result<delete::Arguments> {
         match self.tokens.len() {
             1 => Ok(delete::Arguments {

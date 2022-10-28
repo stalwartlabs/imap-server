@@ -28,7 +28,7 @@ use crate::core::{
 };
 
 impl Session {
-    pub async fn handle_unselect(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_unselect(&mut self, request: Request<Command>) -> Result<(), ()> {
         self.state = State::Authenticated {
             data: self.state.session_data(),
         };

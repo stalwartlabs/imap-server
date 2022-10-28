@@ -39,7 +39,7 @@ use crate::{
 impl Session {
     pub async fn handle_copy_move(
         &mut self,
-        request: Request,
+        request: Request<Command>,
         is_move: bool,
         is_uid: bool,
     ) -> Result<(), ()> {

@@ -25,7 +25,7 @@ use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 
 use crate::{
-    core::receiver::Request,
+    core::{receiver::Request, Command},
     protocol::{
         search::Filter,
         thread::{self, Algorithm},
@@ -34,7 +34,7 @@ use crate::{
 
 use super::search::parse_filters;
 
-impl Request {
+impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
     pub fn parse_thread(self) -> crate::core::Result<thread::Arguments> {
         if self.tokens.is_empty() {

@@ -26,14 +26,14 @@ use std::borrow::Cow;
 use crate::{
     core::{
         receiver::{Request, Token},
-        Flag,
+        Command, Flag,
     },
     protocol::store::{self, Operation},
 };
 
 use super::{parse_number, parse_sequence_set};
 
-impl Request {
+impl Request<Command> {
     pub fn parse_store(self) -> crate::core::Result<store::Arguments> {
         let mut tokens = self.tokens.into_iter().peekable();
 

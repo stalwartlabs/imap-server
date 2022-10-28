@@ -32,7 +32,7 @@ use crate::{
         client::{Session, SessionData},
         mailbox::{Account, Mailbox},
         receiver::Request,
-        IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::create::Arguments,
 };
@@ -41,7 +41,7 @@ use std::borrow::Cow;
 const MAX_MAILBOX_DEPTH: usize = 10;
 
 impl Session {
-    pub async fn handle_create(&mut self, requests: Vec<Request>) -> Result<(), ()> {
+    pub async fn handle_create(&mut self, requests: Vec<Request<Command>>) -> Result<(), ()> {
         let mut arguments = Vec::with_capacity(requests.len());
 
         for request in requests {

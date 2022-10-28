@@ -26,13 +26,13 @@ use tracing::debug;
 use crate::core::{
     client::{Session, SessionData},
     receiver::Request,
-    IntoStatusResponse, ResponseCode, StatusResponse,
+    Command, IntoStatusResponse, ResponseCode, StatusResponse,
 };
 
 impl Session {
     pub async fn handle_subscribe(
         &mut self,
-        request: Request,
+        request: Request<Command>,
         is_subscribe: bool,
     ) -> Result<(), ()> {
         match request.parse_subscribe(self.version) {

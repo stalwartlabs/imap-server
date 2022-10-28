@@ -35,7 +35,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_append(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_append(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_append() {
             Ok(arguments) => {
                 let (data, selected_mailbox) = self.state.session_mailbox_data();

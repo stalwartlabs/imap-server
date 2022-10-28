@@ -46,7 +46,11 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_fetch(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
+    pub async fn handle_fetch(
+        &mut self,
+        request: Request<Command>,
+        is_uid: bool,
+    ) -> Result<(), ()> {
         match request.parse_fetch() {
             Ok(arguments) => {
                 let (data, mailbox) = self.state.select_data();

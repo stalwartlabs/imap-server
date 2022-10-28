@@ -40,7 +40,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_status(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_status(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_status(self.version) {
             Ok(arguments) => {
                 let version = self.version;

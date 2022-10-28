@@ -21,9 +21,12 @@
  * for more details.
 */
 
-use crate::{core::receiver::Request, protocol::login};
+use crate::{
+    core::{receiver::Request, Command},
+    protocol::login,
+};
 
-impl Request {
+impl Request<Command> {
     pub fn parse_login(self) -> crate::core::Result<login::Arguments> {
         match self.tokens.len() {
             2 => {

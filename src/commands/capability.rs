@@ -30,7 +30,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_capability(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_capability(&mut self, request: Request<Command>) -> Result<(), ()> {
         self.write_bytes(
             StatusResponse::completed(Command::Capability)
                 .with_tag(request.tag)
@@ -47,7 +47,7 @@ impl Session {
         .await
     }
 
-    pub async fn handle_id(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_id(&mut self, request: Request<Command>) -> Result<(), ()> {
         self.write_bytes(
             StatusResponse::completed(Command::Id)
                 .with_tag(request.tag)

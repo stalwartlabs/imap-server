@@ -23,10 +23,11 @@
 
 use crate::core::receiver::{Request, Token};
 use crate::core::utf7::utf7_maybe_decode;
+use crate::core::Command;
 use crate::protocol::status::Status;
 use crate::protocol::{status, ProtocolVersion};
 
-impl Request {
+impl Request<Command> {
     pub fn parse_status(self, version: ProtocolVersion) -> crate::core::Result<status::Arguments> {
         match self.tokens.len() {
             0..=3 => Err(self.into_error("Missing arguments.")),

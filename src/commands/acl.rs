@@ -41,7 +41,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_get_acl(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_get_acl(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_acl() {
             Ok(arguments) => {
                 let data = self.state.session_data();
@@ -121,7 +121,7 @@ impl Session {
         }
     }
 
-    pub async fn handle_my_rights(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_my_rights(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_acl() {
             Ok(arguments) => {
                 let data = self.state.session_data();
@@ -191,7 +191,7 @@ impl Session {
         }
     }
 
-    pub async fn handle_set_acl(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_set_acl(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_acl() {
             Ok(arguments) => {
                 let data = self.state.session_data();
@@ -283,7 +283,7 @@ impl Session {
         }
     }
 
-    pub async fn handle_delete_acl(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_delete_acl(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_acl() {
             Ok(arguments) => {
                 let data = self.state.session_data();
@@ -344,7 +344,7 @@ impl Session {
         }
     }
 
-    pub async fn handle_list_rights(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_list_rights(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_acl() {
             Ok(arguments) => {
                 self.write_bytes(

@@ -22,11 +22,11 @@
 */
 
 use crate::{
-    core::receiver::Request,
+    core::{receiver::Request, Command},
     protocol::{capability::Capability, enable},
 };
 
-impl Request {
+impl Request<Command> {
     pub fn parse_enable(self) -> crate::core::Result<enable::Arguments> {
         let len = self.tokens.len();
         if len > 0 {

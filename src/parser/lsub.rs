@@ -22,14 +22,14 @@
 */
 
 use crate::{
-    core::{receiver::Request, utf7::utf7_maybe_decode},
+    core::{receiver::Request, utf7::utf7_maybe_decode, Command},
     protocol::{
         list::{self, SelectionOption},
         ProtocolVersion,
     },
 };
 
-impl Request {
+impl Request<Command> {
     pub fn parse_lsub(self) -> crate::core::Result<list::Arguments> {
         if self.tokens.len() > 1 {
             let mut tokens = self.tokens.into_iter();

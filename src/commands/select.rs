@@ -36,7 +36,7 @@ use std::sync::Arc;
 use super::search::SavedSearch;
 
 impl Session {
-    pub async fn handle_select(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_select(&mut self, request: Request<Command>) -> Result<(), ()> {
         let is_select = request.command == Command::Select;
         let command = request.command;
         match request.parse_select(self.version) {

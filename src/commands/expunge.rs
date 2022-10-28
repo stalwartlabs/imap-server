@@ -38,7 +38,11 @@ use crate::{
 use super::search::SavedSearch;
 
 impl Session {
-    pub async fn handle_expunge(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
+    pub async fn handle_expunge(
+        &mut self,
+        request: Request<Command>,
+        is_uid: bool,
+    ) -> Result<(), ()> {
         let (data, mailbox) = self.state.select_data();
 
         // Parse sequence to operate on

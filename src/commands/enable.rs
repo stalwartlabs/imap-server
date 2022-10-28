@@ -22,12 +22,12 @@
 */
 
 use crate::{
-    core::{client::Session, receiver::Request, StatusResponse},
+    core::{client::Session, receiver::Request, Command, StatusResponse},
     protocol::{capability::Capability, ProtocolVersion},
 };
 
 impl Session {
-    pub async fn handle_enable(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_enable(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_enable() {
             Ok(arguments) => {
                 for capability in arguments.capabilities {

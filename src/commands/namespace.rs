@@ -27,7 +27,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_namespace(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_namespace(&mut self, request: Request<Command>) -> Result<(), ()> {
         self.write_bytes(
             StatusResponse::completed(Command::Namespace)
                 .with_tag(request.tag)

@@ -39,7 +39,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_list(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_list(&mut self, request: Request<Command>) -> Result<(), ()> {
         let command = request.command;
         let is_lsub = command == Command::Lsub;
         match if !is_lsub {

@@ -44,7 +44,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_idle(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_idle(&mut self, request: Request<Command>) -> Result<(), ()> {
         let (data, mailbox, subscriptions) = match &self.state {
             State::Authenticated { data } => (data.clone(), None, vec![TypeState::Mailbox]),
             State::Selected { data, mailbox, .. } => (

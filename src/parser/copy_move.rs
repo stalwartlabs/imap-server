@@ -21,11 +21,14 @@
  * for more details.
 */
 
-use crate::{core::receiver::Request, protocol::copy_move};
+use crate::{
+    core::{receiver::Request, Command},
+    protocol::copy_move,
+};
 
 use super::parse_sequence_set;
 
-impl Request {
+impl Request<Command> {
     pub fn parse_copy_move(self) -> crate::core::Result<copy_move::Arguments> {
         if self.tokens.len() > 1 {
             let mut tokens = self.tokens.into_iter();

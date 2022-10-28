@@ -43,7 +43,7 @@ use super::{
 
 pub struct Session {
     pub core: Arc<Core>,
-    pub receiver: Receiver,
+    pub receiver: Receiver<Command>,
     pub version: ProtocolVersion,
     pub state: State,
     pub peer_addr: SocketAddr,
@@ -281,9 +281,9 @@ impl Session {
 }
 
 pub fn group_requests(
-    requests: &mut Peekable<IntoIter<Request>>,
-    mut grouped_requests: Vec<Request>,
-) -> Vec<Request> {
+    requests: &mut Peekable<IntoIter<Request<Command>>>,
+    mut grouped_requests: Vec<Request<Command>>,
+) -> Vec<Request<Command>> {
     let last_command = grouped_requests.last().unwrap().command;
     loop {
         match requests.peek() {
@@ -296,7 +296,7 @@ pub fn group_requests(
     grouped_requests
 }
 
-impl Request {
+impl Request<Command> {
     pub fn is_allowed(self, state: &State, is_tls: bool) -> Result<Self, StatusResponse> {
         match &self.command {
             Command::Capability | Command::Noop | Command::Logout | Command::Id => Ok(self),

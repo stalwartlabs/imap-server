@@ -113,11 +113,6 @@ pub enum Command {
 }
 
 impl Command {
-    #[inline(always)]
-    pub fn is_fetch(&self) -> bool {
-        matches!(self, Command::Fetch(_))
-    }
-
     pub fn is_uid(&self) -> bool {
         matches!(
             self,

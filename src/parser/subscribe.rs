@@ -22,11 +22,11 @@
 */
 
 use crate::{
-    core::{receiver::Request, utf7::utf7_maybe_decode},
+    core::{receiver::Request, utf7::utf7_maybe_decode, Command},
     protocol::{subscribe, ProtocolVersion},
 };
 
-impl Request {
+impl Request<Command> {
     pub fn parse_subscribe(
         self,
         version: ProtocolVersion,

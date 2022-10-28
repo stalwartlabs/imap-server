@@ -24,14 +24,14 @@
 use crate::{
     core::{
         receiver::{Request, Token},
-        Flag,
+        Command, Flag,
     },
     protocol::append::{self, Message},
 };
 
 use super::parse_datetime;
 
-impl Request {
+impl Request<Command> {
     pub fn parse_append(self) -> crate::core::Result<append::Arguments> {
         match self.tokens.len() {
             0 | 1 => Err(self.into_error("Missing arguments.")),

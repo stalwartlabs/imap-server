@@ -31,7 +31,7 @@ use crate::{
     core::{
         client::{SelectedMailbox, Session, SessionData},
         receiver::Request,
-        IntoStatusResponse, StatusResponse,
+        Command, IntoStatusResponse, StatusResponse,
     },
     protocol::{
         select::Exists,
@@ -41,7 +41,11 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_thread(&mut self, request: Request, is_uid: bool) -> Result<(), ()> {
+    pub async fn handle_thread(
+        &mut self,
+        request: Request<Command>,
+        is_uid: bool,
+    ) -> Result<(), ()> {
         let command = request.command;
         match request.parse_thread() {
             Ok(arguments) => {

@@ -25,13 +25,16 @@ use jmap_client::core::query::Operator;
 use mail_parser::decoders::charsets::map::get_charset_decoder;
 
 use crate::{
-    core::receiver::{Request, Token},
+    core::{
+        receiver::{Request, Token},
+        Command,
+    },
     protocol::search::{Arguments, Comparator, Filter, Sort},
 };
 
 use super::search::{parse_filters, parse_result_options};
 
-impl Request {
+impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
     pub fn parse_sort(self) -> crate::core::Result<Arguments> {
         if self.tokens.is_empty() {

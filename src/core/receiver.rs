@@ -23,8 +23,6 @@
 
 use std::{borrow::Cow, fmt::Display};
 
-use crate::core::Command;
-
 use super::{ResponseCode, ResponseType, StatusResponse};
 
 #[derive(Debug, Clone)]
@@ -35,10 +33,15 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Request {
+pub struct Request<T: CommandParser> {
     pub tag: String,
-    pub command: Command,
+    pub command: T,
     pub tokens: Vec<Token>,
+}
+
+pub trait CommandParser: Sized + Default {
+    fn parse(bytes: &[u8], is_uid: bool) -> Option<Self>;
+    fn tokenize_brackets(&self) -> bool;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,11 +57,11 @@ pub enum Token {
     Nil,              // NIL
 }
 
-impl Default for Request {
+impl<T: CommandParser> Default for Request<T> {
     fn default() -> Self {
         Self {
             tag: String::with_capacity(0),
-            command: Command::Noop,
+            command: T::default(),
             tokens: Vec::new(),
         }
     }
@@ -76,20 +79,27 @@ pub enum State {
     LiteralData { remaining: u32 },
 }
 
-pub struct Receiver {
+pub struct Receiver<T: CommandParser> {
     buf: Vec<u8>,
-    pub request: Request,
+    pub request: Request<T>,
     pub state: State,
     pub max_request_size: usize,
     pub current_request_size: usize,
+    pub start_state: State,
 }
 
-impl Receiver {
+impl<T: CommandParser> Receiver<T> {
     pub fn new() -> Self {
         Receiver {
             max_request_size: 25 * 1024 * 1024, // 25MB
             ..Default::default()
         }
+    }
+
+    pub fn with_start_state(mut self, state: State) -> Self {
+        self.state = state;
+        self.start_state = state;
+        self
     }
 
     pub fn with_max_request_size(max_request_size: usize) -> Self {
@@ -110,7 +120,7 @@ impl Receiver {
             message,
         );
         self.buf = Vec::with_capacity(10);
-        self.state = State::Start;
+        self.state = self.start_state;
         self.current_request_size = 0;
         err
     }
@@ -144,7 +154,7 @@ impl Receiver {
         Ok(())
     }
 
-    pub fn parse(&mut self, bytes: &mut std::slice::Iter<'_, u8>) -> Result<Request, Error> {
+    pub fn parse(&mut self, bytes: &mut std::slice::Iter<'_, u8>) -> Result<Request<T>, Error> {
         #[allow(clippy::while_let_on_iterator)]
         while let Some(&ch) = bytes.next() {
             match self.state {
@@ -190,8 +200,8 @@ impl Receiver {
                     } else if ch.is_ascii_whitespace() {
                         if !self.buf.is_empty() {
                             if !self.buf.eq_ignore_ascii_case(b"UID") {
-                                self.request.command = Command::parse(&self.buf, is_uid)
-                                    .ok_or_else(|| {
+                                self.request.command =
+                                    T::parse(&self.buf, is_uid).ok_or_else(|| {
                                         let command =
                                             String::from_utf8_lossy(&self.buf).into_owned();
                                         self.error_reset(format!(
@@ -203,7 +213,7 @@ impl Receiver {
                                 if ch != b'\n' {
                                     self.state = State::Argument { last_ch: b' ' };
                                 } else {
-                                    self.state = State::Start;
+                                    self.state = self.start_state;
                                     self.current_request_size = 0;
                                     return Ok(std::mem::take(&mut self.request));
                                 }
@@ -236,29 +246,29 @@ impl Receiver {
                         self.push_argument(false)?;
                         self.push_token(Token::ParenthesisClose)?;
                     }
-                    b'[' if self.request.command.is_fetch() => {
+                    b'[' if self.request.command.tokenize_brackets() => {
                         self.push_argument(false)?;
                         self.push_token(Token::BracketOpen)?;
                     }
-                    b']' if self.request.command.is_fetch() => {
+                    b']' if self.request.command.tokenize_brackets() => {
                         self.push_argument(false)?;
                         self.push_token(Token::BracketClose)?;
                     }
-                    b'<' if self.request.command.is_fetch() => {
+                    b'<' if self.request.command.tokenize_brackets() => {
                         self.push_argument(false)?;
                         self.push_token(Token::Lt)?;
                     }
-                    b'>' if self.request.command.is_fetch() => {
+                    b'>' if self.request.command.tokenize_brackets() => {
                         self.push_argument(false)?;
                         self.push_token(Token::Gt)?;
                     }
-                    b'.' if self.request.command.is_fetch() => {
+                    b'.' if self.request.command.tokenize_brackets() => {
                         self.push_argument(false)?;
                         self.push_token(Token::Dot)?;
                     }
                     b'\n' => {
                         self.push_argument(false)?;
-                        self.state = State::Start;
+                        self.state = self.start_state;
                         self.current_request_size = 0;
                         return Ok(std::mem::take(&mut self.request));
                     }
@@ -475,19 +485,20 @@ impl Error {
     }
 }
 
-impl Default for Receiver {
+impl<T: CommandParser> Default for Receiver<T> {
     fn default() -> Self {
         Self {
             buf: Vec::with_capacity(10),
             request: Default::default(),
-            state: State::Tag,
+            state: State::Start,
+            start_state: State::Start,
             max_request_size: 25 * 1024 * 1024,
             current_request_size: 0,
         }
     }
 }
 
-impl Request {
+impl<T: CommandParser> Request<T> {
     pub fn into_error(self, message: impl Into<Cow<'static, str>>) -> StatusResponse {
         StatusResponse {
             tag: self.tag.into(),
@@ -593,12 +604,14 @@ DQUOTE         =  %x22 ; " (Double Quote)
 
 #[cfg(test)]
 mod tests {
-    use crate::core::Command;
+
+    use crate::core::receiver::State;
 
     use super::{Error, Receiver, Request, Token};
 
     #[test]
     fn receiver_parse_ok() {
+        use crate::core::Command;
         let mut receiver = Receiver::new();
 
         for (frames, expected_requests) in [
@@ -1052,7 +1065,7 @@ mod tests {
 
     #[test]
     fn receiver_parse_invalid() {
-        let mut receiver = Receiver::new();
+        let mut receiver = Receiver::<crate::core::Command>::new();
         for invalid in [
             "\r\n",
             "  \r \n",
@@ -1066,6 +1079,133 @@ mod tests {
                 Err(Error::Error { .. }) => {}
                 result => panic!("Expecter error, got: {:?}", result),
             }
+        }
+    }
+
+    #[test]
+    fn receiver_parse_managesieve() {
+        use crate::managesieve::Command;
+
+        let mut receiver = Receiver::new().with_start_state(State::Command { is_uid: false });
+
+        for (frames, expected_requests) in [
+            (
+                vec!["Authenticate \"DIGEST-MD5\"\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::Authenticate,
+                    tokens: vec![Token::Argument(b"DIGEST-MD5".to_vec())],
+                }],
+            ),
+            (
+                vec![
+                    "  AUTHENTICATE  \"GSSAPI\"  {56+}\r\n",
+                    "cnNwYXV0aD1lYTQwZjYwMzM1YzQyN2I1NTI3Yjg0ZGJhYmNkZmZmZA==\r\n",
+                ],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::Authenticate,
+                    tokens: vec![
+                        Token::Argument(b"GSSAPI".to_vec()),
+                        Token::Argument(
+                            b"cnNwYXV0aD1lYTQwZjYwMzM1YzQyN2I1NTI3Yjg0ZGJhYmNkZmZmZA==".to_vec(),
+                        ),
+                    ],
+                }],
+            ),
+            (
+                vec!["Authenticate \"PLAIN\" \"QJIrweAPyo6Q1T9xu\"\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::Authenticate,
+                    tokens: vec![
+                        Token::Argument(b"PLAIN".to_vec()),
+                        Token::Argument(b"QJIrweAPyo6Q1T9xu".to_vec()),
+                    ],
+                }],
+            ),
+            (
+                vec!["StartTls\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::StartTls,
+                    tokens: vec![],
+                }],
+            ),
+            (
+                vec!["HAVESPACE \"myscript\" 999999\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::HaveSpace,
+                    tokens: vec![
+                        Token::Argument(b"myscript".to_vec()),
+                        Token::Argument(b"999999".to_vec()),
+                    ],
+                }],
+            ),
+            (
+                vec![
+                    "Putscript \"foo\" {31+}\r\n",
+                    "#comment\r\n",
+                    "InvalidSieveCommand\r\n\r\n",
+                ],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::PutScript,
+                    tokens: vec![
+                        Token::Argument(b"foo".to_vec()),
+                        Token::Argument(b"#comment\r\nInvalidSieveCommand\r\n".to_vec()),
+                    ],
+                }],
+            ),
+            (
+                vec!["Listscripts\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::ListScripts,
+                    tokens: vec![],
+                }],
+            ),
+            (
+                vec!["Setactive \"baz\"\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::SetActive,
+                    tokens: vec![Token::Argument(b"baz".to_vec())],
+                }],
+            ),
+            (
+                vec!["Renamescript \"foo\" \"bar\"\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::RenameScript,
+                    tokens: vec![
+                        Token::Argument(b"foo".to_vec()),
+                        Token::Argument(b"bar".to_vec()),
+                    ],
+                }],
+            ),
+            (
+                vec!["NOOP \"STARTTLS-SYNC-42\"\r\n"],
+                vec![Request {
+                    tag: "".to_string(),
+                    command: Command::Noop,
+                    tokens: vec![Token::Argument(b"STARTTLS-SYNC-42".to_vec())],
+                }],
+            ),
+        ] {
+            let mut requests = Vec::new();
+            for frame in &frames {
+                let mut bytes = frame.as_bytes().iter();
+                loop {
+                    match receiver.parse(&mut bytes) {
+                        Ok(request) => requests.push(request),
+                        Err(Error::NeedsMoreData | Error::NeedsLiteral { .. }) => break,
+                        Err(err) => panic!("{:?} for frames {:#?}", err, frames),
+                    }
+                }
+            }
+            assert_eq!(requests, expected_requests, "{:#?}", frames);
         }
     }
 }

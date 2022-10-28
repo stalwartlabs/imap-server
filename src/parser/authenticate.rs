@@ -22,11 +22,11 @@
 */
 
 use crate::{
-    core::receiver::Request,
+    core::{receiver::Request, Command},
     protocol::authenticate::{self, Mechanism},
 };
 
-impl Request {
+impl Request<Command> {
     pub fn parse_authenticate(self) -> crate::core::Result<authenticate::Arguments> {
         if !self.tokens.is_empty() {
             let mut tokens = self.tokens.into_iter();

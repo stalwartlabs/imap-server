@@ -23,10 +23,10 @@
 
 use jmap_client::client::Credentials;
 
-use crate::core::{client::Session, receiver::Request};
+use crate::core::{client::Session, receiver::Request, Command};
 
 impl Session {
-    pub async fn handle_login(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_login(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_login() {
             Ok(args) => {
                 self.authenticate(Credentials::basic(&args.username, &args.password), args.tag)

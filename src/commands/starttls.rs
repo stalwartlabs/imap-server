@@ -24,12 +24,12 @@
 use tokio::{io::WriteHalf, net::TcpStream, sync::oneshot};
 use tracing::debug;
 
-use crate::core::{client::Session, receiver::Request, writer, StatusResponse};
+use crate::core::{client::Session, receiver::Request, writer, Command, StatusResponse};
 
 impl Session {
     pub async fn handle_starttls(
         &mut self,
-        request: Request,
+        request: Request<Command>,
     ) -> Result<Option<WriteHalf<TcpStream>>, ()> {
         self.write_bytes(
             StatusResponse::ok("Begin TLS negotiation now")

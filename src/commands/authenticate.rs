@@ -36,7 +36,7 @@ use crate::{
 };
 
 impl Session {
-    pub async fn handle_authenticate(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_authenticate(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_authenticate() {
             Ok(mut args) => match args.mechanism {
                 Mechanism::Plain | Mechanism::OAuthBearer => {
@@ -178,7 +178,7 @@ impl Session {
         }
     }
 
-    pub async fn handle_unauthenticate(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_unauthenticate(&mut self, request: Request<Command>) -> Result<(), ()> {
         self.state = State::NotAuthenticated { auth_failures: 0 };
 
         self.write_bytes(

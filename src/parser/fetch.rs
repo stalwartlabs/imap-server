@@ -26,13 +26,16 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 use crate::{
-    core::receiver::{Request, Token},
+    core::{
+        receiver::{Request, Token},
+        Command,
+    },
     protocol::fetch::{self, Attribute, Section},
 };
 
 use super::{parse_number, parse_sequence_set, PushUnique};
 
-impl Request {
+impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
     pub fn parse_fetch(self) -> crate::core::Result<fetch::Arguments> {
         if self.tokens.len() < 2 {

@@ -28,7 +28,11 @@ use crate::core::{
 };
 
 impl Session {
-    pub async fn handle_noop(&mut self, request: Request, is_check: bool) -> Result<(), ()> {
+    pub async fn handle_noop(
+        &mut self,
+        request: Request<Command>,
+        is_check: bool,
+    ) -> Result<(), ()> {
         match &self.state {
             State::Authenticated { data } => {
                 data.write_changes(None, true, true, self.is_qresync, self.version.is_rev2())

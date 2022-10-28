@@ -27,13 +27,13 @@ use crate::{
     core::{
         client::{Session, SessionData},
         receiver::Request,
-        IntoStatusResponse, ResponseCode, StatusResponse,
+        Command, IntoStatusResponse, ResponseCode, StatusResponse,
     },
     protocol::delete::Arguments,
 };
 
 impl Session {
-    pub async fn handle_delete(&mut self, requests: Vec<Request>) -> Result<(), ()> {
+    pub async fn handle_delete(&mut self, requests: Vec<Request<Command>>) -> Result<(), ()> {
         let mut arguments = Vec::with_capacity(requests.len());
 
         for request in requests {

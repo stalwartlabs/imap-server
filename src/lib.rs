@@ -23,15 +23,19 @@
 
 pub mod commands;
 pub mod core;
+pub mod managesieve;
 pub mod parser;
 pub mod protocol;
 #[cfg(test)]
 pub mod tests;
 
-use crate::core::{
-    config::{build_core, failed_to, UnwrapFailure},
-    env_settings::EnvSettings,
-    housekeeper::spawn_housekeeper,
+use crate::{
+    core::{
+        config::{build_core, failed_to, UnwrapFailure},
+        env_settings::EnvSettings,
+        housekeeper::spawn_housekeeper,
+    },
+    managesieve::listener::spawn_managesieve_listener,
 };
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
@@ -42,6 +46,7 @@ use crate::core::listener::spawn_listener;
 
 const IMAP4_PORT: u16 = 143;
 const IMAP4_PORT_TLS: u16 = 993;
+const MANAGESIEVE_PORT: u16 = 4190;
 
 pub async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
     // Enable logging
@@ -78,6 +83,18 @@ pub async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
             );
             spawn_listener(socket_addr, core.clone(), is_tls, shutdown_rx.clone()).await;
         }
+    }
+
+    // Start ManageSieve listener
+    if let Some(bind_port) = settings.get("bind-port-managesieve") {
+        let socket_addr =
+            SocketAddr::from((bind_addr, bind_port.parse().unwrap_or(MANAGESIEVE_PORT)));
+        info!(
+            "Starting Stalwart ManageSieve server v{} at {}...",
+            env!("CARGO_PKG_VERSION"),
+            socket_addr,
+        );
+        spawn_managesieve_listener(socket_addr, core.clone(), shutdown_rx.clone()).await;
     }
 
     // Start houskeeper

@@ -25,7 +25,7 @@ use crate::{
     core::{
         receiver::{Request, Token},
         utf7::utf7_maybe_decode,
-        StatusResponse,
+        Command, StatusResponse,
     },
     protocol::{
         select::{self, QResync},
@@ -35,7 +35,7 @@ use crate::{
 
 use super::{parse_number, parse_sequence_set};
 
-impl Request {
+impl Request<Command> {
     pub fn parse_select(self, version: ProtocolVersion) -> crate::core::Result<select::Arguments> {
         if !self.tokens.is_empty() {
             let mut tokens = self.tokens.into_iter().peekable();

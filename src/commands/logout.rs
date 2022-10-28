@@ -24,7 +24,7 @@
 use crate::core::{client::Session, receiver::Request, Command, StatusResponse};
 
 impl Session {
-    pub async fn handle_logout(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_logout(&mut self, request: Request<Command>) -> Result<(), ()> {
         let mut response = StatusResponse::bye(
             concat!(
                 "Stalwart IMAP4rev2 v",

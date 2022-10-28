@@ -25,6 +25,7 @@ use crate::{
     core::{
         receiver::{Request, Token},
         utf7::utf7_maybe_decode,
+        Command,
     },
     protocol::{
         list::{self, ReturnOption, SelectionOption},
@@ -33,7 +34,7 @@ use crate::{
     },
 };
 
-impl Request {
+impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
     pub fn parse_list(self, version: ProtocolVersion) -> crate::core::Result<list::Arguments> {
         match self.tokens.len() {

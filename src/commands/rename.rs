@@ -35,7 +35,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 impl Session {
-    pub async fn handle_rename(&mut self, request: Request) -> Result<(), ()> {
+    pub async fn handle_rename(&mut self, request: Request<Command>) -> Result<(), ()> {
         match request.parse_rename(self.version) {
             Ok(arguments) => {
                 let data = self.state.session_data();
