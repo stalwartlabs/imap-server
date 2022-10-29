@@ -23,19 +23,13 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use tokio::{io::AsyncWriteExt, net::TcpListener, sync::watch};
+use tokio::{net::TcpListener, sync::watch};
 use tracing::{debug, error};
 
 use crate::{
     core::{config::failed_to, Core},
     managesieve::{client::Session, connection::handle_conn},
 };
-
-static SERVER_GREETING: &str = concat!(
-    "OK Stalwart ManageSieve v",
-    env!("CARGO_PKG_VERSION"),
-    " at your service."
-);
 
 pub async fn spawn_managesieve_listener(
     bind_addr: SocketAddr,
@@ -52,18 +46,12 @@ pub async fn spawn_managesieve_listener(
             tokio::select! {
                 stream = listener.accept() => {
                     match stream {
-                        Ok((mut stream, _)) => {
+                        Ok((stream, _)) => {
                             let shutdown_rx = shutdown_rx.clone();
                             let core = core.clone();
 
                             tokio::spawn(async move {
                                 let peer_addr = stream.peer_addr().unwrap();
-
-                                // Send greeting
-                                if let Err(err) = stream.write_all(SERVER_GREETING.as_bytes()).await {
-                                    debug!("Failed to send greeting to {}: {}", peer_addr, err);
-                                    return;
-                                }
 
                                 handle_conn(
                                     stream,

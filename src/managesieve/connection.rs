@@ -42,7 +42,14 @@ pub async fn handle_conn(
     let mut buf = vec![0; 4096];
     let (mut stream_rx, stream_tx) = tokio::io::split(stream);
 
-    if !session.set_stream(stream_tx).await {
+    if !session.set_stream(stream_tx).await
+        || matches!(
+            session
+                .handle_capability("Stalwart ManageSieve at your service.")
+                .await,
+            Ok(false)
+        )
+    {
         return;
     }
 
@@ -91,14 +98,14 @@ pub async fn handle_conn(
                         break;
                     },
                     Err(_) => {
-                        session.write_bytes(b"* BYE Connection timed out.\r\n".to_vec()).await.ok();
+                        session.write_bytes(b"BYE \"Connection timed out.\"\r\n".to_vec()).await.ok();
                         debug!("ManageSieve connection timed out with {}.", session.peer_addr);
                         break;
                     }
                 }
             },
             _ = shutdown_rx.changed() => {
-                session.write_bytes(b"* BYE Server shutting down.\r\n".to_vec()).await.ok();
+                session.write_bytes(b"BYE \"Server shutting down.\"\r\n".to_vec()).await.ok();
                 debug!("ManageSieve connection with peer {} shutting down.", session.peer_addr);
                 return;
             }
@@ -114,7 +121,12 @@ pub async fn handle_conn_tls(
     let mut buf = vec![0; 4096];
     let (mut stream_rx, stream_tx) = tokio::io::split(stream);
 
-    if !session.set_stream_tls(stream_tx).await {
+    if !session.set_stream_tls(stream_tx).await
+        || matches!(
+            session.handle_capability("TLS now active.").await,
+            Ok(false)
+        )
+    {
         return;
     }
 
@@ -144,14 +156,14 @@ pub async fn handle_conn_tls(
                         break;
                     },
                     Err(_) => {
-                        session.write_bytes(b"* BYE Connection timed out.\r\n".to_vec()).await.ok();
+                        session.write_bytes(b"BYE \"Connection timed out.\"\r\n".to_vec()).await.ok();
                         debug!("ManageSieve connection timed out with {}.", session.peer_addr);
                         break;
                     }
                 }
             },
             _ = shutdown_rx.changed() => {
-                session.write_bytes(b"* BYE Server shutting down.\r\n".to_vec()).await.ok();
+                session.write_bytes(b"BYE \"Server shutting down.\"\r\n".to_vec()).await.ok();
                 debug!("ManageSieve connection with peer {} shutting down.", session.peer_addr);
                 return;
             }

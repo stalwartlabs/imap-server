@@ -190,7 +190,7 @@ impl Session {
     }
 }
 
-fn decode_challenge_plain(challenge: &[u8]) -> Result<Credentials, &'static str> {
+pub fn decode_challenge_plain(challenge: &[u8]) -> Result<Credentials, &'static str> {
     let mut username = Vec::new();
     let mut secret = Vec::new();
     let mut arg_num = 0;
@@ -214,7 +214,7 @@ fn decode_challenge_plain(challenge: &[u8]) -> Result<Credentials, &'static str>
     }
 }
 
-fn decode_challenge_oauth(challenge: &[u8]) -> Result<Credentials, &'static str> {
+pub fn decode_challenge_oauth(challenge: &[u8]) -> Result<Credentials, &'static str> {
     let mut saw_marker = true;
     for (pos, &ch) in challenge.iter().enumerate() {
         if saw_marker {

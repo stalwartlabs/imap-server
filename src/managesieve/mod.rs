@@ -1,4 +1,5 @@
 pub mod client;
+pub mod commands;
 pub mod connection;
 pub mod listener;
 
@@ -84,7 +85,7 @@ pub enum ResponseCode {
     Active,
     NonExistent,
     AlreadyExists,
-    Tag,
+    Tag(String),
     Warnings,
 }
 
@@ -103,7 +104,13 @@ impl ResponseCode {
             ResponseCode::Active => b"ACTIVE",
             ResponseCode::NonExistent => b"NONEXISTENT",
             ResponseCode::AlreadyExists => b"ALREADYEXISTS",
-            ResponseCode::Tag => b"TAG",
+            ResponseCode::Tag(tag) => {
+                buf.extend_from_slice(b"TAG {");
+                buf.extend_from_slice(tag.len().to_string().as_bytes());
+                buf.extend_from_slice(b"}\r\n");
+                buf.extend_from_slice(tag.as_bytes());
+                return;
+            }
             ResponseCode::Warnings => b"WARNINGS",
         });
     }
@@ -128,8 +135,14 @@ impl StatusResponse {
             buf.push(b')');
         }
         if !self.message.is_empty() {
-            buf.push(b' ');
-            buf.extend_from_slice(self.message.as_bytes());
+            buf.extend_from_slice(b" \"");
+            for ch in self.message.as_bytes() {
+                if [b'\"', b'\\'].contains(ch) {
+                    buf.push(b'\\');
+                }
+                buf.push(*ch);
+            }
+            buf.push(b'\"');
         }
         buf.extend_from_slice(b"\r\n");
         buf

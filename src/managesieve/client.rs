@@ -47,14 +47,8 @@ pub struct Session {
 
 #[allow(clippy::large_enum_variant)]
 pub enum State {
-    NotAuthenticated {
-        auth_failures: u8,
-    },
-    Authenticated {
-        client: Client,
-        core: Arc<Core>,
-        writer: mpsc::Sender<writer::Event>,
-    },
+    NotAuthenticated { auth_failures: u8 },
+    Authenticated { client: Client },
 }
 
 impl Session {
@@ -120,21 +114,29 @@ impl Session {
         }
 
         for request in requests {
-            match request.command {
-                Command::Authenticate => todo!(),
-                Command::StartTls => todo!(),
-                Command::Logout => todo!(),
-                Command::Capability => todo!(),
-                Command::HaveSpace => todo!(),
-                Command::PutScript => todo!(),
-                Command::ListScripts => todo!(),
-                Command::SetActive => todo!(),
-                Command::GetScript => todo!(),
-                Command::DeleteScript => todo!(),
-                Command::RenameScript => todo!(),
-                Command::CheckScript => todo!(),
-                Command::Noop => todo!(),
-                Command::Unauthenticate => todo!(),
+            let result = match request.command {
+                Command::ListScripts => self.handle_listscripts(request).await,
+                Command::PutScript => self.handle_putscript(request).await,
+                Command::SetActive => self.handle_setactive(request).await,
+                Command::GetScript => self.handle_getscript(request).await,
+                Command::DeleteScript => self.handle_deletescript(request).await,
+                Command::RenameScript => self.handle_renamescript(request).await,
+                Command::CheckScript => self.handle_checkscript(request).await,
+                Command::HaveSpace => self.handle_havespace(request).await,
+                Command::Capability => self.handle_capability("").await,
+                Command::Authenticate => self.handle_authenticate(request).await,
+                Command::StartTls => return self.handle_starttls().await,
+                Command::Logout => self.handle_logout().await,
+                Command::Noop => self.handle_noop(request).await,
+                Command::Unauthenticate => self.handle_unauthenticate().await,
+            };
+
+            match result {
+                Ok(true) => (),
+                Ok(false) => return Err(()),
+                Err(response) => {
+                    self.write_bytes(response.into_bytes()).await?;
+                }
             }
         }
 

@@ -490,6 +490,11 @@ impl IntoStatusResponse for jmap_client::Error {
                     (ResponseCode::NoPerm, "Sending is not allowed.".to_string())
                 }
                 SetErrorType::CannotUnsend => (ResponseCode::Cannot, "Cannot unsend.".to_string()),
+                SetErrorType::AlreadyExists
+                | SetErrorType::InvalidScript
+                | SetErrorType::ScriptIsActive => {
+                    (ResponseCode::Cannot, "Sieve script error.".to_string())
+                }
             },
             jmap_client::Error::WebSocket(_) => (
                 ResponseCode::ContactAdmin,
