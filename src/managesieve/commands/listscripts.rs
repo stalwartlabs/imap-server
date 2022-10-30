@@ -21,18 +21,47 @@
  * for more details.
 */
 
-use crate::{
-    core::receiver::Request,
-    managesieve::{client::Session, Command, StatusResponse},
-};
+use jmap_client::sieve::Property;
+
+use crate::managesieve::{client::Session, StatusResponse};
+
+use super::IntoStatusResponse;
 
 impl Session {
-    pub async fn handle_listscripts(
-        &mut self,
-        request: Request<Command>,
-    ) -> Result<bool, StatusResponse> {
-        let response = Vec::new();
+    pub async fn handle_listscripts(&mut self) -> Result<bool, StatusResponse> {
+        let mut request = self.client().build();
+        request
+            .get_sieve_script()
+            .properties([Property::Name, Property::IsActive]);
 
-        Ok(self.write_bytes(response).await.is_ok())
+        let mut response = Vec::with_capacity(128);
+
+        for script in request
+            .send_get_sieve_script()
+            .await
+            .map_err(|err| err.into_status_response())?
+            .take_list()
+        {
+            response.push(b'\"');
+            if let Some(name) = script.name() {
+                for ch in name.as_bytes() {
+                    if [b'\\', b'\"'].contains(ch) {
+                        response.push(b'\\');
+                    }
+                    response.push(*ch);
+                }
+            }
+
+            if script.is_active() {
+                response.extend_from_slice(b"\" ACTIVE\r\n");
+            } else {
+                response.extend_from_slice(b"\"\r\n");
+            }
+        }
+
+        Ok(self
+            .write_bytes(StatusResponse::ok("").serialize(response))
+            .await
+            .is_ok())
     }
 }

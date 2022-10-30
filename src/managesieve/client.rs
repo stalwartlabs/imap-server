@@ -23,7 +23,7 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use jmap_client::client::Client;
+use jmap_client::{client::Client, sieve::query::Filter};
 use tokio::{io::WriteHalf, net::TcpStream, sync::mpsc};
 use tokio_rustls::server::TlsStream;
 use tracing::debug;
@@ -34,7 +34,7 @@ use crate::core::{
     Core,
 };
 
-use super::{Command, ResponseCode, StatusResponse};
+use super::{commands::IntoStatusResponse, Command, ResponseCode, StatusResponse};
 
 pub struct Session {
     pub core: Arc<Core>,
@@ -84,6 +84,11 @@ impl Session {
     }
 
     pub async fn ingest(&mut self, bytes: &[u8]) -> Result<Option<WriteHalf<TcpStream>>, ()> {
+        let tmp = "dd";
+        for line in String::from_utf8_lossy(bytes).split("\r\n") {
+            println!("<- {:?}", &line[..std::cmp::min(line.len(), 100)]);
+        }
+
         let mut bytes = bytes.iter();
         let mut requests = Vec::with_capacity(2);
         let mut needs_literal = None;
@@ -115,7 +120,7 @@ impl Session {
 
         for request in requests {
             let result = match request.command {
-                Command::ListScripts => self.handle_listscripts(request).await,
+                Command::ListScripts => self.handle_listscripts().await,
                 Command::PutScript => self.handle_putscript(request).await,
                 Command::SetActive => self.handle_setactive(request).await,
                 Command::GetScript => self.handle_getscript(request).await,
@@ -149,12 +154,39 @@ impl Session {
     }
 
     pub async fn write_bytes(&self, bytes: Vec<u8>) -> Result<(), ()> {
+        let tmp = "dd";
+        println!(
+            "-> {:?}",
+            String::from_utf8_lossy(&bytes[..std::cmp::min(bytes.len(), 100)])
+        );
+
         if let Err(err) = self.writer.send(Event::Bytes(bytes)).await {
             debug!("Failed to send bytes: {}", err);
             Err(())
         } else {
             Ok(())
         }
+    }
+
+    pub fn client(&self) -> &Client {
+        if let State::Authenticated { client } = &self.state {
+            client
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub async fn get_script_id(&self, name: String) -> Result<String, StatusResponse> {
+        self.client()
+            .sieve_script_query(Filter::name(name).into(), None::<Vec<_>>)
+            .await
+            .map_err(|err| err.into_status_response())?
+            .take_ids()
+            .pop()
+            .ok_or_else(|| {
+                StatusResponse::no("There is no script by that name")
+                    .with_code(ResponseCode::NonExistent)
+            })
     }
 }
 
@@ -164,6 +196,12 @@ impl Request<Command> {
             Command::Capability | Command::Logout | Command::Noop => Ok(self),
             Command::Authenticate => {
                 if let State::NotAuthenticated { .. } = state {
+                    #[cfg(test)]
+                    {
+                        Ok(self)
+                    }
+
+                    #[cfg(not(test))]
                     if is_tls {
                         Ok(self)
                     } else {

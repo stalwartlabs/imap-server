@@ -64,16 +64,19 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
         .assert_contains(concat!(
             "BODYSTRUCTURE ((\"text\" \"html\" (\"charset\" \"us-ascii\") NIL NIL ",
             "\"base64\" 239 3 \"07aab44e51c5f1833a5d19f2e1804c4b\" NIL NIL NIL) ",
-            "(\"message\" \"rfc822\" NIL NIL NIL NIL 724 ",
+            "(\"message\" \"rfc822\" NIL NIL NIL NIL 723 ",
             "(NIL \"Exporting my book about coffee tables\" ",
             "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
             "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
             "((\"Cosmo Kramer\" NIL \"kramer\" \"kramerica.com\")) ",
             "NIL NIL NIL NIL NIL) ",
+            "((\"text\" \"plain\" (\"charset\" \"utf-16\") NIL NIL ",
+            "\"quoted-printable\" 228 3 \"3a942a99cdd8a099ae107d3867ec20fb\" NIL NIL NIL) ",
             "(\"image\" \"gif\" (\"name\" \"Book about ☕ tables.gif\") ",
             "NIL NIL \"Base64\" 56 \"d40fa7f401e9dc2df56cbb740d65ff52\" ",
-            "(\"attachment\" ()) NIL NIL) 0 \"fea0d696b570c4904fa45f401566fc57\" ",
-            "NIL NIL NIL) \"mixed\" (\"boundary\" \"festivus\") NIL NIL NIL)"
+            "(\"attachment\" ()) NIL NIL) \"mixed\" (\"boundary\" \"giddyup\") NIL NIL NIL)",
+            " 0 \"cdb0382a03a15601fb1b3c7422521620\" NIL NIL NIL) ",
+            "\"mixed\" (\"boundary\" \"festivus\") NIL NIL NIL)"
         ));
 
     // Fetch bodyparts

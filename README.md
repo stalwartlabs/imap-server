@@ -12,18 +12,19 @@ IMAP is an imap4-to-jmap proxy).
 
 Key features:
 
-- **IMAP4** full compliance and support for multiple extensions:
+- **IMAP4** full implementation with support for multiple extensions:
   - IMAP4rev2 ([RFC 9051](https://datatracker.ietf.org/doc/html/rfc9051))
   - IMAP4rev1 ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) 
+  - ManageSieve ([RFC 5804](https://datatracker.ietf.org/doc/html/rfc5804)) 
   - Access Control Lists (ACL) ([RFC 4314](https://datatracker.ietf.org/doc/html/rfc4314))
   - Conditional Store and Quick Resynchronization ([RFC 7162](https://datatracker.ietf.org/doc/html/rfc7162))
   - SORT and THREAD ([RFC 5256](https://datatracker.ietf.org/doc/html/rfc5256))
   - Message Preview Generation ([RFC 8970](https://datatracker.ietf.org/doc/html/rfc8970))
   - And [many other extensions](https://stalw.art/imap/development/rfc/#imap4-extensions)...
-- **JMAP** backend:
-  - Proxies IMAP4 requests to JMAP requests.
+- **JMAP** proxy features:
+  - Proxies IMAP4 and ManageSieve requests to JMAP requests.
   - High-availability and fault-tolerance support when using a [Stalwart JMAP](https://github.com/stalwartlabs/jmap-server) backend.
-  - Full compliance with [JMAP Core](https://datatracker.ietf.org/doc/html/rfc8620) and [JMAP Mail](https://datatracker.ietf.org/doc/html/rfc8621).
+  - Full support for [JMAP Core](https://datatracker.ietf.org/doc/html/rfc8620), [JMAP Mail](https://datatracker.ietf.org/doc/html/rfc8621) and [JMAP for Sieve Scripts](https://www.ietf.org/archive/id/draft-ietf-jmap-sieve-12.html).
 - **Secure**:
   - OAuth 2.0 [authorization code](https://www.rfc-editor.org/rfc/rfc8628) and [device authorization](https://www.rfc-editor.org/rfc/rfc8628) flows.
   - Rate limiting.

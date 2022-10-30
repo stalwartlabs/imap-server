@@ -21,18 +21,52 @@
  * for more details.
 */
 
+use jmap_client::sieve::Property;
+
 use crate::{
     core::receiver::Request,
-    managesieve::{client::Session, Command, StatusResponse},
+    managesieve::{client::Session, Command, ResponseCode, StatusResponse},
 };
+
+use super::IntoStatusResponse;
 
 impl Session {
     pub async fn handle_getscript(
         &mut self,
         request: Request<Command>,
     ) -> Result<bool, StatusResponse> {
-        let response = Vec::new();
+        let name = request
+            .tokens
+            .into_iter()
+            .next()
+            .and_then(|s| s.unwrap_string().ok())
+            .ok_or_else(|| StatusResponse::no("Expected script name as a parameter."))?;
 
-        Ok(self.write_bytes(response).await.is_ok())
+        let client = self.client();
+        let script = client
+            .sieve_script_get(&self.get_script_id(name).await?, [Property::BlobId].into())
+            .await
+            .map_err(|err| err.into_status_response())?
+            .ok_or_else(|| {
+                StatusResponse::no("Script not found").with_code(ResponseCode::NonExistent)
+            })?;
+        let script = client
+            .download(script.blob_id().ok_or_else(|| {
+                StatusResponse::no("BlobId not included in response")
+                    .with_code(ResponseCode::NonExistent)
+            })?)
+            .await
+            .map_err(|err| err.into_status_response())?;
+
+        let mut response = Vec::with_capacity(script.len() + 30);
+        response.push(b'{');
+        response.extend_from_slice(script.len().to_string().as_bytes());
+        response.extend_from_slice(b"}\r\n");
+        response.extend(script);
+
+        Ok(self
+            .write_bytes(StatusResponse::ok("").serialize(response))
+            .await
+            .is_ok())
     }
 }

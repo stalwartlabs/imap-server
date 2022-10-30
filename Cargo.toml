@@ -1,6 +1,13 @@
 [package]
 name = "stalwart-imap"
-version = "0.1.0"
+description = "Stalwart IMAP Server"
+authors = [ "Stalwart Labs Ltd. <hello@stalw.art>"]
+repository = "https://github.com/stalwartlabs/imap-server"
+homepage = "https://stalw.art/imap"
+keywords = ["imap", "email", "mail", "server"]
+categories = ["email"]
+license = "AGPL-3.0-only"
+version = "0.2.0"
 edition = "2021"
 resolver = "2"
 

@@ -31,8 +31,23 @@ impl Session {
         &mut self,
         request: Request<Command>,
     ) -> Result<bool, StatusResponse> {
-        let response = Vec::new();
+        let mut tokens = request.tokens.into_iter();
+        let _name = tokens
+            .next()
+            .and_then(|s| s.unwrap_string().ok())
+            .ok_or_else(|| StatusResponse::no("Expected script name as a parameter."))?;
+        let _size = tokens
+            .next()
+            .and_then(|s| s.unwrap_string().ok())
+            .ok_or_else(|| StatusResponse::no("Expected script size as a parameter."))?
+            .parse::<usize>()
+            .map_err(|_| StatusResponse::no("Invalid size parameter."))?;
 
-        Ok(self.write_bytes(response).await.is_ok())
+        // Not yet implemented, requires QUOTA support.
+
+        Ok(self
+            .write_bytes(StatusResponse::ok("").into_bytes())
+            .await
+            .is_ok())
     }
 }

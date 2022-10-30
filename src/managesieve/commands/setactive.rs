@@ -26,13 +26,32 @@ use crate::{
     managesieve::{client::Session, Command, StatusResponse},
 };
 
+use super::IntoStatusResponse;
+
 impl Session {
     pub async fn handle_setactive(
         &mut self,
         request: Request<Command>,
     ) -> Result<bool, StatusResponse> {
-        let response = Vec::new();
+        let name = request
+            .tokens
+            .into_iter()
+            .next()
+            .and_then(|s| s.unwrap_string().ok())
+            .ok_or_else(|| StatusResponse::no("Expected script name as a parameter."))?;
 
-        Ok(self.write_bytes(response).await.is_ok())
+        (if !name.is_empty() {
+            self.client()
+                .sieve_script_activate(&self.get_script_id(name).await?)
+                .await
+        } else {
+            self.client().sieve_script_deactivate().await
+        })
+        .map_err(|err| err.into_status_response())?;
+
+        Ok(self
+            .write_bytes(StatusResponse::ok("Success").into_bytes())
+            .await
+            .is_ok())
     }
 }

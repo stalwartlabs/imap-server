@@ -29,6 +29,7 @@ pub mod copy_move;
 pub mod fetch;
 pub mod idle;
 pub mod mailbox;
+pub mod managesieve;
 pub mod search;
 pub mod store;
 pub mod thread;
@@ -95,6 +96,12 @@ pub async fn imap_tests() {
         imap.assert_read(Type::Tagged, ResponseType::Ok).await;
     }
 
+    // Delete folders
+    for mailbox in ["Drafts", "Junk Mail", "Sent Items"] {
+        imap.send(&format!("DELETE \"{}\"", mailbox)).await;
+        imap.assert_read(Type::Tagged, ResponseType::Ok).await;
+    }
+
     mailbox::test(&mut imap, &mut imap_check).await;
     append::test(&mut imap, &mut imap_check).await;
     search::test(&mut imap, &mut imap_check).await;
@@ -114,6 +121,9 @@ pub async fn imap_tests() {
         imap.send("LOGOUT").await;
         imap.assert_read(Type::Untagged, ResponseType::Bye).await;
     }
+
+    // Run ManageSieve tests
+    managesieve::test().await;
 
     // Delete temporary directory
     if temp_dir.exists() {
@@ -424,6 +434,7 @@ pub fn init_settings(delete_if_exists: bool) -> (EnvSettings, PathBuf) {
                     ("bind-addr".to_string(), "127.0.0.1".to_string()),
                     ("bind-port".to_string(), "9991".to_string()),
                     ("bind-port-tls".to_string(), "9992".to_string()),
+                    ("bind-port-sieve".to_string(), "4190".to_string()),
                     ("log-level".to_string(), "error".to_string()),
                 ]
                 .into_iter(),

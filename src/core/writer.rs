@@ -50,13 +50,13 @@ pub fn spawn_writer() -> mpsc::Sender<Event> {
                     while let Some(event) = rx.recv().await {
                         match event {
                             Event::Bytes(bytes) => {
-                                /*let tmp = "dd";
+                                let tmp = "dd";
                                 println!(
-                                    "-> {:?}",
+                                    "<- {:?}",
                                     String::from_utf8_lossy(
                                         &bytes[..std::cmp::min(bytes.len(), 100)]
                                     )
-                                );*/
+                                );
 
                                 if let Err(err) = stream_tx.write_all(&bytes).await {
                                     debug!("Failed to write to stream: {}", err);
@@ -109,6 +109,12 @@ pub fn spawn_writer() -> mpsc::Sender<Event> {
 
 impl Session {
     pub async fn write_bytes(&self, bytes: Vec<u8>) -> Result<(), ()> {
+        let tmp = "dd";
+        println!(
+            "-> {:?}",
+            String::from_utf8_lossy(&bytes[..std::cmp::min(bytes.len(), 100)])
+        );
+
         if let Err(err) = self.writer.send(Event::Bytes(bytes)).await {
             debug!("Failed to send bytes: {}", err);
             Err(())
@@ -120,6 +126,12 @@ impl Session {
 
 impl SessionData {
     pub async fn write_bytes(&self, bytes: Vec<u8>) -> bool {
+        let tmp = "dd";
+        println!(
+            "-> {:?}",
+            String::from_utf8_lossy(&bytes[..std::cmp::min(bytes.len(), 100)])
+        );
+
         if let Err(err) = self.writer.send(Event::Bytes(bytes)).await {
             debug!("Failed to send bytes: {}", err);
             false

@@ -54,7 +54,7 @@ pub async fn test(imap: &mut ImapConnection, _imap_check: &mut ImapConnection) {
     entries.sort();
 
     let mut expected_uid = 1;
-    for file_name in entries {
+    for file_name in entries.into_iter().take(20) {
         if file_name.extension().map_or(true, |e| e != "txt") {
             continue;
         }

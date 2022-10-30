@@ -92,10 +92,7 @@ impl Session {
                     // Create session
                     self.state = State::Authenticated { client };
 
-                    Ok(self
-                        .write_bytes(StatusResponse::ok("Authentication successful").into_bytes())
-                        .await
-                        .is_ok())
+                    self.handle_capability("Authentication successful").await
                 } else {
                     self.write_bytes(
                         StatusResponse::bye("JMAP over Sieve is not supported by the JMAP server.")

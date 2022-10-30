@@ -86,7 +86,7 @@ pub async fn start_imap_server(settings: EnvSettings) -> std::io::Result<()> {
     }
 
     // Start ManageSieve listener
-    if let Some(bind_port) = settings.get("bind-port-managesieve") {
+    if let Some(bind_port) = settings.get("bind-port-sieve") {
         let socket_addr =
             SocketAddr::from((bind_addr, bind_port.parse().unwrap_or(MANAGESIEVE_PORT)));
         info!(
