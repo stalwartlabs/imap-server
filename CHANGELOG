@@ -1,0 +1,10 @@
+stalwart-imap 0.2.0
+================================
+- ManageSieve support.
+- Fixed BODY[1] bug.
+- Added UTF8=ACCEPT (RFC 6855) support.
+
+stalwart-imap 0.1.0
+================================
+- Initial release.
+
