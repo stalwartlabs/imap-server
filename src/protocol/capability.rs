@@ -63,6 +63,7 @@ pub enum Capability {
     StatusSize, //STATUS=SIZE
     ObjectId,
     Preview,
+    Utf8Accept,
     Auth(Mechanism),
 }
 
@@ -107,6 +108,7 @@ impl Capability {
             Capability::SpecialUse => b"SPECIAL-USE",
             Capability::CreateSpecialUse => b"CREATE-SPECIAL-USE",
             Capability::Move => b"MOVE",
+            Capability::Utf8Accept => b"UTF8=ACCEPT",
         });
     }
 
@@ -118,6 +120,7 @@ impl Capability {
             Capability::SASLIR,
             Capability::LiteralPlus,
             Capability::Id,
+            Capability::Utf8Accept,
         ];
 
         if is_authenticated {

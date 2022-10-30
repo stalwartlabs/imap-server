@@ -916,26 +916,21 @@ impl<'x> AsImapDataItem<'x> for Message<'x> {
         }
 
         let mut message = self;
+        let sections_single = sections.len() == 1;
         let mut sections_iter = sections.iter().peekable();
 
         while let Some(section) = sections_iter.next() {
             match section {
                 Section::Part { num } => {
-                    part = part
-                        .get_sub_parts()
-                        .and_then(|sub_part_ids| {
-                            sub_part_ids
-                                .get((*num).saturating_sub(1) as usize)
-                                .and_then(|pos| message.parts.get(*pos))
-                        })
-                        .or_else(|| {
-                            // Special case when rfc/822 is the only part
-                            if *num == 1 && part.is_message() {
-                                Some(part)
-                            } else {
-                                None
-                            }
-                        })?;
+                    part = if let Some(sub_part_ids) = part.get_sub_parts() {
+                        sub_part_ids
+                            .get((*num).saturating_sub(1) as usize)
+                            .and_then(|pos| message.parts.get(*pos))
+                    } else if *num == 1 && (sections_single || part.is_message()) {
+                        Some(part)
+                    } else {
+                        None
+                    }?;
 
                     if let (PartType::Message(nested_message), Some(_)) =
                         (&part.body, sections_iter.peek())

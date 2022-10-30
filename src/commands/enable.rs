@@ -44,6 +44,7 @@ impl Session {
                         Capability::QResync => {
                             self.is_qresync = true;
                         }
+                        Capability::Utf8Accept => {}
                         _ => {
                             let mut buf = Vec::with_capacity(10);
                             capability.serialize(&mut buf);

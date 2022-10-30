@@ -59,6 +59,8 @@ impl Capability {
             Ok(Self::CondStore)
         } else if value.eq_ignore_ascii_case(b"QRESYNC") {
             Ok(Self::QResync)
+        } else if value.eq_ignore_ascii_case(b"UTF8=ACCEPT") {
+            Ok(Self::Utf8Accept)
         } else {
             Err(format!(
                 "Unsupported capability '{}'.",

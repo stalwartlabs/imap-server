@@ -84,10 +84,10 @@ impl Session {
     }
 
     pub async fn ingest(&mut self, bytes: &[u8]) -> Result<Option<WriteHalf<TcpStream>>, ()> {
-        let tmp = "dd";
+        /*let tmp = "dd";
         for line in String::from_utf8_lossy(bytes).split("\r\n") {
             println!("<- {:?}", &line[..std::cmp::min(line.len(), 100)]);
-        }
+        }*/
 
         let mut bytes = bytes.iter();
         let mut requests = Vec::with_capacity(2);
@@ -154,11 +154,11 @@ impl Session {
     }
 
     pub async fn write_bytes(&self, bytes: Vec<u8>) -> Result<(), ()> {
-        let tmp = "dd";
+        /*let tmp = "dd";
         println!(
             "-> {:?}",
             String::from_utf8_lossy(&bytes[..std::cmp::min(bytes.len(), 100)])
-        );
+        );*/
 
         if let Err(err) = self.writer.send(Event::Bytes(bytes)).await {
             debug!("Failed to send bytes: {}", err);
