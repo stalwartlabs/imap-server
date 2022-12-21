@@ -54,7 +54,7 @@ impl Session {
         let credentials = match mechanism {
             Mechanism::Plain | Mechanism::OAuthBearer => {
                 if !params.is_empty() {
-                    let challenge = base64::decode(&params.pop().unwrap())
+                    let challenge = base64::decode(params.pop().unwrap())
                         .map_err(|_| StatusResponse::no("Failed to decode challenge."))?;
                     (if mechanism == Mechanism::Plain {
                         decode_challenge_plain(&challenge)

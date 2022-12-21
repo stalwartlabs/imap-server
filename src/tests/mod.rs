@@ -445,5 +445,5 @@ pub fn init_settings(delete_if_exists: bool) -> (EnvSettings, PathBuf) {
 }
 
 pub fn destroy_temp_dir(temp_dir: PathBuf) {
-    std::fs::remove_dir_all(&temp_dir).unwrap();
+    std::fs::remove_dir_all(temp_dir).unwrap();
 }

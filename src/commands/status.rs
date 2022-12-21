@@ -106,13 +106,7 @@ impl SessionData {
             if account.account_id == mailbox.account_id {
                 let mailbox_data = account
                     .mailbox_data
-                    .entry(
-                        mailbox
-                            .mailbox_id
-                            .as_ref()
-                            .cloned()
-                            .unwrap_or_else(|| "".to_string()),
-                    )
+                    .entry(mailbox.mailbox_id.as_ref().cloned().unwrap_or_default())
                     .or_insert_with(Mailbox::default);
                 for item in items {
                     match item {
@@ -125,14 +119,14 @@ impl SessionData {
                         }
                         Status::UidNext => {
                             if let Some(value) = mailbox_data.uid_next {
-                                items_response.push((*item, StatusItemType::Number(value as u32)));
+                                items_response.push((*item, StatusItemType::Number(value)));
                             } else {
                                 items_update.push(*item);
                             }
                         }
                         Status::UidValidity => {
                             if let Some(value) = mailbox_data.uid_validity {
-                                items_response.push((*item, StatusItemType::Number(value as u32)));
+                                items_response.push((*item, StatusItemType::Number(value)));
                             } else {
                                 items_update.push(*item);
                             }
@@ -196,27 +190,19 @@ impl SessionData {
                 if account.account_id == mailbox.account_id {
                     let mailbox_data = account
                         .mailbox_data
-                        .entry(
-                            mailbox
-                                .mailbox_id
-                                .as_ref()
-                                .cloned()
-                                .unwrap_or_else(|| "".to_string()),
-                        )
+                        .entry(mailbox.mailbox_id.as_ref().cloned().unwrap_or_default())
                         .or_insert_with(Mailbox::default);
                     mailbox_data.total_messages = status.total_messages.into();
                     mailbox_data.uid_next = status.uid_next.into();
                     mailbox_data.uid_validity = status.uid_validity.into();
                     if items_update.contains(&Status::UidNext) {
-                        items_response.push((
-                            Status::UidNext,
-                            StatusItemType::Number(status.uid_next as u32),
-                        ));
+                        items_response
+                            .push((Status::UidNext, StatusItemType::Number(status.uid_next)));
                     }
                     if items_update.contains(&Status::UidValidity) {
                         items_response.push((
                             Status::UidValidity,
-                            StatusItemType::Number(status.uid_validity as u32),
+                            StatusItemType::Number(status.uid_validity),
                         ));
                     }
                     if items_update.contains(&Status::Messages) {
@@ -279,13 +265,7 @@ impl SessionData {
                 if account.account_id == mailbox.account_id {
                     let mailbox_data = account
                         .mailbox_data
-                        .entry(
-                            mailbox
-                                .mailbox_id
-                                .as_ref()
-                                .cloned()
-                                .unwrap_or_else(|| "".to_string()),
-                        )
+                        .entry(mailbox.mailbox_id.as_ref().cloned().unwrap_or_default())
                         .or_insert_with(Mailbox::default);
 
                     if items_update.contains(&Status::Unseen) {
@@ -397,13 +377,7 @@ impl SessionData {
                 if account.account_id == mailbox.account_id {
                     account
                         .mailbox_data
-                        .entry(
-                            mailbox
-                                .mailbox_id
-                                .as_ref()
-                                .cloned()
-                                .unwrap_or_else(|| "".to_string()),
-                        )
+                        .entry(mailbox.mailbox_id.as_ref().cloned().unwrap_or_default())
                         .or_insert_with(Mailbox::default)
                         .size = mailbox_size.into();
                     items_response

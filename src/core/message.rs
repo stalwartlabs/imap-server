@@ -400,7 +400,7 @@ impl Core {
         self.spawn_worker(move || {
             let mut batch = sled::Batch::default();
 
-            for kv_result in db.scan_prefix(&serialize_key_account_prefix(&account_id)) {
+            for kv_result in db.scan_prefix(serialize_key_account_prefix(&account_id)) {
                 let (key, _) = kv_result.map_err(|err| {
                     error!("Failed to scan db: {}", err);
                 })?;
@@ -505,7 +505,7 @@ impl Core {
             let mut num_deletions = 0;
             let mut batch = sled::Batch::default();
 
-            for kv_result in db.scan_prefix(&[]) {
+            for kv_result in db.scan_prefix([]) {
                 let (key, value) = kv_result.map_err(|err| {
                     error!("Failed to scan db: {}", err);
                 })?;
@@ -565,7 +565,7 @@ impl SelectedMailbox {
                 return Ok(ids);
             }
 
-            let max_uid = state.imap_uids.last().copied().unwrap_or(0) as u32;
+            let max_uid = state.imap_uids.last().copied().unwrap_or(0);
             let max_seqnum = state.imap_uids.len() as u32;
 
             for (pos, &uid) in state.imap_uids.iter().enumerate() {
@@ -730,7 +730,7 @@ impl ImapUtils for sled::Db {
     ) -> Result<sled::IVec, ()> {
         // Obtain next UID.
         let uid = self
-            .update_and_fetch(&uid_next_key, increment_uid)
+            .update_and_fetch(uid_next_key, increment_uid)
             .map_err(|err| {
                 error!("Failed to increment UID: {}", err);
             })?
