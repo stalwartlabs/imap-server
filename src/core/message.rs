@@ -315,6 +315,7 @@ impl Core {
         .await
     }
 
+    #[cfg(test)]
     pub async fn imap_to_jmap(
         &self,
         mailbox: Arc<MailboxId>,
