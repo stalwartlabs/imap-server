@@ -1,5 +1,0 @@
-capabilities: THREAD=REFERENCES
-messages: all
-
-ok thread references us-ascii all
-* thread (1)(2)

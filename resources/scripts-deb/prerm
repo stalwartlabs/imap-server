@@ -1,4 +1,0 @@
-#!/bin/bash
-/bin/systemctl stop stalwart-imap
-/bin/systemctl disable stalwart-imap
-deluser stalwart-imap

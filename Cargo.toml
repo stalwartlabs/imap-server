@@ -7,31 +7,50 @@ homepage = "https://stalw.art/imap"
 keywords = ["imap", "email", "mail", "server"]
 categories = ["email"]
 license = "AGPL-3.0-only"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 resolver = "2"
 
+[[bin]]
+name = "stalwart-imap"
+path = "src/main.rs"
+
 [dependencies]
-jmap-client = { git = "https://github.com/stalwartlabs/jmap-client", features = ["websockets", "follow-trusted"] }
-mail-parser = { git = "https://github.com/stalwartlabs/mail-parser" }
-ahash = "0.8.0"
-chrono = { version = "0.4"}
-tracing-subscriber = "0.3.15"
+store = { path = "main/crates/store" }
+jmap = { path = "main/crates/jmap" }
+jmap_proto = { path = "main/crates/jmap-proto" }
+smtp = { path = "main/crates/smtp", features = ["local_delivery"] }
+imap = { path = "main/crates/imap" }
+managesieve = { path = "main/crates/managesieve" }
+directory = { path = "main/crates/directory" }
+utils = { path = "main/crates/utils" }
+tokio = { version = "1.23", features = ["full"] }
 tracing = "0.1"
-rustls = "0.20"
-rustls-pemfile = "1.0"
-tokio = { version = "1.16.1", features = ["full"] }
-tokio-rustls = { version = "0.23.4"}
-rayon = "1.5.1"
-sled = "0.34.7"
-num_cpus = "1.13.1"
-futures = "0.3"
-parking_lot = "0.12.0"
-base64 = "0.13"
-md5 = "0.7.0"
 
-[dev-dependencies]
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.5.0"
 
+[features]
+default = ["sqlite"]
+#default = ["foundationdb"]
+sqlite = ["store/sqlite"]
+foundationdb = ["store/foundation"]
+
+[workspace]
+members = [
+    "main/crates/jmap",
+    "main/crates/jmap-proto",
+    "main/crates/imap",
+    "main/crates/imap-proto",
+    "main/crates/smtp",
+    "main/crates/managesieve",
+    "main/crates/store",
+    "main/crates/directory",
+    "main/crates/utils",
+    "main/crates/maybe-async",
+    "main/crates/install",
+    "main/tests",
+]
 
 [profile.dev]
 opt-level = 0
@@ -59,7 +78,7 @@ rpath = false
 [profile.test]
 opt-level = 0
 debug = 1
-codegen-units = 16
+#codegen-units = 16
 lto = false
 incremental = true
 debug-assertions = true
@@ -76,19 +95,3 @@ debug-assertions = false
 overflow-checks = false
 rpath = false
 
-[package.metadata.deb]
-name = "stalwart-imap"
-maintainer = "Stalwart Labs Ltd. <hello@stalw.art>"
-copyright = "2022, Stalwart Labs Ltd. <hello@stalw.art>"
-depends = "$auto"
-section = "mail"
-license-file = ["LICENSE"]
-maintainer-scripts = "resources/scripts-deb"
-assets = [
-    ["target/release/imap-server", "usr/bin/stalwart-imap", "755"],
-    ["resources/config/config.yml", "etc/stalwart-imap/", "600"],
-    ["resources/systemd/stalwart-imap.service", "lib/systemd/system/", "644"],
-]
-conf-files = [
-    "/etc/stalwart-imap/config.yml"
-]
