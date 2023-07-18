@@ -25,6 +25,13 @@ Key features:
   - JMAP Mail ([RFC 8621](https://datatracker.ietf.org/doc/html/rfc8621))
   - JMAP over WebSocket ([RFC 8887](https://datatracker.ietf.org/doc/html/rfc8887))
   - JMAP for Sieve Scripts ([DRAFT-SIEVE-13](https://www.ietf.org/archive/id/draft-ietf-jmap-sieve-13.html))
+- Flexible:
+  - **LDAP** directory and **SQL** database authentication.
+  - Full-text search available in 17 languages.
+  - Disk quotas.
+  - Sieve scripting language with support for all [registered extensions](https://www.iana.org/assignments/sieve-extensions/sieve-extensions.xhtml).
+  - Email aliases, mailing lists, subaddressing and catch-all addresses support.
+  - Integration with **OpenTelemetry** to enable monitoring, tracing, and performance analysis.
 - Secure:
   - OAuth 2.0 [authorization code](https://www.rfc-editor.org/rfc/rfc8628) and [device authorization](https://www.rfc-editor.org/rfc/rfc8628) flows.
   - Access Control Lists (ACLs).
@@ -42,7 +49,7 @@ Install Stalwart IMAP Server on your server by following the instructions for yo
 - [Windows](https://stalw.art/docs/install/windows)
 - [Docker](https://stalw.art/docs/install/docker)
 
-All documentation is available at [stalw.art/docs](https://stalw.art/docs/get-started).
+All documentation is available at [stalw.art/docs/get-started](https://stalw.art/docs/get-started).
 
 > **Note**
 > If you need a more comprehensive solution that includes an SMTP server, you should consider installing the [Stalwart Mail Server](https://github.com/stalwartlabs/mail-server) instead.
