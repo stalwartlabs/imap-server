@@ -1,10 +1,11 @@
 # Stalwart IMAP Server
 
-[![Test](https://github.com/stalwartlabs/mail-server/actions/workflows/test.yml/badge.svg)](https://github.com/stalwartlabs/mail-server/actions/workflows/test.yml)
 [![Build](https://github.com/stalwartlabs/imap-server/actions/workflows/build.yml/badge.svg)](https://github.com/stalwartlabs/imap-server/actions/workflows/build.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![](https://img.shields.io/discord/923615863037390889?label=Chat)](https://discord.gg/jVAuShSdNZ)
-[![](https://img.shields.io/twitter/follow/stalwartlabs?style=flat)](https://twitter.com/stalwartlabs)
+[![](https://img.shields.io/twitter/follow/stalwartlabs)](https://twitter.com/stalwartlabs)
+[![](https://img.shields.io/mastodon/follow/109929667531941122)](https://mastodon.social/@stalwartlabs)
+[![](https://img.shields.io/badge/Follow-%40stalwartlabs-8A2BE2)](https://www.threads.net/@stalwartlabs)
 
 Stalwart IMAP is an open-source Internet Message Access Protocol server designed to be secure, fast, robust and scalable.
 
