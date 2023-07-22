@@ -1,3 +1,8 @@
+stalwart-imap v0.3.1
+================================
+- Fix: Support for OpenLDAP password hashing schemes between curly brackets (#8). 
+- Fix: Add CA certificates to Docker runtime (#5).
+
 stalwart-imap v0.3.0
 ================================
 - Rewritten IMAP server to have direct access to the message store (no more IMAP proxy).
