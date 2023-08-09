@@ -7,7 +7,8 @@ COPY main/resources/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN sed -i -e 's/__C__/imap/g' /usr/local/bin/configure.sh && \
     sed -i -e 's/__R__/imap-server/g' /usr/local/bin/configure.sh && \
-    sed -i -e 's/__N__/imap-sqlite/g' /usr/local/bin/configure.sh
+    sed -i -e 's/__N__/imap-sqlite/g' /usr/local/bin/configure.sh && \
+    sed -i -e 's/__B__/stalwart-imap/g' /usr/local/bin/entrypoint.sh
 
 RUN chmod a+rx /usr/local/bin/*.sh
 
