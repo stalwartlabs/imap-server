@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.6] - 2023-08-29
+
+## Added
+- Arithmetic and logical expression evaluation in Sieve scripts.
+- Support for storing query results in Sieve variables.
+- Configurable protocol flags for Milter filters.
+
+### Changed
+ 
+### Fixed
+- ManageSieve `PUTSCRIPT` should replace existing scripts.
+
 ## [0.3.5] - 2023-08-18
 
 ## Added
