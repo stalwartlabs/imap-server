@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.7] - 2023-09-05
+
+## Added
+- Option to disable IMAP All Messages folder (#68).
+
+### Changed
+ 
+### Fixed
+- Invalid IMAP `FETCH` responses for non-UTF-8 messages (#70)
+- Allow `STATUS` and `ACL` IMAP operations on virtual mailboxes.
+- IMAP `SELECT QRESYNC` without specifying a UID causes panic (#67)
+
 ## [0.3.6] - 2023-08-29
 
 ## Added
