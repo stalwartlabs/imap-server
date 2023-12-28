@@ -7,7 +7,7 @@
 </h1>
 
 <p align="center">
-  <i align="center">Modern and secure IMAP4rev2 server</i> 🛡️
+  <i align="center">Secure and Modern IMAP4rev2 server</i> 🛡️
 </p>
 
 <h4 align="center">
