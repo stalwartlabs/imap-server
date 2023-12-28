@@ -90,14 +90,14 @@ jobs:
           cargo build --target=${{ matrix.target }} --no-default-features --features foundationdb --release
           cd target/${{ matrix.target }}/release && tar czvf ../../../stalwart-imap-foundationdb-${{ matrix.target }}.tar.gz stalwart-imap && cd -
           cargo build --target=${{ matrix.target }} --release
-          cd target/${{ matrix.target }}/release && tar czvf ../../../stalwart-imap-sqlite-${{ matrix.target }}.tar.gz stalwart-imap && cd -
+          cd target/${{ matrix.target }}/release && tar czvf ../../../stalwart-imap-${{ matrix.target }}.tar.gz stalwart-imap && cd -
 
       - name: Building binary (Windows version)
         if: ${{ contains(matrix.host_os, 'windows') }}
         run: |
           cargo build --target=${{ matrix.target }} --release
           cd target/${{ matrix.target }}/release
-          7z a ../../../stalwart-imap-sqlite-${{ matrix.target }}.zip stalwart-imap.exe
+          7z a ../../../stalwart-imap-${{ matrix.target }}.zip stalwart-imap.exe
           cd -
 
       - name: Publish Release
@@ -157,7 +157,7 @@ jobs:
             export PATH="$HOME/.cargo/bin:$PATH"
             cargo build --target=${target} --release
             cd target/${target}/release
-            tar czvf /artifacts/stalwart-imap-sqlite-${target}.tar.gz stalwart-imap
+            tar czvf /artifacts/stalwart-imap-${target}.tar.gz stalwart-imap
             cd -
 
       - name: Move packages

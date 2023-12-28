@@ -23,11 +23,12 @@
 
 use std::time::Duration;
 
-use directory::config::ConfigDirectory;
+use directory::core::config::ConfigDirectory;
 use imap::core::{ImapSessionManager, IMAP};
 use jmap::{api::JmapSessionManager, services::IPC_CHANNEL_BUFFER, JMAP};
 use managesieve::core::ManageSieveSessionManager;
 use smtp::core::{SmtpSessionManager, SMTP};
+use store::config::ConfigStore;
 use tokio::sync::mpsc;
 use utils::{
     config::{Config, ServerProtocol},
@@ -44,11 +45,6 @@ static GLOBAL: Jemalloc = Jemalloc;
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let config = Config::init();
-    let servers = config.parse_servers().failed("Invalid configuration");
-    let directory = config.parse_directory().failed("Invalid configuration");
-
-    // Bind ports and drop privileges
-    servers.bind(&config);
 
     // Enable tracing
     let _tracer = enable_tracing(
@@ -60,12 +56,31 @@ async fn main() -> std::io::Result<()> {
     )
     .failed("Failed to enable tracing");
 
+    // Bind ports and drop privileges
+    let servers = config.parse_servers().failed("Invalid configuration");
+    servers.bind(&config);
+
+    // Parse stores and directories
+    let stores = config.parse_stores().await.failed("Invalid configuration");
+    let directory = config
+        .parse_directory(&stores, config.value("jmap.store.data"))
+        .await
+        .failed("Invalid configuration");
+    let schedulers = config
+        .parse_purge_schedules(
+            &stores,
+            config.value("jmap.store.data"),
+            config.value("jmap.store.blob"),
+        )
+        .await
+        .failed("Invalid configuration");
+
     // Init servers
     let (delivery_tx, delivery_rx) = mpsc::channel(IPC_CHANNEL_BUFFER);
-    let smtp = SMTP::init(&config, &servers, &directory, delivery_tx)
+    let smtp = SMTP::init(&config, &servers, &stores, &directory, delivery_tx)
         .await
         .failed("Invalid configuration file");
-    let jmap = JMAP::init(&config, &directory, delivery_rx, smtp.clone())
+    let jmap = JMAP::init(&config, &stores, &directory, delivery_rx, smtp.clone())
         .await
         .failed("Invalid configuration file");
     let imap = IMAP::init(&config)
@@ -95,9 +110,9 @@ async fn main() -> std::io::Result<()> {
         };
     });
 
-    // Spawn scheduled directory queries
-    for schedule in directory.schedules {
-        schedule.spawn(shutdown_rx.clone());
+    // Spawn purge schedulers
+    for scheduler in schedulers {
+        scheduler.spawn(shutdown_rx.clone());
     }
 
     // Wait for shutdown signal
